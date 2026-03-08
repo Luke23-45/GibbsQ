@@ -1,10 +1,8 @@
 import logging
-from pathlib import Path
-
 import hydra
 import numpy as np
 import jax.numpy as jnp
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from moeq.core.config import hydra_to_config, validate
 from moeq.core.policies import make_policy
@@ -39,8 +37,9 @@ def main(raw_cfg: DictConfig) -> None:
 
     sc = cfg.system
     N = sc.num_servers
-    mu = sc.service_rates
-    cap = sum(mu)
+    mu = np.asarray(sc.service_rates, dtype=np.float64)
+    mu_jax = jnp.asarray(mu)
+    cap = float(mu.sum())
 
     # Use the isolated Run Directory for all outputs
     out_dir = run_dir
@@ -64,6 +63,7 @@ def main(raw_cfg: DictConfig) -> None:
         for j, alpha in enumerate(ALPHA_VALUES):
             completed += 1
             rep_means = []
+            rep_stationary_flags: list[bool] = []
             last_res = None
 
             if cfg.jax.enabled:
@@ -73,7 +73,7 @@ def main(raw_cfg: DictConfig) -> None:
                     num_replications=cfg.simulation.num_replications,
                     num_servers=N,
                     arrival_rate=lam,
-                    service_rates=jnp.array(mu),
+                    service_rates=mu_jax,
                     alpha=float(alpha),
                     sim_time=cfg.simulation.sim_time,
                     sample_interval=cfg.simulation.sample_interval,
@@ -93,6 +93,8 @@ def main(raw_cfg: DictConfig) -> None:
                     )
                     avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
                     rep_means.append(avg_q.sum())
+                    rep_diag = stationarity_diagnostic(res, burn_in_fraction=cfg.simulation.burn_in_fraction)
+                    rep_stationary_flags.append(bool(rep_diag["is_stationary"]))
                     last_res = res
             else:
                 # --- STANDARD NUMPY EXECUTION (Sequential) ---
@@ -110,11 +112,13 @@ def main(raw_cfg: DictConfig) -> None:
                     )
                     avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
                     rep_means.append(avg_q.sum())
+                    rep_diag = stationarity_diagnostic(res, burn_in_fraction=cfg.simulation.burn_in_fraction)
+                    rep_stationary_flags.append(bool(rep_diag["is_stationary"]))
                     last_res = res
 
             mean_Q[i, j] = np.mean(rep_means)
-            diag = stationarity_diagnostic(last_res, burn_in_fraction=cfg.simulation.burn_in_fraction)  # type: ignore
-            stationary[i, j] = diag["is_stationary"]
+            stationarity_rate = float(np.mean(rep_stationary_flags)) if rep_stationary_flags else 0.0
+            stationary[i, j] = stationarity_rate >= 0.5
             
             # Export scalar metrics
             metrics = {
@@ -122,8 +126,8 @@ def main(raw_cfg: DictConfig) -> None:
                 "lam": float(lam),
                 "alpha": float(alpha),
                 "mean_q_total": float(mean_Q[i, j]),
-                "is_stationary": bool(diag["is_stationary"]),
-                "slope": float(diag.get("slope", 0.0)),
+                "is_stationary": bool(stationary[i, j]),
+                "stationarity_rate": stationarity_rate,
             }
             append_metrics_jsonl(metrics, out_dir / "metrics.jsonl")
             if run:
@@ -134,7 +138,7 @@ def main(raw_cfg: DictConfig) -> None:
                 fname = out_dir / f"trajectories/rho{rho:.2f}_alpha{alpha:.2f}.parquet"
                 save_trajectory_parquet(last_res, fname)
 
-            stat_str = "OK" if diag["is_stationary"] else "NONSTATIONARY"
+            stat_str = "OK" if stationary[i, j] else "NONSTATIONARY"
             log.info(f"  alpha={alpha:6.2f} | E[Q_total]={mean_Q[i,j]:8.2f} | {stat_str}  ({completed}/{total_runs})")
 
     # Outputs

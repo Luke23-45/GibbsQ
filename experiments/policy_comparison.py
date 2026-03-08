@@ -1,10 +1,8 @@
 import logging
-from pathlib import Path
-
 import hydra
 import numpy as np
 import jax.numpy as jnp
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from moeq.core.config import hydra_to_config, validate
 from moeq.core.policies import make_policy
@@ -46,12 +44,14 @@ def main(raw_cfg: DictConfig) -> None:
 
     sc = cfg.system
     N = sc.num_servers
-    mu = sc.service_rates
-    cap = sum(mu)
+    mu = np.asarray(sc.service_rates, dtype=np.float64)
+    mu_jax = jnp.asarray(mu)
+    cap = float(mu.sum())
     rho = sc.arrival_rate / cap
 
     # Use the isolated Run Directory for all outputs
     out_dir = run_dir
+    (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
 
     log.info(f"System: N={N}, lam={sc.arrival_rate:.4f}, rho={rho:.4f} | Backend: {'JAX' if cfg.jax.enabled else 'NumPy'}")
     log.info(f"Comparing {len(POLICIES)} policies across {cfg.simulation.num_replications} reps.")
@@ -78,7 +78,7 @@ def main(raw_cfg: DictConfig) -> None:
                 num_replications=cfg.simulation.num_replications,
                 num_servers=N,
                 arrival_rate=sc.arrival_rate,
-                service_rates=jnp.array(mu),
+                service_rates=mu_jax,
                 alpha=float(p.get("alpha", 1.0)),
                 sim_time=cfg.simulation.sim_time,
                 sample_interval=cfg.simulation.sample_interval,
@@ -142,7 +142,8 @@ def main(raw_cfg: DictConfig) -> None:
         }
         append_metrics_jsonl(metrics, out_dir / "metrics.jsonl")
         if run:
-            run.log({f"policy_{p['name']}/{k}": v for k, v in metrics.items() if k not in ["policy", "label"]})
+            label_slug = lbl.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_")
+            run.log({f"policy_{label_slug}/{k}": v for k, v in metrics.items() if k not in ["policy", "label"]})
         
         # Conditionally export the last trajectory for this policy
         if cfg.simulation.export_trajectories and last_res is not None:

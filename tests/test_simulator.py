@@ -45,3 +45,31 @@ def test_zero_arrivals():
     assert res.arrival_count == 0
     assert res.departure_count == 0
     np.testing.assert_array_equal(res.states[-1], [0, 0])
+
+
+def test_zero_arrivals_records_full_timeline():
+    res = simulate(
+        num_servers=2,
+        arrival_rate=0.0,
+        service_rates=np.array([1.0, 1.0]),
+        policy=JSQRouting(),
+        sim_time=10.0,
+        sample_interval=1.0,
+    )
+    assert res.times[-1] == pytest.approx(10.0)
+
+
+def test_policy_output_validation():
+    class BadPolicy:
+        def __call__(self, Q, rng):
+            return np.array([0.2, 0.2])
+
+    with pytest.raises(ValueError, match="sum to 1.0"):
+        simulate(
+            num_servers=2,
+            arrival_rate=1.0,
+            service_rates=np.array([1.0, 1.0]),
+            policy=BadPolicy(),
+            sim_time=1.0,
+            rng=np.random.default_rng(0),
+        )

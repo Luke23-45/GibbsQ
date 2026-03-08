@@ -1,5 +1,4 @@
-# Q-MoE: Queue-Aware Mixture of Experts
-# High-Performance Soft-JSQ Routing Infrastructure
+# MoEQ: Softmax-routed queueing network research toolkit
 
 from moeq.core.config import ExperimentConfig, SystemConfig, SimulationConfig, PolicyConfig, DriftConfig
 from moeq.core.config import validate, total_capacity, load_factor, drift_constant_R, drift_rate_epsilon

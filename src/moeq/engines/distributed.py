@@ -7,13 +7,9 @@ of replications by partitioning the simulation state across TPUs/GPUs.
 import jax
 import jax.numpy as jnp
 from jax.sharding import Mesh, PartitionSpec, NamedSharding
-from functools import partial
-
-# Import the core functional simulator from jax_engine 
-# (assuming it is fully JAX-compatible and stateless)
+# Import the core simulator from jax_engine
 from moeq.engines.jax_engine import simulate_jax
 
-@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "policy_type"))
 def sharded_replications(
     num_replications: int,
     num_servers: int,
@@ -30,8 +26,23 @@ def sharded_replications(
     Run N replications in parallel across ALL available hardware devices.
     Replaces jax.vmap with jax.jit + NamedSharding for multi-host execution.
     """
+    if num_replications < 1:
+        raise ValueError(f"num_replications must be >= 1, got {num_replications}")
+    if num_servers < 1:
+        raise ValueError(f"num_servers must be >= 1, got {num_servers}")
+    if sample_interval <= 0.0:
+        raise ValueError(f"sample_interval must be > 0, got {sample_interval}")
+    if sim_time < 0.0:
+        raise ValueError(f"sim_time must be >= 0, got {sim_time}")
+    if max_samples < 1:
+        raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+    if service_rates.shape != (num_servers,):
+        raise ValueError(
+            f"service_rates must have shape ({num_servers},), got {service_rates.shape}"
+        )
+
     devices = jax.devices()
-    
+
     # Define a 1D mesh of all available devices (e.g., 8 GPUs or TPU slices)
     mesh = Mesh(devices, axis_names=('batch',))
     

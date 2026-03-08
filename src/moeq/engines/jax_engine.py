@@ -1,16 +1,7 @@
-"""
-Hardware-Accelerated CTMC Simulator using Google JAX.
+"""Hardware-accelerated CTMC simulator implemented in JAX.
 
-Utilizes XLA compilation and vmap-parallelization to achieve
-Tier-1 AI research lab performance standards.
-
-Differences from NumPy version:
--------------------------------
-1.  **Pure Functional**: All state is passed explicitly through jax.lax.while_loop.
-2.  **Explicit PRNG**: Uses jax.random.PRNGKey and splitting.
-3.  **XLA Optimized**: The entire loop is compiled into a single optimized kernel.
-4.  **Vectorized Replications**: jax.vmap allows running thousands of
-    simulations in parallel across GPU/TPU cores.
+This module mirrors the NumPy engine contract while using pure functional
+state transitions suitable for JIT compilation and vectorization.
 """
 
 from __future__ import annotations
@@ -21,6 +12,46 @@ from jax import lax
 from functools import partial
 from typing import NamedTuple
 from dataclasses import dataclass
+
+
+RATE_EPSILON = 1e-12
+
+
+def _validate_inputs(
+    *,
+    num_servers: int,
+    arrival_rate: float,
+    service_rates: jnp.ndarray,
+    sim_time: float,
+    sample_interval: float,
+    max_samples: int,
+    policy_type: int,
+    d: int,
+) -> None:
+    """Host-side validation for JAX simulator inputs."""
+    if num_servers < 1:
+        raise ValueError(f"num_servers must be >= 1, got {num_servers}")
+    if arrival_rate < 0:
+        raise ValueError(f"arrival_rate must be >= 0, got {arrival_rate}")
+    if sim_time < 0:
+        raise ValueError(f"sim_time must be >= 0, got {sim_time}")
+    if sample_interval <= 0:
+        raise ValueError(f"sample_interval must be > 0, got {sample_interval}")
+    if max_samples < 1:
+        raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+    if policy_type not in (0, 1, 2, 3, 4):
+        raise ValueError(f"policy_type must be one of 0..4, got {policy_type}")
+    if d < 1:
+        raise ValueError(f"d must be >= 1, got {d}")
+
+    if service_rates.shape != (num_servers,):
+        raise ValueError(
+            f"service_rates must have shape ({num_servers},), got {service_rates.shape}"
+        )
+    if not bool(jnp.all(jnp.isfinite(service_rates))):
+        raise ValueError("service_rates must be finite")
+    if not bool(jnp.all(service_rates > 0)):
+        raise ValueError("service_rates must be strictly positive")
 
 # ──────────────────────────────────────────────────────────────
 #  State & Configuration
@@ -134,12 +165,7 @@ def cond_fun(state: SimState, params: SimParams) -> bool:
 
 
 def body_fun(state: SimState, params: SimParams) -> SimState:
-    """Single Gillespie event and snapshot logic.
-    
-    PATCHED VERSION - Fixes:
-    1. Zero total rate (a0=0) no longer produces spurious events
-    2. Multiple snapshots recorded when tau > sample_interval
-    """
+    """Single Gillespie event and snapshot logic."""
     k1, k2, k3, k4 = jax.random.split(state.key, 4)
     
     # 1. Probabilities (k4 used for Power-of-d sampling if needed)
@@ -153,10 +179,7 @@ def body_fun(state: SimState, params: SimParams) -> SimState:
     
     a0 = jnp.sum(rates)
     
-    # ========== PATCH #1: Handle zero total rate ==========
-    # When a0=0 (no arrivals possible, all queues empty), skip event processing
-    # to avoid spurious events from event selection logic
-    
+
     def process_event(s: SimState) -> SimState:
         """Normal event processing when a0 > 0."""
         # 3. Draw holding time  ~ Exp(a0)
@@ -178,7 +201,6 @@ def body_fun(state: SimState, params: SimParams) -> SimState:
         new_arrival_count = s.arrival_count + jnp.where(is_arrival, 1, 0)
         new_departure_count = s.departure_count + jnp.where(is_arrival, 0, 1)
         
-        # ========== PATCH #2: Record ALL crossed samples ==========
         # Use a while_loop to fill all samples between old t and new_t
         def fill_samples(carry):
             """Fill all sample slots that fall between current t and new_t."""
@@ -259,7 +281,7 @@ def body_fun(state: SimState, params: SimParams) -> SimState:
     
     # Use lax.cond to branch based on whether events are possible
     return lax.cond(
-        a0 > 1e-12,  # Threshold for "effectively zero"
+        a0 > RATE_EPSILON,  # Threshold for "effectively zero"
         process_event,
         skip_event,
         state
@@ -271,7 +293,7 @@ def body_fun(state: SimState, params: SimParams) -> SimState:
 # ──────────────────────────────────────────────────────────────
 
 @partial(jax.jit, static_argnames=("num_servers", "max_samples", "policy_type", "d"))
-def simulate_jax(
+def _simulate_jax_impl(
     num_servers:     int,
     arrival_rate:    float,
     service_rates:   jnp.ndarray,
@@ -283,14 +305,7 @@ def simulate_jax(
     policy_type:     int = 3,
     d:               int = 2
 ):
-    """
-    Hardware-accelerated simulation of the MoEQ network.
-    
-    PATCHED VERSION - Fixes:
-    1. Zero arrival rate no longer produces spurious events
-    2. All samples up to sim_time are recorded (including final sample)
-    3. Multiple samples recorded when tau > sample_interval
-    """
+    """Hardware-accelerated simulation of the MoEQ network."""
     params = SimParams(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
@@ -327,15 +342,48 @@ def simulate_jax(
         init_state
     )
     
-    # ========== PATCH #3: Final sample is now recorded by body_fun ==========
-    # The body_fun now records all samples including those at sim_time via the while_loop
-    # No need for additional post-processing
-    
     return final_state.times_buf, final_state.states_buf, (final_state.arrival_count, final_state.departure_count)
 
 
-@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "policy_type"))
-def run_replications_jax(
+def simulate_jax(
+    num_servers:     int,
+    arrival_rate:    float,
+    service_rates:   jnp.ndarray,
+    alpha:           float,
+    sim_time:        float,
+    sample_interval: float,
+    key:             jax.random.PRNGKey,
+    max_samples:     int,
+    policy_type:     int = 3,
+    d:               int = 2
+):
+    """Validated wrapper around the jitted JAX simulation kernel."""
+    _validate_inputs(
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+        max_samples=max_samples,
+        policy_type=policy_type,
+        d=d,
+    )
+    return _simulate_jax_impl(
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        alpha=alpha,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+        key=key,
+        max_samples=max_samples,
+        policy_type=policy_type,
+        d=d,
+    )
+
+
+@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "policy_type", "d"))
+def _run_replications_jax_impl(
     num_replications: int,
     num_servers:      int,
     arrival_rate:     float,
@@ -355,7 +403,7 @@ def run_replications_jax(
     
     # Vectorize across the keys
     v_sim = jax.vmap(
-        lambda k: simulate_jax(
+        lambda k: _simulate_jax_impl(
             num_servers=num_servers,
             arrival_rate=arrival_rate,
             service_rates=service_rates,
@@ -370,3 +418,44 @@ def run_replications_jax(
     )
     
     return v_sim(keys)
+
+
+def run_replications_jax(
+    num_replications: int,
+    num_servers:      int,
+    arrival_rate:     float,
+    service_rates:    jnp.ndarray,
+    alpha:            float,
+    sim_time:         float,
+    sample_interval:  float,
+    base_seed:        int,
+    max_samples:      int,
+    policy_type:      int = 3,
+    d:                int = 2
+):
+    """Validated wrapper around vmapped JAX replications."""
+    if num_replications < 1:
+        raise ValueError(f"num_replications must be >= 1, got {num_replications}")
+    _validate_inputs(
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+        max_samples=max_samples,
+        policy_type=policy_type,
+        d=d,
+    )
+    return _run_replications_jax_impl(
+        num_replications=num_replications,
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        alpha=alpha,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+        base_seed=base_seed,
+        max_samples=max_samples,
+        policy_type=policy_type,
+        d=d,
+    )

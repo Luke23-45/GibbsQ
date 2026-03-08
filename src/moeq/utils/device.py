@@ -29,7 +29,9 @@ def setup_jax(cfg: JAXConfig) -> None:
 
     # 2. Platform Management
     target_platform = cfg.platform.lower()
-    
+    if target_platform == "cuda":
+        target_platform = "gpu"
+
     if target_platform == "auto":
         # JAX handles auto-detection by default (prefers TPU > GPU > CPU)
         devices = jax.devices()

@@ -28,13 +28,11 @@ MoEQ/
 ├── configs/                  # Hydra YAML configurations
 │   ├── default.yaml          # N=10 heterogeneous servers, ρ=0.8
 │   └── small.yaml            # N=2 for quick validation
-├── src/                      # Core library
-│   ├── config.py             # Hydra structured configs + validation
-│   ├── policies.py           # Routing policies (softmax, JSQ, etc.)
-│   ├── simulator.py          # Gillespie SSA for CTMC simulation
-│   ├── drift.py              # Lyapunov drift verifier
-│   ├── metrics.py            # Statistical analysis
-│   └── plotting.py           # Visualization
+├── src/moeq/                 # Core library package
+│   ├── core/                 # Config, policies, drift verification
+│   ├── engines/              # NumPy, JAX, distributed, differentiable engines
+│   ├── analysis/             # Metrics and plotting
+│   └── utils/                # Exporting, logging, runtime setup
 ├── experiments/              # Hydra-driven experiment scripts
 │   ├── drift_verification.py # Experiment 2: drift bound verification
 │   ├── stability_sweep.py    # Experiment 1+3: α/ρ parameter sweep

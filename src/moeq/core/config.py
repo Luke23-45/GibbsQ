@@ -2,8 +2,8 @@
 Structured configuration for the softmax-routed queueing system.
 
 Uses Hydra's ConfigStore to register typed schemas. Each sub-config
-is a frozen dataclass with ``__post_init__`` validation, so invalid
-configurations are caught at construction time — not at simulation time.
+is a typed dataclass validated by :func:`validate`, so invalid
+configurations are caught before experiment execution.
 
 Derived quantities mirror the proof exactly:
 
@@ -198,6 +198,30 @@ class ExperimentConfig:
 #  Validation  (fail-fast with precise diagnostics)
 # ──────────────────────────────────────────────────────────────
 
+
+def _normalize_service_rates(system_cfg: dict) -> dict:
+    """Expand scalar service-rate shorthand to match num_servers when needed."""
+    cfg = dict(system_cfg)
+    rates = cfg.get("service_rates")
+    num_servers = cfg.get("num_servers")
+    if isinstance(rates, list) and len(rates) == 1 and isinstance(num_servers, int) and num_servers > 1:
+        cfg["service_rates"] = rates * num_servers
+    return cfg
+
+
+def _validate_jax_config(jax_cfg: JAXConfig) -> None:
+    """Validate JAX backend config values."""
+    valid_platforms = {"auto", "cpu", "gpu", "tpu", "cuda"}
+    if jax_cfg.platform.lower() not in valid_platforms:
+        raise ValueError(
+            f"jax.platform must be one of {sorted(valid_platforms)}, got '{jax_cfg.platform}'"
+        )
+    valid_precisions = {"float32", "float64"}
+    if jax_cfg.precision not in valid_precisions:
+        raise ValueError(
+            f"jax.precision must be one of {sorted(valid_precisions)}, got '{jax_cfg.precision}'"
+        )
+
 def validate(cfg: ExperimentConfig) -> None:
     """
     Validate every constraint on *cfg* and raise ``ValueError`` with a
@@ -251,6 +275,11 @@ def validate(cfg: ExperimentConfig) -> None:
         raise ValueError(
             f"Unknown policy '{cfg.policy.name}'.  Choose from: {sorted(valid_names)}"
         )
+
+    if cfg.policy.name == PolicyName.POWER_OF_D.value and cfg.policy.d < 1:
+        raise ValueError(f"policy.d must be >= 1 for power_of_d, got {cfg.policy.d}")
+
+    _validate_jax_config(cfg.jax)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -314,8 +343,9 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
     Hydra variable references before constructing the dataclass.
     """
     d: dict = OmegaConf.to_container(raw, resolve=True)  # type: ignore[assignment]
+    system_cfg = _normalize_service_rates(d.get("system", {}))
     return ExperimentConfig(
-        system=SystemConfig(**d.get("system", {})),
+        system=SystemConfig(**system_cfg),
         simulation=SimulationConfig(**d.get("simulation", {})),
         policy=PolicyConfig(**d.get("policy", {})),
         drift=DriftConfig(**d.get("drift", {})),

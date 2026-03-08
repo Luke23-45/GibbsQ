@@ -27,8 +27,7 @@ from __future__ import annotations
 
 import logging
 import numpy as np
-from dataclasses import dataclass, field
-from typing import Callable, Sequence
+from dataclasses import dataclass
 
 from moeq.core.policies import RoutingPolicy
 
@@ -39,6 +38,41 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+
+def _validate_simulation_inputs(
+    *,
+    num_servers: int,
+    arrival_rate: float,
+    service_rates: np.ndarray,
+    sim_time: float,
+    sample_interval: float,
+) -> np.ndarray:
+    """Validate simulator inputs and return normalized service-rate array."""
+    if num_servers < 1:
+        raise ValueError(f"num_servers must be >= 1, got {num_servers}")
+    if sample_interval <= 0.0:
+        raise ValueError(
+            f"sample_interval must be > 0, got {sample_interval}"
+        )
+    if sim_time < 0.0:
+        raise ValueError(f"sim_time must be >= 0, got {sim_time}")
+    if arrival_rate < 0.0 or not np.isfinite(arrival_rate):
+        raise ValueError(
+            f"arrival_rate must be finite and >= 0, got {arrival_rate}"
+        )
+
+    mu = np.asarray(service_rates, dtype=np.float64)
+    if mu.shape != (num_servers,):
+        raise ValueError(
+            f"service_rates must have shape ({num_servers},), got {mu.shape}"
+        )
+    if np.any(mu <= 0.0) or not np.all(np.isfinite(mu)):
+        raise ValueError(
+            "service_rates must be finite and strictly positive; "
+            f"got min={mu.min()}, max={mu.max()}"
+        )
+    return mu
 
 
 # ──────────────────────────────────────────────────────────────
@@ -120,9 +154,15 @@ def simulate(
     if rng is None:
         rng = np.random.default_rng()
 
-    N   = num_servers
+    N = num_servers
     lam = float(arrival_rate)
-    mu  = np.asarray(service_rates, dtype=np.float64)
+    mu = _validate_simulation_inputs(
+        num_servers=N,
+        arrival_rate=lam,
+        service_rates=service_rates,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+    )
 
     # ── State ──
     Q = np.zeros(N, dtype=np.int64)
@@ -152,7 +192,21 @@ def simulate(
     while t < sim_time:
 
         # 1.  Routing probabilities
-        probs = policy(Q, rng)
+        probs = np.asarray(policy(Q, rng), dtype=np.float64)
+        if probs.shape != (N,):
+            raise ValueError(
+                f"policy returned shape {probs.shape}; expected ({N},)"
+            )
+        if np.any(probs < 0.0) or not np.all(np.isfinite(probs)):
+            raise ValueError(
+                "policy probabilities must be finite and non-negative; "
+                f"got min={probs.min()}, max={probs.max()}"
+            )
+        probs_sum = probs.sum()
+        if not np.isclose(probs_sum, 1.0, rtol=1e-10, atol=1e-12):
+            raise ValueError(
+                f"policy probabilities must sum to 1.0, got {probs_sum}"
+            )
 
         # 2.  Build event-rate vector
         #     [arrival_to_0 … arrival_to_{N-1}, departure_from_0 … departure_from_{N-1}]
@@ -177,6 +231,7 @@ def simulate(
         event = min(event, 2 * N - 1)               # safety clamp
 
         # 6.  Apply transition
+        pre_event_Q = Q.copy()
         if event < N:
             Q[event] += 1
             arrival_count += 1
@@ -188,7 +243,7 @@ def simulate(
         # 7.  Record snapshots at fixed intervals
         while next_sample <= t and sample_idx < max_samples:
             times_buf[sample_idx]  = next_sample
-            states_buf[sample_idx] = Q.copy()
+            states_buf[sample_idx] = pre_event_Q
             sample_idx  += 1
             next_sample += sample_interval
 
@@ -201,6 +256,12 @@ def simulate(
                 f"  |  Q_total={Q.sum()}"
             )
             next_log += log_interval
+
+    while next_sample <= sim_time and sample_idx < max_samples:
+        times_buf[sample_idx] = next_sample
+        states_buf[sample_idx] = Q.copy()
+        sample_idx += 1
+        next_sample += sample_interval
 
     return SimResult(
         times=times_buf[:sample_idx].copy(),

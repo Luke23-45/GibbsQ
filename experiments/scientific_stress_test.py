@@ -1,5 +1,5 @@
 """
-Advanced Scientific Stress Test: Q-MoE (Soft-JSQ) Robustness
+Advanced Scientific Stress Test: MoEQ (Soft-JSQ) Robustness
 -----------------------------------------------------------
 This script executes "Genius Scientist" level verification, stressing the 
 Soft-JSQ algorithm in regimes that are computationally prohibitive for standard libraries.
@@ -13,12 +13,10 @@ Utilizes JAX-vmap for parallelized High-Confidence Replications.
 """
 
 import logging
-from pathlib import Path
-
 import hydra
 import numpy as np
 import jax.numpy as jnp
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
 from moeq.core.config import hydra_to_config, validate
 from moeq.engines.distributed import sharded_replications
@@ -48,8 +46,11 @@ CRITICAL_RHOS = [0.9, 0.95, 0.99, 0.999]
 @hydra.main(version_base=None, config_path="../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
     cfg = hydra_to_config(raw_cfg)
-    # We allow overrides for stress testing
-    
+    validate(cfg)
+
+    if not cfg.jax.enabled:
+        raise ValueError("scientific_stress_test requires cfg.jax.enabled=True")
+
     # Initialize Run Capsule (Dynamic Directory + Config Persistence)
     run_dir, run_id = get_run_config(cfg, "scientific_stress", raw_cfg)
 
@@ -60,7 +61,7 @@ def main(raw_cfg: DictConfig) -> None:
     out_dir = run_dir
 
     log.info("=" * 60)
-    log.info("  Q-MoE Scientific Stress Test (JAX Accelerator Active)")
+    log.info("  MoEQ Scientific Stress Test (JAX Accelerator Active)")
     log.info("=" * 60)
 
     # 1. MASSIVE-N SCALING TEST
