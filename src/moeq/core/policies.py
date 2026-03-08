@@ -1,0 +1,271 @@
+"""
+Routing policies for the queueing network.
+
+Each policy implements the :class:`RoutingPolicy` protocol: a callable
+that maps a queue-length vector  Q ∈ Z₊^N  to a probability distribution
+p ∈ Δ_{N−1}  over the  N  servers.
+
+Design principles
+-----------------
+* **No mutable captured state.**  Every policy is an instance whose
+  ``__call__`` depends only on the current state  Q  and its *own*
+  deterministic parameters.  Stochastic policies (``PowerOfDRouting``)
+  accept an ``rng`` per-call rather than capturing one at construction,
+  so the simulator owns the sole ``Generator`` and reproducibility is
+  guaranteed.
+* **Numerical stability.**  ``SoftmaxRouting`` uses the log-sum-exp
+  trick with ``float64`` precision throughout.
+* **Vectorised where possible.**  The softmax computation is a single
+  chain of numpy operations — no Python loops.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+from typing import Protocol, runtime_checkable
+
+__all__ = [
+    "RoutingPolicy",
+    "SoftmaxRouting",
+    "UniformRouting",
+    "ProportionalRouting",
+    "JSQRouting",
+    "PowerOfDRouting",
+    "make_policy",
+]
+
+
+# ──────────────────────────────────────────────────────────────
+#  Protocol
+# ──────────────────────────────────────────────────────────────
+
+@runtime_checkable
+class RoutingPolicy(Protocol):
+    """
+    Structural interface for any routing policy.
+
+    Implementations must be callable with signature::
+
+        (Q: np.ndarray, rng: np.random.Generator) -> np.ndarray
+
+    where *Q* has shape ``(N,)`` and the return value is a
+    probability vector of shape ``(N,)`` summing to 1.
+
+    The *rng* argument is provided so that stochastic policies
+    can draw randomness from the simulator's generator, ensuring
+    a single source of entropy and perfect reproducibility.
+    Deterministic policies simply ignore *rng*.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray: ...
+
+
+# ──────────────────────────────────────────────────────────────
+#  Implementations
+# ──────────────────────────────────────────────────────────────
+
+class SoftmaxRouting:
+    """
+    Boltzmann (softmax) routing.
+
+    .. math::
+
+        p_i(Q) = \\frac{\\exp(-\\alpha Q_i)}{\\sum_{j=1}^N \\exp(-\\alpha Q_j)}
+
+    Uses the **log-sum-exp trick**:  shift logits by their maximum before
+    exponentiating to avoid overflow / underflow at extreme  α·Q  values.
+
+    Parameters
+    ----------
+    alpha : float
+        Inverse temperature.  Must be  > 0.
+    """
+
+    __slots__ = ("_alpha",)
+
+    def __init__(self, alpha: float) -> None:
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        self._alpha = float(alpha)
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,                       # unused
+    ) -> np.ndarray:
+        logits = -self._alpha * Q.astype(np.float64)     # −αQ_i
+        logits -= logits.max()                           # shift for stability
+        w = np.exp(logits)
+        return w / w.sum()
+
+    def __repr__(self) -> str:
+        return f"SoftmaxRouting(α={self._alpha})"
+
+
+class UniformRouting:
+    """
+    State-independent uniform routing:  p_i = 1/N  for all  i.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        N = len(Q)
+        return np.full(N, 1.0 / N, dtype=np.float64)
+
+    def __repr__(self) -> str:
+        return "UniformRouting()"
+
+
+class ProportionalRouting:
+    """
+    Proportional-to-capacity routing:  p_i = μ_i / Λ.
+
+    State-independent.  Throughput-optimal under the strict capacity
+    condition when servers are heterogeneous.
+
+    Parameters
+    ----------
+    mu : array_like, shape (N,)
+        Service rates  μ_i > 0.
+    """
+
+    __slots__ = ("_probs",)
+
+    def __init__(self, mu: np.ndarray) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        self._probs = mu / mu.sum()
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        return self._probs                               # immutable view
+
+    def __repr__(self) -> str:
+        return f"ProportionalRouting(N={len(self._probs)})"
+
+
+class JSQRouting:
+    """
+    Join-Shortest-Queue:  deterministically route to the server with
+    the smallest queue length.
+
+    **Tie-breaking.**  If  k  servers share the minimum, each receives
+    probability  1/k.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        mask = (Q == Q.min()).astype(np.float64)
+        return mask / mask.sum()
+
+    def __repr__(self) -> str:
+        return "JSQRouting()"
+
+
+class PowerOfDRouting:
+    """
+    Power-of-*d*-choices:  sample  *d*  servers uniformly at random,
+    then route to the one with the shortest queue among them.
+
+    The ``rng`` argument in ``__call__`` is used for the random
+    sample, so the policy is *stochastic* but fully reproducible
+    given the simulator's seed.
+
+    Parameters
+    ----------
+    d : int
+        Number of servers to sample.   1 ≤ d ≤ N.
+    """
+
+    __slots__ = ("_d",)
+
+    def __init__(self, d: int = 2) -> None:
+        if d < 1:
+            raise ValueError(f"d must be ≥ 1, got {d}")
+        self._d = d
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        N = len(Q)
+        d = min(self._d, N)
+        candidates = rng.choice(N, size=d, replace=False)
+        winner = candidates[Q[candidates].argmin()]
+
+        probs = np.zeros(N, dtype=np.float64)
+        probs[winner] = 1.0
+        return probs
+
+    def __repr__(self) -> str:
+        return f"PowerOfDRouting(d={self._d})"
+
+
+# ──────────────────────────────────────────────────────────────
+#  Factory
+# ──────────────────────────────────────────────────────────────
+
+def make_policy(
+    name: str,
+    *,
+    alpha: float = 1.0,
+    mu: np.ndarray | None = None,
+    d: int = 2,
+) -> RoutingPolicy:
+    """
+    Construct a :class:`RoutingPolicy` from a string name and kwargs.
+
+    Parameters
+    ----------
+    name : str
+        One of  ``"softmax"``, ``"uniform"``, ``"proportional"``,
+        ``"jsq"``, ``"power_of_d"``.
+    alpha : float
+        Inverse temperature (softmax only).
+    mu : ndarray
+        Service rates (proportional only).
+    d : int
+        Number of choices (power_of_d only).
+
+    Returns
+    -------
+    RoutingPolicy
+        A callable conforming to the :class:`RoutingPolicy` protocol.
+    """
+    match name:
+        case "softmax":
+            return SoftmaxRouting(alpha)
+        case "uniform":
+            return UniformRouting()
+        case "proportional":
+            if mu is None:
+                raise ValueError("Proportional routing requires 'mu' (service rates)")
+            return ProportionalRouting(np.asarray(mu, dtype=np.float64))
+        case "jsq":
+            return JSQRouting()
+        case "power_of_d":
+            return PowerOfDRouting(d)
+        case _:
+            raise ValueError(
+                f"Unknown policy '{name}'.  "
+                f"Valid: softmax, uniform, proportional, jsq, power_of_d"
+            )
