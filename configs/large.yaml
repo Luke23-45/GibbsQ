@@ -7,7 +7,7 @@ defaults:
 jax:
   enabled: true
   platform: auto
-  precision: float64
+  precision: float32
   fallback_to_cpu: true
 
 system:
