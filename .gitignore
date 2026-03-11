@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.hypothesis
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Hydra outputs
+outputs/
+multirun/
+
+# Data artifacts
+*.npz
+*.csv
+*.parquet
+temp
+# Plots (generated, not source)
+*.png
+*.pdf
+docs/plan
+# OS
+.DS_Store
+Thumbs.db

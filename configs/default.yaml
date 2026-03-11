@@ -1,0 +1,60 @@
+# Default experiment configuration
+
+system:
+  num_servers: 10
+  arrival_rate: 10.4
+  service_rates: [0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]
+  # Λ = Σ μ_i = 13.0, ρ = 10.4/13.0 = 0.8
+  alpha: 1.0
+
+simulation:
+  sim_time: 25000.0
+  sample_interval: 0.1
+  num_replications: 30
+  seed: 42
+  burn_in_fraction: 0.2
+  export_trajectories: false
+
+policy:
+  name: softmax
+  d: 2
+
+drift:
+  q_max: 50
+  use_grid: true
+
+stress:
+  n_values: [8, 32, 128, 512, 1024]
+  critical_rhos: [0.9, 0.95, 0.99, 0.999]
+
+generalization:
+  rho_boundary_vals: [0.90, 0.95, 0.98, 0.99, 0.999]
+  scale_vals: [0.5, 1.0, 2.0, 5.0, 10.0]
+  rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
+
+neural_training:
+  learning_rate: 3e-3
+  weight_decay: 1e-4
+  curriculum:
+    - [20, 500]
+    - [30, 2000]
+    - [50, 5000]
+
+jax:
+  enabled: false
+  platform: auto
+  precision: float64
+  fallback_to_cpu: true
+
+wandb:
+  enabled: false
+  project: GibbsQ
+  mode: offline
+  run_name: null
+
+output_dir: outputs
+log_dir: ${output_dir}/logs
+
+# Verification flags
+debug: false
+train_epochs: 30

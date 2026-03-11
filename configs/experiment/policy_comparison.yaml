@@ -1,0 +1,20 @@
+# @package _global_
+
+# High-fidelity parameters for the baseline policy comparison
+simulation:
+  num_replications: 100
+  sim_time: 25000.0
+  burn_in_fraction: 0.2
+  sample_interval: 0.1
+
+jax:
+  enabled: true
+  platform: auto
+  precision: float64
+  fallback_to_cpu: true
+
+wandb:
+  enabled: true
+  mode: offline
+  project: GibbsQ-Paper
+  group: policy_evaluation

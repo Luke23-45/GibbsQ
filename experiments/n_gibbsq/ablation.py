@@ -1,0 +1,172 @@
+"""
+N-GibbsQ ablation study.
+
+Evaluates contributions of log-state normalization and zero-initialized
+final layers to overall performance.
+
+Variants Tested:
+1. Full model
+2. No Preprocessing (Remove log1p normalization)
+3. No Zero Init (Use default random initialization for the final layer)
+4. Random Policy (Baseline comparison)
+"""
+
+import jax
+import jax.numpy as jnp
+import equinox as eqx
+import logging
+import hydra
+from pathlib import Path
+from omegaconf import DictConfig
+from jaxtyping import Array, Float, PRNGKeyArray
+import matplotlib.pyplot as plt
+import numpy as np
+
+import optax
+
+from gibbsq.core.config import hydra_to_config, validate
+from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy, expected_queue_loss
+from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.utils.logging import setup_wandb, get_run_config
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+log = logging.getLogger(__name__)
+
+def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
+    """Pure functional bridge."""
+    return model(Q)
+
+class AblationRouter(NeuralRouter):
+    """Modified router for ablation testing."""
+    ablate_log: bool = eqx.field(static=True)
+
+    def __init__(self, num_servers, hidden_size, key, ablate_log=False, ablate_zero=False):
+        self.ablate_log = ablate_log
+        super().__init__(num_servers, hidden_size, key)
+        
+        if ablate_zero:
+            # Re-initialize the final layer with standard Lecun normal
+            k = jax.random.split(key, 1)[0]
+            l3 = eqx.nn.Linear(hidden_size, num_servers, key=k)
+            self.layers = self.layers[:-1] + [l3]
+
+    def __call__(self, Q):
+        x = Q if self.ablate_log else jnp.log1p(Q)
+        for layer in self.layers[:-1]:
+            x = jax.nn.relu(layer(x))
+        return self.layers[-1](x)
+
+class AblationStudy:
+    """
+    Scientific suite to decompose N-GibbsQ performance.
+    """
+    def __init__(self, cfg, run_dir: Path, run_logger):
+        self.cfg = cfg
+        self.run_dir = run_dir
+        self.run_logger = run_logger
+        self.num_servers = cfg.system.num_servers
+        self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
+        self.arrival_rate = float(cfg.system.arrival_rate)
+        self.sim_steps = int(cfg.simulation.sim_time)
+        self.temperature = float(cfg.simulation.temperature)
+
+    def execute(self, key: PRNGKeyArray):
+        """Runs all ablation variants."""
+        keys = jax.random.split(key, 5)
+        
+        # Variants: (Name, ablate_log, ablate_zero)
+        variants = [
+            ("Full Model", False, False),
+            ("Ablated: No Log-Norm", True, False),
+            ("Ablated: No Zero-Init", False, True),
+            ("No Routing (Random)", "RANDOM", "RANDOM")
+        ]
+        
+        results = {}
+        
+        log.info("Starting Ablation Benchmark...")
+        
+        for name, a_log, a_zero in variants:
+            if name == "No Routing (Random)":
+                loss = simulate_dga_jax(
+                    self.num_servers, self.arrival_rate, self.service_rates, jnp.zeros(self.num_servers), 
+                    self.sim_steps, keys[4], self.temperature, default_policy
+                )
+            else:
+                router = AblationRouter(self.num_servers, 64, keys[0], a_log, a_zero)
+                
+                # Mini-Curriculum Training (15 epochs at T=500) to expose initialization/preprocessing effects
+                optimizer = optax.adamw(learning_rate=3e-3, weight_decay=1e-4)
+                opt_state = optimizer.init(eqx.filter(router, eqx.is_array))
+                
+                train_key = keys[1]
+                
+                def _loss_fn(m, k):
+                    return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, 2000, self.temperature, evaluate_model)
+                
+                @eqx.filter_jit
+                def train_step(model_t, opt_state_t, key_t):
+                    l, grads = eqx.filter_value_and_grad(_loss_fn)(model_t, key_t)
+                    updates, new_opt_state = optimizer.update(grads, opt_state_t, model_t)
+                    new_model = eqx.apply_updates(model_t, updates)
+                    return l, new_model, new_opt_state
+                
+                log.info(f"   [Training] {name} for 20 epochs at T=2000...")
+                for ep in range(20):
+                    train_key, subkey = jax.random.split(train_key)
+                    l, router, opt_state = train_step(router, opt_state, subkey)
+                
+                # Evaluate the trained variant over the full long horizon
+                loss = simulate_dga_jax(
+                    self.num_servers, self.arrival_rate, self.service_rates, router, 
+                    self.sim_steps, keys[2], self.temperature, evaluate_model
+                )
+            
+            results[name] = float(loss)
+            log.info(f"   {name:<25} | Final Eval Loss: {results[name]:.4f}")
+
+        self._plot(results)
+
+    def _plot(self, results):
+        """Generates the ablation bar chart."""
+        plt.figure(figsize=(10, 6))
+        names = list(results.keys())
+        values = list(results.values())
+        
+        bars = plt.bar(names, values, color=['#2ecc71', '#e67e22', '#e74c3c', '#95a5a6'])
+        plt.title('N-GibbsQ Component Ablation Study (Initialization Regime)')
+        plt.ylabel('Expected Queue Length $\mathbb{E}[Q]$')
+        plt.xticks(rotation=15)
+        plt.grid(True, axis='y', alpha=0.3)
+        
+        # Add labels on top
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval + 1, round(yval, 2), ha='center', va='bottom')
+            
+        plot_path = self.run_dir / "ablation_study.png"
+        plt.savefig(plot_path, dpi=300)
+        plt.close()
+        
+        log.info(f"Ablation complete. Plot saved to {plot_path}")
+        
+        if self.run_logger:
+            self.run_logger.log({"ablation_results": results})
+
+@hydra.main(version_base=None, config_path="../../configs", config_name="default")
+def main(raw_cfg: DictConfig):
+    cfg = hydra_to_config(raw_cfg)
+    validate(cfg)
+
+    run_dir, run_id = get_run_config(cfg, "ablation_study", raw_cfg)
+    run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
+
+    log.info("=" * 60)
+    log.info("  Phase IX: Scientific Ablation Study")
+    log.info("=" * 60)
+    
+    study = AblationStudy(cfg, run_dir, run_logger)
+    study.execute(jax.random.PRNGKey(888))
+
+if __name__ == "__main__":
+    main()
