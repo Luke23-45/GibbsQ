@@ -26,7 +26,7 @@ drift:
 jax:
   enabled: false
   platform: auto
-  precision: float64
+  precision: float32
   fallback_to_cpu: true
 
 wandb:

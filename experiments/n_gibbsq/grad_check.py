@@ -31,7 +31,7 @@ class GradientFidelityChecker:
         self.run_dir = run_dir
         self.run_logger = run_logger
         self.num_servers = cfg.system.num_servers
-        precision = jnp.float64 if cfg.jax.precision == "float64" else jnp.float32
+        precision = jnp.float32 if cfg.jax.precision == "float32" else jnp.float64
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=precision)
         self.arrival_rate = float(cfg.system.arrival_rate)
         self.temperature = float(cfg.simulation.temperature)

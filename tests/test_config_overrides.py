@@ -51,7 +51,7 @@ def test_experiment_profile_composition_stability_sweep():
         assert cfg.simulation.sim_time == 25000.0
         assert math.isclose(cfg.simulation.sample_interval, 0.1)
         assert cfg.jax.enabled is True
-        assert cfg.jax.precision == "float64"
+        assert cfg.jax.precision == "float32"
 
 def test_experiment_profile_composition_stability_sweep_small():
     """Ensure the small stability_sweep variation uses efficient parameters."""
@@ -65,6 +65,7 @@ def test_experiment_profile_composition_stability_sweep_small():
         assert cfg.simulation.num_replications == 5
         assert math.isclose(cfg.simulation.sample_interval, 0.05)
         assert cfg.jax.enabled is True
+        assert cfg.jax.precision == "float32"
 
 def test_experiment_profile_composition_stability_sweep_large():
     """Ensure the large stability_sweep variation uses OOM-safe parameters."""
@@ -78,7 +79,7 @@ def test_experiment_profile_composition_stability_sweep_large():
         assert cfg.simulation.num_replications == 10
         assert math.isclose(cfg.simulation.sample_interval, 0.5)
         assert cfg.jax.enabled is True
-        assert cfg.jax.precision == "float64"
+        assert cfg.jax.precision == "float32"
 
 def test_experiment_profile_composition_policy_comparison():
     """Ensure the standard policy_comparison experiment profile maintains high-fidelity overrides."""
