@@ -47,6 +47,36 @@ case "$EXPERIMENT" in
     "policy")
         PYTHON_SCRIPT="experiments.evaluation.policy_comparison"
         ;;
+    "stress")
+        PYTHON_SCRIPT="experiments.testing.stress_test"
+        ;;
+    "train")
+        PYTHON_SCRIPT="experiments.training.train_dga"
+        ;;
+    "fidelity")
+        PYTHON_SCRIPT="experiments.n_gibbsq.grad_check"
+        ;;
+    "n_train")
+        PYTHON_SCRIPT="experiments.n_gibbsq.train"
+        ;;
+    "parity")
+        PYTHON_SCRIPT="experiments.n_gibbsq.eval"
+        ;;
+    "jacobian")
+        PYTHON_SCRIPT="experiments.n_gibbsq.jacobian_check"
+        ;;
+    "stats")
+        PYTHON_SCRIPT="experiments.n_gibbsq.stats_bench"
+        ;;
+    "generalize")
+        PYTHON_SCRIPT="experiments.n_gibbsq.gen_sweep"
+        ;;
+    "ablation")
+        PYTHON_SCRIPT="experiments.n_gibbsq.ablation"
+        ;;
+    "critical")
+        PYTHON_SCRIPT="experiments.n_gibbsq.critical_load"
+        ;;
     "-h"|"--help"|"help")
         print_usage
         exit 0
