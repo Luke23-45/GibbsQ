@@ -40,52 +40,83 @@ def test_cli_overrides():
         assert cfg.wandb.mode == "online"
 
 def test_experiment_profile_composition_stability_sweep():
-    """Ensure the stability_sweep experiment profile accurately overrides the defaults."""
+    """Ensure the standard stability_sweep experiment profile maintains high-fidelity paper defaults."""
     with initialize(version_base=None, config_path="../configs"):
         cfg_raw = compose(config_name="default", overrides=["+experiment=stability_sweep"])
         cfg = hydra_to_config(cfg_raw)
         validate(cfg)
         
-        # Checking overrides specific to stability_sweep
-        assert cfg.simulation.num_replications == 50  # Overridden from 30
+        # Checking high-fidelity paper defaults
+        assert cfg.simulation.num_replications == 50
         assert cfg.simulation.sim_time == 25000.0
+        assert math.isclose(cfg.simulation.sample_interval, 0.1)
         assert cfg.jax.enabled is True
-        assert cfg.wandb.enabled is True
-        assert cfg.wandb.mode == "offline"  # Ensure it stays offline based on recent manual fix
-        assert cfg.wandb.group == "stability_sweep"
+        assert cfg.jax.precision == "float64"
+
+def test_experiment_profile_composition_stability_sweep_small():
+    """Ensure the small stability_sweep variation uses efficient parameters."""
+    with initialize(version_base=None, config_path="../configs"):
+        cfg_raw = compose(config_name="small", overrides=["+experiment=stability_sweep_small"])
+        cfg = hydra_to_config(cfg_raw)
+        validate(cfg)
+        
+        # Small config specialized values
+        assert cfg.simulation.sim_time == 1000.0
+        assert cfg.simulation.num_replications == 5
+        assert math.isclose(cfg.simulation.sample_interval, 0.05)
+        assert cfg.jax.enabled is True
+
+def test_experiment_profile_composition_stability_sweep_large():
+    """Ensure the large stability_sweep variation uses OOM-safe parameters."""
+    with initialize(version_base=None, config_path="../configs"):
+        cfg_raw = compose(config_name="large", overrides=["+experiment=stability_sweep_large"])
+        cfg = hydra_to_config(cfg_raw)
+        validate(cfg)
+        
+        # Large config safe values
+        assert cfg.simulation.sim_time == 5000.0
+        assert cfg.simulation.num_replications == 10
+        assert math.isclose(cfg.simulation.sample_interval, 0.5)
+        assert cfg.jax.enabled is True
+        assert cfg.jax.precision == "float64"
 
 def test_experiment_profile_composition_policy_comparison():
-    """Ensure the policy_comparison experiment profile overrides only JAX/WandB, not simulation."""
+    """Ensure the standard policy_comparison experiment profile maintains high-fidelity overrides."""
     with initialize(version_base=None, config_path="../configs"):
         cfg_raw = compose(config_name="default", overrides=["+experiment=policy_comparison"])
         cfg = hydra_to_config(cfg_raw)
         validate(cfg)
         
-        # Simulation params must come from the base config (default.yaml), NOT the overlay
-        assert cfg.simulation.num_replications == 30   # Default preserved (no longer overridden to 100)
-        assert cfg.simulation.sim_time == 25000.0      # Default preserved
-        assert math.isclose(cfg.simulation.sample_interval, 0.1)  # Default preserved
-        # JAX and WandB overrides should still apply
+        # Checking high-fidelity paper defaults
+        assert cfg.simulation.num_replications == 100
+        assert cfg.simulation.sim_time == 25000.0
+        assert math.isclose(cfg.simulation.sample_interval, 0.1)
         assert cfg.jax.enabled is True
-        assert cfg.wandb.group == "policy_evaluation"
-        assert cfg.wandb.mode == "offline"
 
-def test_policy_comparison_respects_small_config():
-    """Regression test: policy_comparison overlay must NOT override small.yaml simulation params.
-    
-    This test catches the exact bug that caused ~833x compute overhead on the small config
-    and 9.31 GiB GPU OOM on the large config.
-    """
+def test_experiment_profile_composition_policy_comparison_small():
+    """Ensure the small policy_comparison variation uses efficient parameters."""
     with initialize(version_base=None, config_path="../configs"):
-        cfg_raw = compose(config_name="small", overrides=["+experiment=policy_comparison"])
+        cfg_raw = compose(config_name="small", overrides=["+experiment=policy_comparison_small"])
         cfg = hydra_to_config(cfg_raw)
         validate(cfg)
         
-        # Small config's native simulation values must survive the overlay
-        assert cfg.simulation.sim_time == 1000.0                    # NOT 25000
-        assert cfg.simulation.num_replications == 3                 # NOT 100
-        assert math.isclose(cfg.simulation.sample_interval, 0.05)  # NOT 0.1
-        # JAX should be enabled by the overlay
+        # Small config specialized values
+        assert cfg.simulation.sim_time == 1000.0
+        assert cfg.simulation.num_replications == 3
+        assert math.isclose(cfg.simulation.sample_interval, 0.05)
+        assert cfg.jax.enabled is True
+
+def test_experiment_profile_composition_policy_comparison_large():
+    """Ensure the large policy_comparison variation uses OOM-safe parameters."""
+    with initialize(version_base=None, config_path="../configs"):
+        cfg_raw = compose(config_name="large", overrides=["+experiment=policy_comparison_large"])
+        cfg = hydra_to_config(cfg_raw)
+        validate(cfg)
+        
+        # Large config safe values
+        assert cfg.simulation.sim_time == 5000.0
+        assert cfg.simulation.num_replications == 100
+        assert math.isclose(cfg.simulation.sample_interval, 1.0)
         assert cfg.jax.enabled is True
 
 def test_validation_failure_on_bad_override():

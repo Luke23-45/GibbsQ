@@ -1,11 +1,11 @@
 # @package _global_
 
-# High-fidelity parameters for the baseline policy comparison
+# Fast validation parameters for small-scale policy comparison
 simulation:
-  num_replications: 100
-  sim_time: 25000.0
+  num_replications: 3
+  sim_time: 1000.0
   burn_in_fraction: 0.2
-  sample_interval: 0.1
+  sample_interval: 0.05
 
 jax:
   enabled: true

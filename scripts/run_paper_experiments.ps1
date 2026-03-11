@@ -46,11 +46,17 @@ Invoke-Expression "& `"$RunScript`" fidelity $($HydraArgs -join ' ')"
 Write-Host "`n[3/10] Running Jacobian Rigor (AD Check)..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" jacobian $($HydraArgs -join ' ')"
 
+# Determine if we need a scale-specialized overlay suffix (_small or _large)
+$ArgString = $HydraArgs -join " "
+$ExpSuffix = ""
+if ($ArgString -like "*config-name small*") { $ExpSuffix = "_small" }
+elseif ($ArgString -like "*config-name large*") { $ExpSuffix = "_large" }
+
 Write-Host "`n[4/10] Running Policy Evaluation Benchmark..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" policy +experiment=policy_comparison $($HydraArgs -join ' ')"
+Invoke-Expression "& `"$RunScript`" policy +experiment=policy_comparison$ExpSuffix $($HydraArgs -join ' ')"
 
 Write-Host "`n[5/10] Running Stability Sweep..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" sweep +experiment=stability_sweep $($HydraArgs -join ' ')"
+Invoke-Expression "& `"$RunScript`" sweep +experiment=stability_sweep$ExpSuffix $($HydraArgs -join ' ')"
 
 Write-Host "`n[6/10] Running Scaling Stress Tests..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" stress ++jax.enabled=True $($HydraArgs -join ' ')"
