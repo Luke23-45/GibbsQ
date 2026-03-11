@@ -37,3 +37,5 @@ docs/plan
 .DS_Store
 Thumbs.db
 logs.md
+large_logs.md
+small_logs.md

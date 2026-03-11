@@ -46,10 +46,10 @@ Invoke-Expression "& `"$RunScript`" fidelity $($HydraArgs -join ' ')"
 Write-Host "`n[3/10] Running Jacobian Rigor (AD Check)..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" jacobian $($HydraArgs -join ' ')"
 
-Write-Host "`n[3/9] Running Policy Evaluation Benchmark..." -ForegroundColor Yellow
+Write-Host "`n[4/10] Running Policy Evaluation Benchmark..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" policy +experiment=policy_comparison $($HydraArgs -join ' ')"
 
-Write-Host "`n[4/9] Running Stability Sweep..." -ForegroundColor Yellow
+Write-Host "`n[5/10] Running Stability Sweep..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" sweep +experiment=stability_sweep $($HydraArgs -join ' ')"
 
 Write-Host "`n[6/10] Running Scaling Stress Tests..." -ForegroundColor Yellow
@@ -58,13 +58,13 @@ Invoke-Expression "& `"$RunScript`" stress ++jax.enabled=True $($HydraArgs -join
 # ---------------------------------------------------------
 # Phase 2: N-GibbsQ Neural Learning Pipeline
 # ---------------------------------------------------------
-Write-Host "`n[6/9] Running DGA Routing Agent Core Training..." -ForegroundColor Yellow
+Write-Host "`n[7/10] Running DGA Routing Agent Core Training..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" train $($HydraArgs -join ' ')"
 
-Write-Host "`n[7/9] Running Neural Curriculum Training..." -ForegroundColor Yellow
+Write-Host "`n[8/10] Running Neural Curriculum Training..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" n_train $($HydraArgs -join ' ')"
 
-Write-Host "`n[8/9] Verifying Neural Parity against GibbsQ Ground Truth..." -ForegroundColor Yellow
+Write-Host "`n[9/10] Verifying Neural Parity against GibbsQ Ground Truth..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" parity $($HydraArgs -join ' ')"
 
 # ---------------------------------------------------------

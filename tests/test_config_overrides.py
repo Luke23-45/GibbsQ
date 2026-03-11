@@ -55,17 +55,38 @@ def test_experiment_profile_composition_stability_sweep():
         assert cfg.wandb.group == "stability_sweep"
 
 def test_experiment_profile_composition_policy_comparison():
-    """Ensure the policy_comparison experiment profile accurately overrides the defaults."""
+    """Ensure the policy_comparison experiment profile overrides only JAX/WandB, not simulation."""
     with initialize(version_base=None, config_path="../configs"):
         cfg_raw = compose(config_name="default", overrides=["+experiment=policy_comparison"])
         cfg = hydra_to_config(cfg_raw)
         validate(cfg)
         
-        # Checking overrides specific to policy_comparison
-        assert cfg.simulation.num_replications == 100  # Overridden from 30
+        # Simulation params must come from the base config (default.yaml), NOT the overlay
+        assert cfg.simulation.num_replications == 30   # Default preserved (no longer overridden to 100)
+        assert cfg.simulation.sim_time == 25000.0      # Default preserved
+        assert math.isclose(cfg.simulation.sample_interval, 0.1)  # Default preserved
+        # JAX and WandB overrides should still apply
         assert cfg.jax.enabled is True
         assert cfg.wandb.group == "policy_evaluation"
         assert cfg.wandb.mode == "offline"
+
+def test_policy_comparison_respects_small_config():
+    """Regression test: policy_comparison overlay must NOT override small.yaml simulation params.
+    
+    This test catches the exact bug that caused ~833x compute overhead on the small config
+    and 9.31 GiB GPU OOM on the large config.
+    """
+    with initialize(version_base=None, config_path="../configs"):
+        cfg_raw = compose(config_name="small", overrides=["+experiment=policy_comparison"])
+        cfg = hydra_to_config(cfg_raw)
+        validate(cfg)
+        
+        # Small config's native simulation values must survive the overlay
+        assert cfg.simulation.sim_time == 1000.0                    # NOT 25000
+        assert cfg.simulation.num_replications == 3                 # NOT 100
+        assert math.isclose(cfg.simulation.sample_interval, 0.05)  # NOT 0.1
+        # JAX should be enabled by the overlay
+        assert cfg.jax.enabled is True
 
 def test_validation_failure_on_bad_override():
     """Ensure mathematical corruption (e.g. arrival > capacity) is blocked by the config system."""
