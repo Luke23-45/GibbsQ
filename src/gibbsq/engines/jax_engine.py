@@ -404,23 +404,21 @@ def _run_replications_jax_impl(
     """
     keys = jax.random.split(jax.random.PRNGKey(base_seed), num_replications)
     
-    # Vectorize across the keys
-    v_sim = jax.vmap(
-        lambda k: _simulate_jax_impl(
-            num_servers=num_servers,
-            arrival_rate=arrival_rate,
-            service_rates=service_rates,
-            alpha=alpha,
-            sim_time=sim_time,
-            sample_interval=sample_interval,
-            key=k,
-            max_samples=max_samples,
-            policy_type=policy_type,
-            d=d
-        )
+    # Use jax.lax.map for memory-efficient iteration over the batch frame.
+    v_sim = lambda k: _simulate_jax_impl(
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        alpha=alpha,
+        sim_time=sim_time,
+        sample_interval=sample_interval,
+        key=k,
+        max_samples=max_samples,
+        policy_type=policy_type,
+        d=d
     )
     
-    return v_sim(keys)
+    return jax.lax.map(v_sim, keys)
 
 
 def run_replications_jax(

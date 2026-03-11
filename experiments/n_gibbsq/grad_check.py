@@ -31,12 +31,13 @@ class GradientFidelityChecker:
         self.run_dir = run_dir
         self.run_logger = run_logger
         self.num_servers = cfg.system.num_servers
-        self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
+        precision = jnp.float64 if cfg.jax.precision == "float64" else jnp.float32
+        self.service_rates = jnp.array(cfg.system.service_rates, dtype=precision)
         self.arrival_rate = float(cfg.system.arrival_rate)
         self.temperature = float(cfg.simulation.temperature)
         
         # Test gradient at a stable non-zero scalar routing parameter
-        self.alpha_test = jnp.float32(0.5) 
+        self.alpha_test = jnp.array(0.5, dtype=precision) 
         
         # Horizons to sweep (log scale roughly)
         self.horizons = [100, 500, 1000, 2500, 5000, 10000]

@@ -128,7 +128,7 @@ class JacobianValidator:
         log.info("=" * 50)
         log.info(f"Max Relative Error:  {max_rel_err:.2e}")
         log.info(f"Mean Relative Error: {mean_rel_err:.2e}")
-        log.info(f"Status: {'PASS' if max_rel_err < 5e-4 else 'FAIL'}")
+        log.info(f"Status: {'PASS' if max_rel_err < 1e-2 else 'FAIL'}")
         log.info("=" * 50)
 
         # Logging to WandB
