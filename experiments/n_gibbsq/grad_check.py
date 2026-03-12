@@ -15,7 +15,9 @@ from pathlib import Path
 from omegaconf import DictConfig
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import expected_queue_loss
+from gibbsq.engines.differentiable_engine import (
+    simulate_dga_jax_dynamic_steps,
+)
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 
@@ -42,11 +44,29 @@ class GradientFidelityChecker:
         # Horizons to sweep (log scale roughly)
         self.horizons = [100, 500, 1000, 2500, 5000, 10000]
 
-        # JAX compilation caching static step counts
+        # Use forward-mode differentiation over a dynamic-step simulation to
+        # avoid recompilation when sweeping horizon values.
         self.loss_grad_fn = jax.jit(
-            jax.value_and_grad(expected_queue_loss, argnums=0),
-            static_argnums=(4, 5) 
+            self._loss_and_grad,
+            static_argnums=(4,),
         )
+
+    @staticmethod
+    def _loss_and_grad(alpha, arrival_rate, service_rates, key, num_servers, sim_steps, temperature):
+        def _loss_fn(alpha_param):
+            return simulate_dga_jax_dynamic_steps(
+                num_servers=num_servers,
+                arrival_rate=arrival_rate,
+                service_rates=service_rates,
+                params=alpha_param,
+                sim_steps=sim_steps,
+                key=key,
+                temperature=temperature,
+            )
+
+        tangent = jnp.array(1.0, dtype=alpha.dtype)
+        loss_val, grad_val = jax.jvp(_loss_fn, (alpha,), (tangent,))
+        return loss_val, grad_val
 
     def execute(self, key: jax.random.PRNGKey):
         """Sweeps horizons and measures gradient survival."""

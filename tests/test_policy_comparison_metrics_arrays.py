@@ -1,0 +1,49 @@
+import numpy as np
+
+from experiments.evaluation.policy_comparison import _compute_metrics_from_arrays
+from gibbsq.analysis.metrics import gini_coefficient, sojourn_time_estimate, time_averaged_queue_lengths
+from gibbsq.engines.numpy_engine import SimResult
+
+
+def test_compute_metrics_from_arrays_matches_reference_loop():
+    reps, t_steps, n = 3, 16, 2
+    rng = np.random.default_rng(7)
+
+    times = np.tile(np.linspace(0.0, 3.0, t_steps, dtype=np.float64), (reps, 1))
+    states = rng.integers(0, 6, size=(reps, t_steps, n), dtype=np.int32)
+    arrs = rng.integers(10, 20, size=(reps,), dtype=np.int32)
+    deps = rng.integers(10, 20, size=(reps,), dtype=np.int32)
+
+    burn = 0.2
+    lam = 1.0
+
+    q_vals, g_vals, w_vals, last_res = _compute_metrics_from_arrays(
+        times=times,
+        states=states,
+        arrs=arrs,
+        deps=deps,
+        num_servers=n,
+        arrival_rate=lam,
+        burn_in_fraction=burn,
+    )
+
+    q_ref, g_ref, w_ref = [], [], []
+    for r in range(reps):
+        res = SimResult(
+            times=times[r],
+            states=states[r],
+            arrival_count=int(arrs[r]),
+            departure_count=int(deps[r]),
+            final_time=float(times[r][-1]),
+            num_servers=n,
+        )
+        avg_q = time_averaged_queue_lengths(res, burn)
+        q_ref.append(float(avg_q.sum()))
+        g_ref.append(float(gini_coefficient(avg_q)))
+        w_ref.append(float(sojourn_time_estimate(res, lam, burn)))
+
+    assert np.allclose(q_vals, q_ref)
+    assert np.allclose(g_vals, g_ref)
+    assert np.allclose(w_vals, w_ref)
+    assert np.array_equal(last_res.times, times[-1])
+    assert np.array_equal(last_res.states, states[-1])

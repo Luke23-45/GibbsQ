@@ -12,6 +12,16 @@ echo -e "\033[1;35m==========================================================\03
 
 echo -e "\n\033[1;36m[Initiating Pipeline...]\033[0m\n"
 
+# Determine scale-specific experiment overlay suffix from Hydra args.
+# Example: --config-name small -> +experiment=*_small
+EXP_SUFFIX=""
+ARG_STRING="$*"
+if [[ "$ARG_STRING" == *"--config-name small"* ]]; then
+  EXP_SUFFIX="_small"
+elif [[ "$ARG_STRING" == *"--config-name large"* ]]; then
+  EXP_SUFFIX="_large"
+fi
+
 # ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
 # ---------------------------------------------------------
@@ -25,10 +35,10 @@ echo -e "\n\033[1;33m[3/10] Running Jacobian Rigor (AD Check)...\033[0m"
 "$RUN_SCRIPT" jacobian "$@"
 
 echo -e "\n\033[1;33m[3/9] Running Policy Evaluation Benchmark...\033[0m"
-"$RUN_SCRIPT" policy +experiment=policy_comparison "$@"
+"$RUN_SCRIPT" policy "+experiment=policy_comparison${EXP_SUFFIX}" "$@"
 
 echo -e "\n\033[1;33m[4/9] Running Stability Sweep...\033[0m"
-"$RUN_SCRIPT" sweep +experiment=stability_sweep "$@"
+"$RUN_SCRIPT" sweep "+experiment=stability_sweep${EXP_SUFFIX}" "$@"
 
 echo -e "\n\033[1;33m[6/10] Running Scaling Stress Tests...\033[0m"
 "$RUN_SCRIPT" stress ++jax.enabled=True "$@"

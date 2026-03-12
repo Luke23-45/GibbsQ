@@ -20,6 +20,50 @@ class DGASimState(NamedTuple):
     key: jax.random.PRNGKey
     expected_Q_tot: jnp.float32  # Accumulated metric for loss tracking
 
+
+def _dga_step(
+    state: DGASimState,
+    num_servers: int,
+    arrival_rate: float,
+    service_rates: jnp.ndarray,
+    params: Any,
+    temperature: float,
+    apply_fn: Callable,
+) -> DGASimState:
+    """Single differentiable Gillespie step shared by scan/fori implementations."""
+    k1, k2 = jax.random.split(state.key)
+
+    # 1. Routing Probabilities (fully differentiable via apply_fn)
+    logits = apply_fn(params, state.Q)
+    max_logit = jnp.max(logits)
+    exp_logits = jnp.exp(logits - lax.stop_gradient(max_logit))
+    probs = exp_logits / jnp.sum(exp_logits)
+
+    # 2. Relaxed Propensities
+    arrival_rates = arrival_rate * probs
+    departure_rates = service_rates * jax.nn.sigmoid(state.Q * 20.0)
+
+    rates = jnp.concatenate([arrival_rates, departure_rates])
+    a0 = jnp.sum(rates)
+
+    # 3. Expected Holding Time (Deterministic for variance reduction)
+    tau = 1.0 / jnp.maximum(a0, 1e-9)
+
+    # 4. Gumbel-Softmax Event Selection
+    gumbels = -jnp.log(-jnp.log(jax.random.uniform(k1, shape=rates.shape) + 1e-9) + 1e-9)
+    event_weights = jax.nn.softmax((jnp.log(rates + 1e-9) + gumbels) / temperature)
+
+    # 5. Continuous State Update
+    arr_updates = event_weights[:num_servers]
+    dep_updates = -event_weights[num_servers:]
+
+    new_Q = jax.nn.relu(state.Q + arr_updates + dep_updates)
+    new_t = state.t + tau
+
+    current_Q_tot = jnp.sum(new_Q)
+    new_expected_Q = state.expected_Q_tot + (current_Q_tot * tau)
+    return DGASimState(t=new_t, Q=new_Q, key=k2, expected_Q_tot=new_expected_Q)
+
 @partial(jax.jit, static_argnames=("num_servers", "sim_steps", "apply_fn"))
 def simulate_dga_jax(
     num_servers: int,
@@ -41,47 +85,14 @@ def simulate_dga_jax(
     """
     
     def body_fun(carry, _):
-        state = carry
-        k1, k2 = jax.random.split(state.key)
-        
-        # 1. Routing Probabilities (fully differentiable via apply_fn)
-        logits = apply_fn(params, state.Q)
-        max_logit = jnp.max(logits)
-        exp_logits = jnp.exp(logits - lax.stop_gradient(max_logit))
-        probs = exp_logits / jnp.sum(exp_logits)
-        
-        # 2. Relaxed Propensities
-        arrival_rates = arrival_rate * probs
-        # Sigmoid relaxation for (Q > 0): if Q is near 0, departure rate lowers smoothly
-        departure_rates = service_rates * jax.nn.sigmoid(state.Q * 20.0)
-        
-        rates = jnp.concatenate([arrival_rates, departure_rates])
-        a0 = jnp.sum(rates)
-        
-        # 3. Expected Holding Time (Deterministic for variance reduction)
-        tau = 1.0 / jnp.maximum(a0, 1e-9)
-        
-        # 4. Gumbel-Softmax Event Selection
-        # Instead of sampling a hard index, we get a smooth probability vector
-        gumbels = -jnp.log(-jnp.log(jax.random.uniform(k1, shape=rates.shape) + 1e-9) + 1e-9)
-        event_weights = jax.nn.softmax((jnp.log(rates + 1e-9) + gumbels) / temperature)
-        
-        # 5. Continuous State Update
-        arr_updates = event_weights[:num_servers]
-        dep_updates = -event_weights[num_servers:]
-        
-        new_Q = jax.nn.relu(state.Q + arr_updates + dep_updates)
-        new_t = state.t + tau
-        
-        # Accumulate time-weighted sum of queues
-        current_Q_tot = jnp.sum(new_Q)
-        new_expected_Q = state.expected_Q_tot + (current_Q_tot * tau)
-        
-        next_state = DGASimState(
-            t=new_t,
-            Q=new_Q,
-            key=k2,
-            expected_Q_tot=new_expected_Q
+        next_state = _dga_step(
+            state=carry,
+            num_servers=num_servers,
+            arrival_rate=arrival_rate,
+            service_rates=service_rates,
+            params=params,
+            temperature=temperature,
+            apply_fn=apply_fn,
         )
         return next_state, None
 
@@ -100,6 +111,46 @@ def simulate_dga_jax(
     final_state, _ = jax.lax.scan(body_fun, init_state, xs=None, length=sim_steps)
     
     # Return time-averaged E[Q_total]
+    return final_state.expected_Q_tot / jnp.maximum(final_state.t, 1e-9)
+
+
+def simulate_dga_jax_dynamic_steps(
+    num_servers: int,
+    arrival_rate: float,
+    service_rates: jnp.ndarray,
+    params: Any,
+    sim_steps: int,
+    key: jax.random.PRNGKey,
+    temperature: float = 0.5,
+    apply_fn: Callable = default_policy,
+) -> jnp.float32:
+    """
+    Differentiable Gillespie simulation with dynamic `sim_steps` support.
+
+    This variant uses ``lax.fori_loop`` to allow dynamic step counts in a single
+    compiled graph when using forward-mode differentiation (e.g., ``jax.jvp``).
+    """
+    dtype = service_rates.dtype if hasattr(service_rates, 'dtype') else jnp.float32
+
+    init_state = DGASimState(
+        t=jnp.zeros((), dtype=dtype),
+        Q=jnp.zeros(num_servers, dtype=dtype),
+        key=key,
+        expected_Q_tot=jnp.zeros((), dtype=dtype)
+    )
+
+    def body_fun(_, carry):
+        return _dga_step(
+            state=carry,
+            num_servers=num_servers,
+            arrival_rate=arrival_rate,
+            service_rates=service_rates,
+            params=params,
+            temperature=temperature,
+            apply_fn=apply_fn,
+        )
+
+    final_state = jax.lax.fori_loop(0, sim_steps, body_fun, init_state)
     return final_state.expected_Q_tot / jnp.maximum(final_state.t, 1e-9)
 
 def expected_queue_loss(

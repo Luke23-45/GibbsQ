@@ -82,16 +82,16 @@ def test_experiment_profile_composition_stability_sweep_large():
         assert cfg.jax.precision == "float32"
 
 def test_experiment_profile_composition_policy_comparison():
-    """Ensure the standard policy_comparison experiment profile maintains high-fidelity overrides."""
+    """Ensure the standard policy_comparison experiment profile uses runtime-balanced overrides."""
     with initialize(version_base=None, config_path="../configs"):
         cfg_raw = compose(config_name="default", overrides=["+experiment=policy_comparison"])
         cfg = hydra_to_config(cfg_raw)
         validate(cfg)
         
-        # Checking high-fidelity paper defaults
-        assert cfg.simulation.num_replications == 100
-        assert cfg.simulation.sim_time == 25000.0
-        assert math.isclose(cfg.simulation.sample_interval, 0.1)
+        # Checking runtime-balanced defaults
+        assert cfg.simulation.num_replications == 20
+        assert cfg.simulation.sim_time == 5000.0
+        assert math.isclose(cfg.simulation.sample_interval, 0.5)
         assert cfg.jax.enabled is True
 
 def test_experiment_profile_composition_policy_comparison_small():

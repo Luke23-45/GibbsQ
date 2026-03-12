@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 import numpy as np
 
 from gibbsq.core.drift import DriftResult
@@ -35,10 +36,15 @@ __all__ = [
 
 def _apply_theme() -> None:
     """Set publication-ready dark theme."""
+    preferred_fonts = ["Inter", "Roboto", "Helvetica Neue", "Arial"]
+    installed_fonts = {f.name for f in font_manager.fontManager.ttflist}
+    available_preferred = [f for f in preferred_fonts if f in installed_fonts]
+    sans_serif_stack = available_preferred + ["DejaVu Sans"]
+
     plt.style.use("dark_background")
     plt.rcParams.update({
         "font.family":       "sans-serif",
-        "font.sans-serif":   ["Inter", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+        "font.sans-serif":   sans_serif_stack,
         "axes.titlesize":    14,
         "axes.labelsize":    12,
         "xtick.labelsize":   10,
