@@ -7,6 +7,14 @@ Tests:
 3. Extreme Heterogeneity: 100x variance in service rates.
 
 Uses JAX vmap for parallel replications.
+
+PATCH NOTES (2026-03-12):
+  BUG-1/2/3 FIX: All three tests previously computed max_samples using
+  cfg.simulation.sample_interval (0.05 in small.yaml), producing buffers of
+  100,001–1,000,001 slots. JAX's XLA compiler hangs when loop-carried state
+  tensors are this large. Fix: use _STRESS_SAMPLE_INTERVAL = 1.0 uniformly
+  for all stress tests. Accuracy is unaffected — stress tests measure Gini
+  coefficients and queue-length means, not fine time-series resolution.
 """
 
 import logging
@@ -20,8 +28,8 @@ from gibbsq.engines.distributed import sharded_replications
 from gibbsq.engines.numpy_engine import SimResult
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.analysis.metrics import (
-    time_averaged_queue_lengths, 
-    stationarity_diagnostic, 
+    time_averaged_queue_lengths,
+    stationarity_diagnostic,
     gini_coefficient,
     mser5_truncation,
     gelman_rubin_diagnostic
@@ -35,8 +43,19 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
-# --- Stress Test Regimes ---
-# Arrays now pulled dynamically from Hydra configs (e.g., cfg.stress)
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH: Fixed coarse sampling interval for ALL stress-test simulations.
+#
+# Rationale: stress_test.py overrides sim_time independently of the config
+# (5 000 s, 10 000 s, 50 000 s). If max_samples is derived from
+# cfg.simulation.sample_interval (0.05 s in small.yaml), the resulting buffer
+# lengths (100 001 – 1 000 001) make XLA hang during JIT compilation because
+# those arrays are loop-carried state in a nested lax.while_loop.
+#
+# 1.0 s gives 5 001 – 50 001 slots — fast to compile, statistically sound
+# for Gini and mean-queue metrics (stress tests do not need fine resolution).
+# ─────────────────────────────────────────────────────────────────────────────
+_STRESS_SAMPLE_INTERVAL: float = 1.0
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
@@ -60,34 +79,37 @@ def main(raw_cfg: DictConfig) -> None:
     log.info("  GibbsQ Stress Test (JAX Accelerator Active)")
     log.info("=" * 60)
 
-    # 1. MASSIVE-N SCALING TEST
+    # ─────────────────────────────────────────────────────────────────────────
+    # TEST 1: MASSIVE-N SCALING
+    # ─────────────────────────────────────────────────────────────────────────
     log.info("\n[TEST 1] Massive-N Scaling Analysis")
     n_targets = [cfg.stress.n_values[0]] if raw_cfg.get("debug", False) else cfg.stress.n_values
+
     for N in n_targets:
-        # Construct parameters for N experts
-        mu = jnp.ones(N) * 2.0  # Normalized service rate
-        lam = 0.8 * float(jnp.sum(mu)) # Fixed rho=0.8
-        
-        sim_time = 5000.0  # Reduced for scaling tests
-        max_samples = int(sim_time / cfg.simulation.sample_interval) + 1
-        
+        mu = jnp.ones(N) * 2.0          # normalised service rate
+        lam = 0.8 * float(jnp.sum(mu))  # rho = 0.8
+
+        # PATCH BUG-1: use _STRESS_SAMPLE_INTERVAL, not cfg.simulation.sample_interval.
+        # old:  max_samples = int(5000.0 / cfg.simulation.sample_interval) + 1  → 100 001
+        # new:  max_samples = int(5000.0 / 1.0) + 1                             →   5 001
+        _sim_time_t1 = 5000.0
+        max_samples_t1 = int(_sim_time_t1 / _STRESS_SAMPLE_INTERVAL) + 1
+
         log.info(f"  Simulating N={N} experts (rho=0.8)...")
-        
-        # JAX backend
+
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
             num_servers=N,
             arrival_rate=lam,
             service_rates=mu,
             alpha=1.0,
-            sim_time=sim_time,
-            sample_interval=cfg.simulation.sample_interval,
+            sim_time=_sim_time_t1,
+            sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
             base_seed=cfg.simulation.seed,
-            max_samples=max_samples,
-            policy_type=3 # Softmax
+            max_samples=max_samples_t1,                # PATCH: now 5 001 instead of 100 001
+            policy_type=3  # Softmax
         )
-        
-        # Calculate aggregate Gini across replications
+
         ginis = []
         for r in range(cfg.simulation.num_replications):
             res = SimResult(
@@ -100,129 +122,164 @@ def main(raw_cfg: DictConfig) -> None:
             )
             avg_q = time_averaged_queue_lengths(res, 0.2)
             ginis.append(gini_coefficient(avg_q))
-        
+
         avg_gini = np.mean(ginis)
         log.info(f"    -> Average Gini Imbalance: {avg_gini:.4f}")
         if wandb and wandb.run:
             wandb.log({"massive_n/N": N, "massive_n/avg_gini": avg_gini})
-        
+
         append_metrics_jsonl(
-            {"test": "massive_n", "N": int(N), "avg_gini": float(avg_gini)}, 
+            {"test": "massive_n", "N": int(N), "avg_gini": float(avg_gini)},
             out_dir / "metrics.jsonl"
         )
 
-    # 2. CRITICAL LOAD ANALYSIS
+    # ─────────────────────────────────────────────────────────────────────────
+    # TEST 2: CRITICAL LOAD ANALYSIS
+    # ─────────────────────────────────────────────────────────────────────────
     log.info("\n[TEST 2] Critical Load Analysis (rho up to 0.999)")
     N_fixed = 10
     mu_fixed = jnp.ones(N_fixed)
     cap_fixed = float(jnp.sum(mu_fixed))
-    
+
     rho_targets = [cfg.stress.critical_rhos[0]] if raw_cfg.get("debug", False) else cfg.stress.critical_rhos
+
     for rho in rho_targets:
         lam = rho * cap_fixed
-        # Near stability limits, we need longer horizons
-        sim_time_critical = 1000.0 if raw_cfg.get("debug", False) else (50000.0 if rho > 0.99 else 10000.0)
-        max_samples_crit = int(sim_time_critical / cfg.simulation.sample_interval) + 1
-        
-        log.info(f"  Simulating rho={rho:.3f} (T={sim_time_critical})...")
-        
+
+        # Near-critical systems need longer horizons to reach stationarity.
+        # PATCH BUG-2: use _STRESS_SAMPLE_INTERVAL, not cfg.simulation.sample_interval.
+        # old:  max_samples = int(sim_time_critical / cfg.simulation.sample_interval) + 1
+        #       → up to 1 000 001 for rho > 0.99
+        # new:  max_samples = int(sim_time_critical / 1.0) + 1
+        #       → up to 50 001 for rho > 0.99
+        if raw_cfg.get("debug", False):
+            _sim_time_crit = 1000.0
+        else:
+            _sim_time_crit = 50000.0 if rho > 0.99 else 10000.0
+
+        max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1  # PATCH
+
+        log.info(f"  Simulating rho={rho:.3f} (T={_sim_time_crit})...")
+
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
             num_servers=N_fixed,
             arrival_rate=lam,
             service_rates=mu_fixed,
             alpha=1.0,
-            sim_time=sim_time_critical,
-            sample_interval=cfg.simulation.sample_interval,
+            sim_time=_sim_time_crit,
+            sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
             base_seed=cfg.simulation.seed,
-            max_samples=max_samples_crit,
+            max_samples=max_samples_crit,              # PATCH: now ≤ 50 001
             policy_type=3
         )
-        
+
         q_totals = []
         stationary_count = 0
-        
-        # Convergence diagnostics
-        total_q_trajectories = np.array(states).sum(axis=2) # Shape: (Reps, TimeSteps)
+
+        total_q_trajectories = np.array(states).sum(axis=2)  # (Reps, TimeSteps)
         r_hat = gelman_rubin_diagnostic(total_q_trajectories)
         log.info(f"    -> Gelman-Rubin R-hat across replicas: {r_hat:.4f}")
-        
+
         for r in range(cfg.simulation.num_replications):
-            res = SimResult(np.array(times[r]), np.array(states[r]), int(arrs[r]), int(deps[r]), float(times[r][-1]), N_fixed)
-            
-            # Use MSER-5 to dynamically find initialization bias truncation instead of arbitrary 20%
+            res = SimResult(
+                np.array(times[r]), np.array(states[r]),
+                int(arrs[r]), int(deps[r]), float(times[r][-1]), N_fixed
+            )
+
             traj = total_q_trajectories[r]
             d_star = mser5_truncation(traj)
-            trunc_fraction = d_star / len(traj)
-            
+            trunc_fraction = d_star / max(len(traj), 1)
+
             avg_q = time_averaged_queue_lengths(res, trunc_fraction).sum()
             q_totals.append(avg_q)
-            
+
             diag = stationarity_diagnostic(res, burn_in_fraction=trunc_fraction)
             if diag["is_stationary"]:
                 stationary_count += 1
-        
-        log.info(f"    -> Avg E[Q_total]: {np.mean(q_totals):.2f} | Stationarity: {stationary_count}/{cfg.simulation.num_replications}")
+
+        log.info(
+            f"    -> Avg E[Q_total]: {np.mean(q_totals):.2f} | "
+            f"Stationarity: {stationary_count}/{cfg.simulation.num_replications}"
+        )
         if wandb and wandb.run:
-            wandb.log({"critical_load/rho": rho, "critical_load/mean_q": np.mean(q_totals), "critical_load/stationary_rate": stationary_count/cfg.simulation.num_replications})
-        
+            wandb.log({
+                "critical_load/rho": rho,
+                "critical_load/mean_q": np.mean(q_totals),
+                "critical_load/stationary_rate": stationary_count / cfg.simulation.num_replications
+            })
+
         append_metrics_jsonl(
             {
-                "test": "critical_load", 
-                "rho": float(rho), 
-                "mean_q": float(np.mean(q_totals)), 
-                "stationary_rate": float(stationary_count/cfg.simulation.num_replications)
-            }, 
+                "test": "critical_load",
+                "rho": float(rho),
+                "mean_q": float(np.mean(q_totals)),
+                "stationary_rate": float(stationary_count / cfg.simulation.num_replications)
+            },
             out_dir / "metrics.jsonl"
         )
 
-    # 3. EXTREME HETEROGENEITY TEST
+    # ─────────────────────────────────────────────────────────────────────────
+    # TEST 3: EXTREME HETEROGENEITY
+    # ─────────────────────────────────────────────────────────────────────────
     log.info("\n[TEST 3] Extreme Heterogeneity Resilience (100x Speed Gap)")
-    mu_het = jnp.array([10.0, 0.1, 0.1, 0.1]) # One expert is 100x faster than the peers
+    mu_het = jnp.array([10.0, 0.1, 0.1, 0.1])
     cap_het = float(jnp.sum(mu_het))
-    lam_het = 0.5 * cap_het # 50% load
-    
+    lam_het = 0.5 * cap_het  # 50% load
+
     log.info(f"  Simulating heterogenous setup: mu={mu_het}")
-    
+
+    # PATCH BUG-3 (two fixes):
+    #   Fix A — derive sim_time into a named variable so max_samples stays consistent.
+    #   Fix B — use _STRESS_SAMPLE_INTERVAL instead of cfg.simulation.sample_interval.
+    # old:  sim_time=... (conditional)
+    #       max_samples=int(10000.0 / cfg.simulation.sample_interval) + 1  ← hardcoded 10000!
+    # new:  _sim_time_het = ... (same conditional)
+    #       max_samples=int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1   ← consistent
+    _sim_time_het = 1000.0 if raw_cfg.get("debug", False) else 10000.0
+    max_samples_het = int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1    # PATCH
+
     times, states, (arrs, deps) = sharded_replications(
         num_replications=cfg.simulation.num_replications,
         num_servers=4,
         arrival_rate=lam_het,
         service_rates=mu_het,
-        alpha=1.0, # Softmax helps here
-        sim_time=1000.0 if raw_cfg.get("debug", False) else 10000.0,
-        sample_interval=cfg.simulation.sample_interval,
+        alpha=1.0,
+        sim_time=_sim_time_het,
+        sample_interval=_STRESS_SAMPLE_INTERVAL,    # PATCH: was cfg.simulation.sample_interval
         base_seed=cfg.simulation.seed,
-        max_samples=int(10000.0 / cfg.simulation.sample_interval) + 1,
+        max_samples=max_samples_het,               # PATCH: consistent with _sim_time_het
         policy_type=3
     )
-    
-    # Analyze workload distribution
-    # Under Soft-JSQ, the fast server should receive most arrivals
+
     work_dist = []
     for r in range(cfg.simulation.num_replications):
-        res = SimResult(np.array(times[r]), np.array(states[r]), int(arrs[r]), int(deps[r]), float(times[r][-1]), 4)
+        res = SimResult(
+            np.array(times[r]), np.array(states[r]),
+            int(arrs[r]), int(deps[r]), float(times[r][-1]), 4
+        )
         avg_q_per_srv = time_averaged_queue_lengths(res, 0.2)
         work_dist.append(avg_q_per_srv)
-    
+
     mean_dist = np.mean(work_dist, axis=0)
     log.info(f"    -> Mean Queue per Expert: {mean_dist}")
     log.info(f"    -> Gini: {gini_coefficient(mean_dist):.4f}")
-    
+
     if wandb and wandb.run:
         wandb.log({"heterogeneity/gini": gini_coefficient(mean_dist)})
         wandb.finish()
-    
+
     append_metrics_jsonl(
         {
-            "test": "heterogeneity", 
-            "gini": float(gini_coefficient(mean_dist)), 
+            "test": "heterogeneity",
+            "gini": float(gini_coefficient(mean_dist)),
             "mean_dist": [float(x) for x in mean_dist]
-        }, 
+        },
         out_dir / "metrics.jsonl"
     )
 
     log.info("\nStress test complete.")
+
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,7 @@
 """
 Analysis Reporting Utilities
-----------------------------"""
+----------------------------
+
 Reporting logic for GibbsQ experiment results.
 """
 
@@ -26,7 +27,7 @@ def report_stability_sweep(run_dir: Path) -> None:
     total_runs = len(df)
     stationary_runs = df["is_stationary"].sum()
     print(f"\nOverall Stationarity: {stationary_runs} / {total_runs} configurations proven stable.")
-    
+
     if stationary_runs < total_runs:
         failed = df[~df["is_stationary"]]
         print(f"  -> Critical Instability Boundary: rho >= {failed['rho'].min():.2f}")
@@ -34,7 +35,7 @@ def report_stability_sweep(run_dir: Path) -> None:
     # 2. Entropy Bound Verification (Q_total vs 1/alpha)
     max_stable_rho = df[df["is_stationary"]]["rho"].max()
     sub_df = df[(df["rho"] == max_stable_rho) & (df["is_stationary"])]
-    
+
     if not sub_df.empty:
         print(f"\nPhase Profile (Load Factor rho = {max_stable_rho:.2f}):")
         print(f"{'Alpha':>8} | {'1/Alpha':>10} | {'E[Q_total]':>12} | {'Slope':>10}")
@@ -42,8 +43,9 @@ def report_stability_sweep(run_dir: Path) -> None:
         for _, row in sub_df.sort_values("alpha").iterrows():
             alpha, q_tot, slope = row["alpha"], row["mean_q_total"], row.get("slope", 0.0)
             print(f"{alpha:8.2f} | {1.0/alpha:10.2f} | {q_tot:12.2f} | {slope:10.4f}")
-        
+
     print("\nConclusion: Gibbs Bound Verified. E[Q] scales with 1/Alpha.")
+
 
 def report_policy_comparison(run_dir: Path) -> None:
     """Print a performance comparison report across different routing policies."""
@@ -60,7 +62,7 @@ def report_policy_comparison(run_dir: Path) -> None:
     print("\nPerformance Ranking (Sorted by Efficiency):")
     print(f"{'Rank':>4} | {'Policy/Label':>25} | {'E[Q_total]':>12} | {'SE[Q]':>8} | {'E[W]':>8} | {'Gini':>8}")
     print("-" * 85)
-    
+
     for i, (_, row) in enumerate(df_sorted.iterrows(), 1):
         lbl = row.get("label", row.get("policy", "Unknown"))
         q = row["mean_q_total"]
@@ -71,12 +73,13 @@ def report_policy_comparison(run_dir: Path) -> None:
 
     print("\nConclusion: Softmax policies achieve Gini coefficients competitive with exact JSQ.")
 
+
 def report_drift(run_dir: Path) -> None:
     """Print theoretical drift verification results."""
     print("\n" + "=" * 80)
     print(f" ANALYSIS: Theoretical Drift | Capsule: {run_dir.name}")
     print("=" * 80)
-    
+
     df = load_metrics(run_dir)
     if not df.empty:
         violations = df.get("violations", [0])[0]
@@ -84,7 +87,7 @@ def report_drift(run_dir: Path) -> None:
             print("[✓] Theoretical Proof Boundary Verified. Zero boundary violations detected.")
         else:
             print(f"[✘] VIOLATION DETECTED: {violations} states exceeded theoretical upper bound!")
-    
+
     if (run_dir / "drift_vs_norm.png").exists():
         print("[+] Landscape plot generated: drift_vs_norm.png.")
     else:
