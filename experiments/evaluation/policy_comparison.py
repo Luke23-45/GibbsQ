@@ -1,4 +1,5 @@
 import logging
+import time
 import hydra
 import numpy as np
 import jax.numpy as jnp
@@ -12,6 +13,11 @@ from gibbsq.analysis.metrics import time_averaged_queue_lengths, gini_coefficien
 from gibbsq.analysis.plotting import plot_policy_comparison
 from gibbsq.utils.exporter import save_trajectory_parquet, append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
+
+try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None
 
 try:
     import wandb
@@ -29,6 +35,49 @@ POLICIES = [
     {"name": "softmax",      "label": "Softmax (alpha=1.0)",  "jax_idx": 3, "alpha": 1.0},
     {"name": "softmax",      "label": "Softmax (alpha=10.0)", "jax_idx": 3, "alpha": 10.0},
 ]
+
+
+def _iter_with_progress(items, desc: str, total: int | None = None):
+    """Return iterable wrapped with tqdm when available."""
+    if tqdm is None:
+        return items
+    return tqdm(items, desc=desc, total=total, dynamic_ncols=True, leave=False)
+
+
+def _compute_metrics_from_arrays(
+    times: np.ndarray,
+    states: np.ndarray,
+    arrs: np.ndarray,
+    deps: np.ndarray,
+    num_servers: int,
+    arrival_rate: float,
+    burn_in_fraction: float,
+) -> tuple[list[float], list[float], list[float], SimResult]:
+    """Compute per-rep metrics from host NumPy arrays and return final rep result."""
+    q_vals: list[float] = []
+    gini_vals: list[float] = []
+    sojourn_vals: list[float] = []
+
+    last_res: SimResult | None = None
+    for r in range(states.shape[0]):
+        res = SimResult(
+            times=np.asarray(times[r]),
+            states=np.asarray(states[r]),
+            arrival_count=int(arrs[r]),
+            departure_count=int(deps[r]),
+            final_time=float(times[r][-1]),
+            num_servers=num_servers,
+        )
+        avg_q = time_averaged_queue_lengths(res, burn_in_fraction)
+        q_vals.append(float(avg_q.sum()))
+        gini_vals.append(gini_coefficient(avg_q))
+        sojourn_vals.append(sojourn_time_estimate(res, arrival_rate, burn_in_fraction))
+        last_res = res
+
+    if last_res is None:
+        raise ValueError("No replications were provided.")
+
+    return q_vals, gini_vals, sojourn_vals, last_res
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
@@ -60,7 +109,7 @@ def main(raw_cfg: DictConfig) -> None:
     gini_res: dict[str, list[float]] = {}
     sojourn_res: dict[str, list[float]] = {}
 
-    for p in POLICIES:
+    for p in _iter_with_progress(POLICIES, desc="Policies", total=len(POLICIES)):
         lbl = p["label"]
         log.info(f"\n--- {lbl} ---")
         
@@ -74,6 +123,7 @@ def main(raw_cfg: DictConfig) -> None:
         if use_jax:
             # --- JAX backend ---
             max_samples = int(cfg.simulation.sim_time / cfg.simulation.sample_interval) + 1
+            t_sim_start = time.perf_counter()
             times, states, (arrs, deps) = run_replications_jax(
                 num_replications=cfg.simulation.num_replications,
                 num_servers=N,
@@ -87,23 +137,45 @@ def main(raw_cfg: DictConfig) -> None:
                 policy_type=p["jax_idx"],
                 d=p.get("d", 2)
             )
-            for r in range(cfg.simulation.num_replications):
-                res = SimResult(
-                    times=np.array(times[r]),
-                    states=np.array(states[r]),
-                    arrival_count=int(arrs[r]),
-                    departure_count=int(deps[r]),
-                    final_time=float(times[r][-1]),
-                    num_servers=N
-                )
-                avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
-                q_res[lbl].append(float(avg_q.sum()))
-                gini_res[lbl].append(gini_coefficient(avg_q))
-                sojourn_res[lbl].append(sojourn_time_estimate(res, sc.arrival_rate, cfg.simulation.burn_in_fraction))
-                last_res = res
+            # Force completion of async dispatch before timing simulation stage.
+            times.block_until_ready()
+            states.block_until_ready()
+            t_sim_done = time.perf_counter()
+
+            # Transfer once to host; avoid repeated per-rep device transfers.
+            t_host_start = time.perf_counter()
+            times_np = np.asarray(times)
+            states_np = np.asarray(states)
+            arrs_np = np.asarray(arrs)
+            deps_np = np.asarray(deps)
+            t_host_done = time.perf_counter()
+
+            t_metrics_start = time.perf_counter()
+            q_vals, g_vals, w_vals, last_res = _compute_metrics_from_arrays(
+                times=times_np,
+                states=states_np,
+                arrs=arrs_np,
+                deps=deps_np,
+                num_servers=N,
+                arrival_rate=sc.arrival_rate,
+                burn_in_fraction=cfg.simulation.burn_in_fraction,
+            )
+            q_res[lbl].extend(q_vals)
+            gini_res[lbl].extend(g_vals)
+            sojourn_res[lbl].extend(w_vals)
+            t_metrics_done = time.perf_counter()
+
+            log.info(
+                "  timing[%s]: simulate=%.2fs host_transfer=%.2fs metrics=%.2fs",
+                lbl,
+                t_sim_done - t_sim_start,
+                t_host_done - t_host_start,
+                t_metrics_done - t_metrics_start,
+            )
         else:
             # --- STANDARD NUMPY EXECUTION ---
-            for rep in range(cfg.simulation.num_replications):
+            t_np_start = time.perf_counter()
+            for rep in _iter_with_progress(range(cfg.simulation.num_replications), desc=f"{lbl} reps", total=cfg.simulation.num_replications):
                 rng = np.random.default_rng(cfg.simulation.seed + rep)
                 policy = make_policy(
                     p["name"],
@@ -125,6 +197,7 @@ def main(raw_cfg: DictConfig) -> None:
                 gini_res[lbl].append(gini_coefficient(avg_q))
                 sojourn_res[lbl].append(sojourn_time_estimate(res, sc.arrival_rate, cfg.simulation.burn_in_fraction))
                 last_res = res
+            log.info("  timing[%s]: numpy_total=%.2fs", lbl, time.perf_counter() - t_np_start)
 
         m_q = np.mean(q_res[lbl])
         se_q = np.std(q_res[lbl]) / np.sqrt(cfg.simulation.num_replications)
