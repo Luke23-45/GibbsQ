@@ -399,12 +399,9 @@ def _run_replications_jax_impl(
     policy_type:      int = 3,
     d:                int = 2
 ):
-    """
-    Run N replications in PARALLEL using jax.vmap.
-    """
+    """Run replications in parallel across available accelerator lanes."""
     keys = jax.random.split(jax.random.PRNGKey(base_seed), num_replications)
-    
-    # Use jax.lax.map for memory-efficient iteration over the batch frame.
+
     v_sim = lambda k: _simulate_jax_impl(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
@@ -417,8 +414,10 @@ def _run_replications_jax_impl(
         policy_type=policy_type,
         d=d
     )
-    
-    return jax.lax.map(v_sim, keys)
+
+    # NOTE: `vmap` exposes batch parallelism to XLA. This is often much faster
+    # than `lax.map` on GPU/TPU for moderate batch sizes used in policy sweeps.
+    return jax.vmap(v_sim)(keys)
 
 
 def run_replications_jax(

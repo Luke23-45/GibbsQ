@@ -33,11 +33,25 @@ def setup_jax(cfg: JAXConfig) -> None:
         target_platform = "gpu"
 
     if target_platform == "auto":
-        # JAX handles auto-detection by default (prefers TPU > GPU > CPU)
-        devices = jax.devices()
-        log.info(f"[JAX] Auto-selected platform: {jax.default_backend().upper()} ({len(devices)} devices)")
+        # Prefer JAX auto-detection, but guard against broken accelerator plugins
+        # (e.g., CUDA plugin installed but no supported GPU in the runtime).
+        try:
+            devices = jax.devices()
+            log.info(f"[JAX] Auto-selected platform: {jax.default_backend().upper()} ({len(devices)} devices)")
+        except (RuntimeError, ValueError) as e:
+            if cfg.fallback_to_cpu:
+                log.warning(f"[JAX] Auto platform detection failed: {e}")
+                log.warning("[JAX] Restricting runtime to CPU backend.")
+                jax.config.update("jax_platforms", "cpu")
+                jax.config.update("jax_platform_name", "cpu")
+                devices = jax.devices(backend="cpu")
+            else:
+                raise
     else:
         try:
+            if target_platform == "cpu":
+                # Skip probing unavailable accelerator plugins in CPU-only environments.
+                jax.config.update("jax_platforms", "cpu")
             devices = jax.devices(backend=target_platform)
             jax.config.update("jax_platform_name", target_platform)
             log.info(f"[JAX] Successfully bound to platform: {target_platform.upper()} ({len(devices)} devices)")
@@ -45,6 +59,7 @@ def setup_jax(cfg: JAXConfig) -> None:
             if cfg.fallback_to_cpu and target_platform != "cpu":
                 log.warning(f"[JAX] FAILED to bind to {target_platform.upper()}: {e}")
                 log.warning("[JAX] Falling back to CPU as per configuration.")
+                jax.config.update("jax_platforms", "cpu")
                 jax.config.update("jax_platform_name", "cpu")
             else:
                 log.error(f"[JAX] CRITICAL: Target platform {target_platform.upper()} unavailable and fallback disabled.")

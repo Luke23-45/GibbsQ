@@ -14,6 +14,11 @@ from gibbsq.utils.exporter import save_trajectory_parquet, append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
 
 try:
+    from tqdm.auto import tqdm
+except ImportError:
+    tqdm = None
+
+try:
     import wandb
 except ImportError:
     wandb = None
@@ -29,6 +34,13 @@ POLICIES = [
     {"name": "softmax",      "label": "Softmax (alpha=1.0)",  "jax_idx": 3, "alpha": 1.0},
     {"name": "softmax",      "label": "Softmax (alpha=10.0)", "jax_idx": 3, "alpha": 10.0},
 ]
+
+
+def _iter_with_progress(items, desc: str, total: int | None = None):
+    """Return iterable wrapped with tqdm when available."""
+    if tqdm is None:
+        return items
+    return tqdm(items, desc=desc, total=total, dynamic_ncols=True, leave=False)
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
@@ -60,7 +72,7 @@ def main(raw_cfg: DictConfig) -> None:
     gini_res: dict[str, list[float]] = {}
     sojourn_res: dict[str, list[float]] = {}
 
-    for p in POLICIES:
+    for p in _iter_with_progress(POLICIES, desc="Policies", total=len(POLICIES)):
         lbl = p["label"]
         log.info(f"\n--- {lbl} ---")
         
@@ -87,7 +99,7 @@ def main(raw_cfg: DictConfig) -> None:
                 policy_type=p["jax_idx"],
                 d=p.get("d", 2)
             )
-            for r in range(cfg.simulation.num_replications):
+            for r in _iter_with_progress(range(cfg.simulation.num_replications), desc=f"{lbl} reps", total=cfg.simulation.num_replications):
                 res = SimResult(
                     times=np.array(times[r]),
                     states=np.array(states[r]),
