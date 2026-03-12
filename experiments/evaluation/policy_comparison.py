@@ -1,4 +1,5 @@
 import logging
+import time
 import hydra
 import numpy as np
 import jax.numpy as jnp
@@ -86,6 +87,7 @@ def main(raw_cfg: DictConfig) -> None:
         if use_jax:
             # --- JAX backend ---
             max_samples = int(cfg.simulation.sim_time / cfg.simulation.sample_interval) + 1
+            t_sim_start = time.perf_counter()
             times, states, (arrs, deps) = run_replications_jax(
                 num_replications=cfg.simulation.num_replications,
                 num_servers=N,
@@ -115,7 +117,8 @@ def main(raw_cfg: DictConfig) -> None:
                 last_res = res
         else:
             # --- STANDARD NUMPY EXECUTION ---
-            for rep in range(cfg.simulation.num_replications):
+            t_np_start = time.perf_counter()
+            for rep in _iter_with_progress(range(cfg.simulation.num_replications), desc=f"{lbl} reps", total=cfg.simulation.num_replications):
                 rng = np.random.default_rng(cfg.simulation.seed + rep)
                 policy = make_policy(
                     p["name"],
@@ -137,6 +140,7 @@ def main(raw_cfg: DictConfig) -> None:
                 gini_res[lbl].append(gini_coefficient(avg_q))
                 sojourn_res[lbl].append(sojourn_time_estimate(res, sc.arrival_rate, cfg.simulation.burn_in_fraction))
                 last_res = res
+            log.info("  timing[%s]: numpy_total=%.2fs", lbl, time.perf_counter() - t_np_start)
 
         m_q = np.mean(q_res[lbl])
         se_q = np.std(q_res[lbl]) / np.sqrt(cfg.simulation.num_replications)
