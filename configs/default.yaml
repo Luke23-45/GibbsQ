@@ -32,8 +32,13 @@ generalization:
   scale_vals: [0.5, 1.0, 2.0, 5.0, 10.0]
   rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
 
+stability_sweep:
+  alpha_vals: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+  rho_vals: [0.5, 0.7, 0.8, 0.9, 0.95]
+
 neural_training:
   learning_rate: 3e-3
+  dga_learning_rate: 1e-3
   weight_decay: 1e-4
   curriculum:
     - [20, 500]

@@ -23,6 +23,18 @@ drift:
   q_max: 50
   use_grid: true
 
+stability_sweep:
+  alpha_vals: [0.1, 1.0, 5.0]
+  rho_vals: [0.5, 0.8, 0.9]
+
+neural_training:
+  learning_rate: 3e-3
+  dga_learning_rate: 1e-3
+  weight_decay: 1e-4
+  curriculum:
+    - [5, 100]
+    - [10, 500]
+
 jax:
   enabled: false
   platform: auto

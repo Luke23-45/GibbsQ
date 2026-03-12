@@ -5,7 +5,7 @@ simulation:
   num_replications: 5
   sim_time: 1000.0
   burn_in_fraction: 0.2
-  sample_interval: 0.05
+  sample_interval: 1.0
 
 jax:
   enabled: true

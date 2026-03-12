@@ -34,10 +34,10 @@ echo -e "\n\033[1;33m[2/10] Running Model Fidelity Check (Phase 1b)...\033[0m"
 echo -e "\n\033[1;33m[3/10] Running Jacobian Rigor (AD Check)...\033[0m"
 "$RUN_SCRIPT" jacobian "$@"
 
-echo -e "\n\033[1;33m[3/9] Running Policy Evaluation Benchmark...\033[0m"
+echo -e "\n\033[1;33m[4/10] Running Policy Evaluation Benchmark...\033[0m"
 "$RUN_SCRIPT" policy "+experiment=policy_comparison${EXP_SUFFIX}" "$@"
 
-echo -e "\n\033[1;33m[4/9] Running Stability Sweep...\033[0m"
+echo -e "\n\033[1;33m[5/10] Running Stability Sweep...\033[0m"
 "$RUN_SCRIPT" sweep "+experiment=stability_sweep${EXP_SUFFIX}" "$@"
 
 echo -e "\n\033[1;33m[6/10] Running Scaling Stress Tests...\033[0m"
@@ -46,13 +46,13 @@ echo -e "\n\033[1;33m[6/10] Running Scaling Stress Tests...\033[0m"
 # ---------------------------------------------------------
 # Phase 2: N-GibbsQ Neural Learning Pipeline
 # ---------------------------------------------------------
-echo -e "\n\033[1;33m[6/9] Running DGA Routing Agent Core Training...\033[0m"
+echo -e "\n\033[1;33m[7/10] Running DGA Routing Agent Core Training...\033[0m"
 "$RUN_SCRIPT" train "$@"
 
-echo -e "\n\033[1;33m[7/9] Running Neural Curriculum Training...\033[0m"
+echo -e "\n\033[1;33m[8/10] Running Neural Curriculum Training...\033[0m"
 "$RUN_SCRIPT" n_train "$@"
 
-echo -e "\n\033[1;33m[8/9] Verifying Neural Parity against GibbsQ Ground Truth...\033[0m"
+echo -e "\n\033[1;33m[9/10] Verifying Neural Parity against GibbsQ Ground Truth...\033[0m"
 "$RUN_SCRIPT" parity "$@"
 
 # ---------------------------------------------------------
