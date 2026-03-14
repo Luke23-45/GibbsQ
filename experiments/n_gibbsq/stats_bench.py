@@ -20,6 +20,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -37,8 +38,8 @@ class StatsBenchmark:
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.temperature = float(cfg.simulation.temperature)
-        self.sim_steps = int(cfg.simulation.sim_time)
+        self.temperature = float(cfg.simulation.dga.temperature)
+        self.sim_steps = cfg.simulation.dga.sim_steps
         
         # Pull replicates from simulation config.
         self.num_samples = int(cfg.simulation.num_replications)
@@ -66,6 +67,11 @@ class StatsBenchmark:
         skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
+        # SG#16 Fix: Validate that the loaded model matches the current config
+        if model.l1.weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+            return
+        
         # --- 2. Run Parallel Benchmark ---
         seeds = jax.random.split(k_neural, self.num_samples)
         
@@ -76,7 +82,7 @@ class StatsBenchmark:
         
         log.info(f"Running {self.num_samples} GibbsQ simulations...")
         gibbs_losses = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, jnp.float32(0.5), self.sim_steps, seeds, self.temperature, default_policy
+            self.num_servers, self.arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), self.sim_steps, seeds, self.temperature, default_policy
         )
         
         # Convert to numpy for scientific analysis
@@ -119,11 +125,20 @@ class StatsBenchmark:
         # Assets
         plt.figure(figsize=(10, 6))
         plt.boxplot([gibbs_data, neural_data], labels=['GibbsQ (Baseline)', 'N-GibbsQ (Proposed)'])
-        plt.title('Performance Distribution Comparison (n=30 seeds)')
+        plt.title(f'Performance Distribution Comparison (n={self.num_samples} seeds)')
         plt.ylabel('Expected Queue Length $\mathbb{E}[Q]$')
         plt.grid(True, alpha=0.3)
-        plt.savefig(self.run_dir / "stats_boxplot.png", dpi=300)
+        plot_path = self.run_dir / "stats_boxplot.png"
+        plt.savefig(plot_path, dpi=300)
         plt.close()
+
+        append_metrics_jsonl({
+            "gibbs_mean": float(g_mean), "gibbs_std": float(g_std),
+            "neural_mean": float(n_mean), "neural_std": float(n_std),
+            "p_value": float(p_val), "cohen_d": float(cohen_d),
+            "ci_low": float(ci_low), "ci_high": float(ci_high),
+            "improvement_pct": float(improvement)
+        }, self.run_dir / "metrics.jsonl")
 
         if self.run_logger:
             self.run_logger.log({
@@ -133,6 +148,11 @@ class StatsBenchmark:
                 "stats/ci_high": ci_high,
                 "stats/improvement_pct": improvement
             })
+            try:
+                import wandb
+                self.run_logger.log({"stats_boxplot": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
@@ -147,7 +167,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     bench = StatsBenchmark(cfg, run_dir, run_logger)
-    bench.execute(jax.random.PRNGKey(123))
+    bench.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 if __name__ == "__main__":
     main()

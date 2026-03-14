@@ -1,11 +1,14 @@
 """
 N-GibbsQ generalization sweep.
 
-Tests N-GibbsQ generalization to unseen configurations.
+Tests N-GibbsQ generalization to unseen configurations at FIXED server count.
 
-Sweeps:
-- Scaling Axis: Server count N increasing from 4 to 32 (Zero-Shot Transfer).
-- Load Axis: Arrival Rate ρ increasing from 0.4 to 0.95.
+Sweeps (2-D grid):
+- Rate-Scale Axis: Uniform scaling of all service rates (config: generalization.scale_vals).
+- Load Axis:       Arrival-rate ρ (config: generalization.rho_grid_vals).
+
+NOTE: N-scaling (varying server count) is NOT implemented in this sweep.
+      The model is evaluated only on the same N it was trained on.
 """
 
 import jax
@@ -23,6 +26,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -39,20 +43,9 @@ class GeneralizationSweeper:
         self.cfg = cfg
         self.run_dir = run_dir
         self.run_logger = run_logger
-        self.temperature = float(cfg.simulation.temperature)
-        self.sim_steps = int(cfg.simulation.sim_time) # Enough to see steady state
-        
-        # Grid parameters - these are currently unused by the class but preserving interface
-        self.n_vals = [4, 8, 16, 32]
-        self.rho_vals = list(cfg.generalization.rho_grid_vals)
+        self.temperature = float(cfg.simulation.dga.temperature)
+        self.sim_steps = cfg.simulation.dga.sim_steps  # Enough to see steady state
 
-    def _get_env(self, N: int, rho: float):
-        """Generates a heterogeneous system for a specific N and rho."""
-        # Mean service rate = 10.0, skewed distribution
-        service_rates = jnp.linspace(1.0, 19.0, N)
-        avg_mu = jnp.mean(service_rates)
-        arrival_rate = rho * (N * avg_mu)
-        return arrival_rate, service_rates
 
     def execute(self, key: PRNGKeyArray):
         """Runs the multi-dimensional sweep."""
@@ -87,9 +80,13 @@ class GeneralizationSweeper:
         skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, hidden_size=64, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
+        # SG#16 Fix: Validate that the loaded model matches the current config
+        if model.l1.weight.shape[1] != self.cfg.system.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
+            return
         # Pre-generate unique keys for each grid cell (stochastic independence)
         total_cells = len(scale_vals) * len(rho_vals)
-        cell_keys = jax.random.split(k_grid, total_cells * 2)
+        cell_keys = jax.random.split(k_grid, total_cells)
         
         log.info("Evaluating N-GibbsQ improvement ratio (GibbsQ / Neural) on 5x5 Grid...")
         
@@ -100,13 +97,12 @@ class GeneralizationSweeper:
             for j, rho in enumerate(rho_vals):
                 lambda_rate = float(rho * total_cap)
                 
-                # Each cell gets its OWN unique keys for stochastic independence
-                k_n = cell_keys[cell_idx * 2]
-                k_g = cell_keys[cell_idx * 2 + 1]
+                # CRN: use the SAME key for both neural and GibbsQ (SG-11.5 fix)
+                k_shared = cell_keys[cell_idx]
                 cell_idx += 1
                 
-                n_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, model, self.sim_steps, k_n, self.temperature, evaluate_model)
-                g_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(0.5), self.sim_steps, k_g, self.temperature, default_policy)
+                n_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, model, self.sim_steps, k_shared, self.temperature, evaluate_model)
+                g_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(self.cfg.system.alpha), self.sim_steps, k_shared, self.temperature, default_policy)
                 
                 # Ratio: GibbsQ / Neural. > 1.0 means Neural is better.
                 ratio = float(g_loss / jnp.maximum(n_loss, 1e-9))
@@ -144,7 +140,18 @@ class GeneralizationSweeper:
         log.info(f"Generalization analysis complete. Heatmap saved to {plot_path}")
         
         if self.run_logger:
-            self.run_logger.log({"generalization_heatmap": [plot_path]})
+            try:
+                import wandb
+                self.run_logger.log({"generalization_heatmap": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
+
+        # Persist metrics locally
+        append_metrics_jsonl({
+            "grid": grid.tolist(),
+            "scale_vals": scale_vals,
+            "rho_vals": rho_vals
+        }, self.run_dir / "metrics.jsonl")
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
@@ -159,7 +166,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     sweeper = GeneralizationSweeper(cfg, run_dir, run_logger)
-    sweeper.execute(jax.random.PRNGKey(456))
+    sweeper.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 if __name__ == "__main__":
     main()

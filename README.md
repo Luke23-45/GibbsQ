@@ -66,7 +66,7 @@ All experiments use [Hydra](https://hydra.cc/) for configuration management. Ove
 
 ```bash
 # Override α and simulation time
-python -m experiments.verification.drift_verification system.alpha=5.0 simulation.sim_time=50000
+python -m experiments.verification.drift_verification system.alpha=5.0 simulation.ssa.sim_time=50000
 
 # Use a different base config
 python -m experiments.evaluation.policy_comparison --config-name small

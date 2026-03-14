@@ -23,6 +23,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import expected_queue_loss
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -42,11 +43,11 @@ class JacobianValidator:
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float64)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.temperature = float(cfg.simulation.temperature)
+        self.temperature = float(cfg.simulation.dga.temperature)
         
         # CFD Parameters
         self.epsilon = 1e-7  # Optimal for FP64 central difference
-        self.sim_steps = 100 # Keep sim small for precision check speed
+        self.sim_steps = cfg.simulation.dga.sim_steps
 
     def _loss_wrapper(self, model: NeuralRouter, key: PRNGKeyArray) -> jnp.float64:
         """Scalar loss function for gradient check."""
@@ -139,6 +140,13 @@ class JacobianValidator:
                 "sim_steps": self.sim_steps
             })
 
+        append_metrics_jsonl({
+            "max_rel_gradient_error": max_rel_err,
+            "mean_rel_gradient_error": mean_rel_err,
+            "sim_steps": self.sim_steps,
+            "status": "PASS" if max_rel_err < 1e-2 else "FAIL"
+        }, self.run_dir / "metrics.jsonl")
+
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
@@ -146,7 +154,7 @@ def main(raw_cfg: DictConfig):
 
     # Force debug settings if requested to keep FD check fast
     if raw_cfg.get("debug", False):
-        cfg.simulation.sim_time = 100
+        cfg.simulation.ssa.sim_time = 100
     
     run_dir, run_id = get_run_config(cfg, "jacobian_check", raw_cfg)
     run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)

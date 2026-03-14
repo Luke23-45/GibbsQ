@@ -41,7 +41,10 @@ def _dga_step(
 
     # 2. Relaxed Propensities
     arrival_rates = arrival_rate * probs
-    departure_rates = service_rates * jax.nn.sigmoid(state.Q * 20.0)
+    # Differentiable approximation of 𝟙(Q > 0).  Centred at Q = 0 with
+    # steepness 50 so sigmoid(0.1*50) ≈ 0.993 — near-full departure rate
+    # by Q = 0.1.  Previous version used (Q - 0.5)*20, biasing E[Q] upward.
+    departure_rates = service_rates * jax.nn.sigmoid(state.Q * 50.0)
 
     rates = jnp.concatenate([arrival_rates, departure_rates])
     a0 = jnp.sum(rates)

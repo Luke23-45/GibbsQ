@@ -26,6 +26,8 @@ from omegaconf import MISSING, DictConfig, OmegaConf
 __all__ = [
     "PolicyName",
     "SystemConfig",
+    "SSAConfig",
+    "DGAConfig",
     "SimulationConfig",
     "PolicyConfig",
     "DriftConfig",
@@ -82,16 +84,49 @@ class SystemConfig:
 
 
 @dataclass
-class SimulationConfig:
+class SSAConfig:
     """
-    Parameters controlling the Gillespie SSA.
+    Parameters for the Gillespie SSA engine (jax_engine.py / numpy simulate).
 
     Fields
     ------
     sim_time : float
-        Total simulation horizon  T > 0  (in continuous time units).
+        Total simulation horizon  T > 0  (continuous time seconds).
     sample_interval : float
         Time between trajectory snapshot samples  Δt > 0.
+    max_events : int
+        Event budget — hard ceiling on Gillespie events to prevent runaway.
+    """
+
+    sim_time:        float = 5000.0
+    sample_interval: float = 1.0
+    max_events:      int   = 100_000
+
+
+@dataclass
+class DGAConfig:
+    """
+    Parameters for the Differentiable Gillespie Approximation engine.
+
+    Fields
+    ------
+    sim_steps : int
+        Number of lax.scan iterations per trajectory.
+    temperature : float
+        Gumbel-Softmax temperature for relaxed event selection.
+    """
+
+    sim_steps:   int   = 5000
+    temperature: float = 0.5
+
+
+@dataclass
+class SimulationConfig:
+    """
+    Engine-agnostic simulation parameters plus engine-specific sub-configs.
+
+    Fields
+    ------
     num_replications : int
         Number of independent replications  R ≥ 1.
     seed : int
@@ -99,15 +134,18 @@ class SimulationConfig:
     burn_in_fraction : float
         Fraction of the trajectory discarded before computing steady-state
         statistics.  Must satisfy  0 ≤ burn_in_fraction < 1.
+    ssa : SSAConfig
+        Gillespie SSA engine parameters.
+    dga : DGAConfig
+        Differentiable Gillespie Approximation engine parameters.
     """
 
-    sim_time:          float = 1e4
-    sample_interval:   float = 0.1
-    num_replications:  int   = 5
-    seed:              int   = 42
-    burn_in_fraction:  float = 0.2
-    export_trajectories: bool = False
-    temperature:       float = 0.5
+    num_replications:    int   = 5
+    seed:                int   = 42
+    burn_in_fraction:    float = 0.2
+    export_trajectories: bool  = False
+    ssa:  SSAConfig = field(default_factory=SSAConfig)
+    dga:  DGAConfig = field(default_factory=DGAConfig)
 
 
 @dataclass
@@ -292,16 +330,38 @@ def validate(cfg: ExperimentConfig) -> None:
 
     # ── Simulation bounds ─────────────────────────────────────
     sim = cfg.simulation
-    if sim.sim_time <= 0:
-        raise ValueError(f"sim_time must be > 0, got {sim.sim_time}")
-    if sim.sample_interval <= 0:
-        raise ValueError(f"sample_interval must be > 0, got {sim.sample_interval}")
     if sim.num_replications < 1:
         raise ValueError(f"num_replications must be ≥ 1, got {sim.num_replications}")
     if not (0 <= sim.burn_in_fraction < 1):
         raise ValueError(
             f"burn_in_fraction must be in [0, 1), got {sim.burn_in_fraction}"
         )
+
+    # ── SSA engine bounds ─────────────────────────────────────
+    ssa = sim.ssa
+    if ssa.sim_time <= 0:
+        raise ValueError(f"ssa.sim_time must be > 0, got {ssa.sim_time}")
+    if ssa.sample_interval <= 0:
+        raise ValueError(f"ssa.sample_interval must be > 0, got {ssa.sample_interval}")
+    max_samples = ssa.sim_time / ssa.sample_interval
+    if max_samples > 50_000:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"SSA max_samples={max_samples:.0f} is very large "
+            f"(sim_time={ssa.sim_time}/sample_interval={ssa.sample_interval}). "
+            f"Consider increasing sample_interval.")
+
+    # ── DGA engine bounds ─────────────────────────────────────
+    dga = sim.dga
+    if dga.sim_steps < 1:
+        raise ValueError(f"dga.sim_steps must be ≥ 1, got {dga.sim_steps}")
+    if dga.sim_steps > 10_000:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"dga.sim_steps={dga.sim_steps} is very large. "
+            f"Consider ≤ 5000 for reasonable runtime.")
+    if not (0 < dga.temperature <= 10.0):
+        raise ValueError(f"dga.temperature must be in (0, 10], got {dga.temperature}")
 
     # ── Policy name ───────────────────────────────────────────
     valid_names = {e.value for e in PolicyName}
@@ -368,6 +428,17 @@ def compact_set_radius(cfg: ExperimentConfig) -> float:
 #  Hydra conversion
 # ──────────────────────────────────────────────────────────────
 
+def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
+    """Build SimulationConfig with nested SSA/DGA from a flat or nested dict."""
+    sim_dict = dict(sim_dict)  # shallow copy
+    ssa_raw = sim_dict.pop("ssa", {})
+    dga_raw = sim_dict.pop("dga", {})
+    return SimulationConfig(
+        ssa=SSAConfig(**ssa_raw),
+        dga=DGAConfig(**dga_raw),
+        **sim_dict,
+    )
+
 def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
     """
     Convert a Hydra ``DictConfig`` (loaded from YAML at runtime) into
@@ -380,7 +451,7 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
     system_cfg = _normalize_service_rates(d.get("system", {}))
     return ExperimentConfig(
         system=SystemConfig(**system_cfg),
-        simulation=SimulationConfig(**d.get("simulation", {})),
+        simulation=_build_simulation_config(d.get("simulation", {})),
         policy=PolicyConfig(**d.get("policy", {})),
         drift=DriftConfig(**d.get("drift", {})),
         wandb=WandbConfig(**d.get("wandb", {})),

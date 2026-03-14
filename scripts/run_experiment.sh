@@ -22,7 +22,7 @@ print_usage() {
     echo ""
     echo "Examples:"
     echo "  ./run_experiment.sh drift"
-    echo "  ./run_experiment.sh sweep system.num_servers=5 simulation.sim_time=5000"
+    echo "  ./run_experiment.sh sweep system.num_servers=5 simulation.ssa.sim_time=5000"
     echo "  ./run_experiment.sh policy +simulation.export_trajectories=True"
     echo ""
 }

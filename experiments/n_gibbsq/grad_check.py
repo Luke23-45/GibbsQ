@@ -36,13 +36,14 @@ class GradientFidelityChecker:
         precision = jnp.float32 if cfg.jax.precision == "float32" else jnp.float64
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=precision)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.temperature = float(cfg.simulation.temperature)
+        self.temperature = float(cfg.simulation.dga.temperature)
         
         # Test gradient at a stable non-zero scalar routing parameter
-        self.alpha_test = jnp.array(0.5, dtype=precision) 
+        self.alpha_test = jnp.array(cfg.system.alpha, dtype=precision) 
         
-        # Horizons to sweep (log scale roughly)
-        self.horizons = [100, 500, 1000, 2500, 5000, 10000]
+        # Horizons to sweep, capped by config
+        max_h = cfg.simulation.dga.sim_steps
+        self.horizons = [h for h in [100, 500, 1000, 2500, 5000] if h <= max_h]
 
         # Use forward-mode differentiation over a dynamic-step simulation to
         # avoid recompilation when sweeping horizon values.
@@ -137,6 +138,13 @@ class GradientFidelityChecker:
         
         log.info("-" * 55)
         log.info(f"Fidelity check complete. Plot saved to {plot_path}")
+
+        if self.run_logger:
+            try:
+                import wandb
+                self.run_logger.log({"gradient_decay": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
 
     def _automated_analysis(self, grad_norms: list):
         """Log diagnostic conclusions."""

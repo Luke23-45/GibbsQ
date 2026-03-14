@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import numpy as np
+
 import hydra
 from omegaconf import DictConfig
 
@@ -101,9 +103,10 @@ def main(raw_cfg: DictConfig) -> None:
             arrival_rate=lam,
             service_rates=mu,
             policy=policy,
-            sim_time=cfg.simulation.sim_time,
-            sample_interval=cfg.simulation.sample_interval,
-            log_interval=cfg.simulation.sim_time / 10.0,
+            sim_time=cfg.simulation.ssa.sim_time,
+            sample_interval=cfg.simulation.ssa.sample_interval,
+            log_interval=cfg.simulation.ssa.sim_time / 10.0,
+            rng=np.random.default_rng(cfg.simulation.seed),
         )
         log.info(f"Simulation done: {sim_res.arrival_count:,} arrivals.")
 

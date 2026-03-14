@@ -57,10 +57,10 @@ Write-Host "[1/5] Running Step 1: Theoretical Drift Verification..." -Foreground
 & $RunScript drift system.num_servers=2 system.arrival_rate=2.0
 
 Write-Host "`n[2/5] Running Step 2: Stability Sweep..." -ForegroundColor Yellow
-& $RunScript sweep simulation.sim_time=$SimTime simulation.num_replications=$Reps simulation.burn_in_fraction=$BurnIn
+& $RunScript sweep simulation.ssa.sim_time=$SimTime simulation.num_replications=$Reps simulation.burn_in_fraction=$BurnIn
 
 Write-Host "`n[3/5] Running Step 3: Policy Comparison (Heterogeneous)..." -ForegroundColor Yellow
-& $RunScript policy system.num_servers=4 system.service_rates="[1.0, 2.0, 5.0, 10.0]" simulation.sim_time=$PolicyTime simulation.num_replications=$Reps
+& $RunScript policy system.num_servers=4 system.service_rates="[1.0, 2.0, 5.0, 10.0]" simulation.ssa.sim_time=$PolicyTime simulation.num_replications=$Reps
 
 Write-Host "`n[4/5] Running Step 4: Stress Test..." -ForegroundColor Yellow
 & $RunScript stress simulation.num_replications=$StressReps "debug=$($Level -ne "full")" jax.enabled=true

@@ -18,6 +18,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -37,8 +38,8 @@ class NeuralTuringTest:
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.temperature = float(cfg.simulation.temperature)
-        self.sim_steps = int(cfg.simulation.sim_time)
+        self.temperature = float(cfg.simulation.dga.temperature)
+        self.sim_steps = cfg.simulation.dga.sim_steps
 
         # We run multiple replications to get statistically stable results
         self.num_reps = int(cfg.simulation.num_replications)
@@ -56,7 +57,7 @@ class NeuralTuringTest:
         log.info(f"Environment: N={self.num_servers}, Load={self.arrival_rate}")
         
         # --- 1. The Expert: GibbsQ (Analytically Optimal) ---
-        optimal_alpha = jnp.float32(0.5)
+        optimal_alpha = jnp.float32(self.cfg.system.alpha)
         log.info(f"\n[GibbsQ baseline (alpha={optimal_alpha})]")
         
         gibbsq_keys = jax.random.split(k1, self.num_reps)
@@ -85,6 +86,12 @@ class NeuralTuringTest:
         # Re-initialize skeleton and load weights securely
         skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k2)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
+        
+        # SG#16 Fix: Validate that the loaded model matches the current config
+        if model.l1.weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+            return
+
         
         neural_keys = jax.random.split(k3, self.num_reps)
         n_gibbsq_loss_array = self.vmap_simulate(
@@ -132,6 +139,13 @@ class NeuralTuringTest:
             f.write(f"GibbsQ E[Q]: {mean_gibbsq_loss:.4f}\n")
             f.write(f"N-GibbsQ E[Q]: {mean_neural_loss:.4f}\n")
             f.write(f"Performance Gap: {perc:.2f}%\n")
+
+        append_metrics_jsonl({
+            "gibbsq_loss": mean_gibbsq_loss,
+            "n_gibbsq_loss": mean_neural_loss,
+            "parity_diff_percentage": perc,
+            "status": status
+        }, self.run_dir / "metrics.jsonl")
 
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")

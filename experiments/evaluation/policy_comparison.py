@@ -86,7 +86,7 @@ def main(raw_cfg: DictConfig) -> None:
         
         if use_jax:
             # --- JAX backend ---
-            max_samples = int(cfg.simulation.sim_time / cfg.simulation.sample_interval) + 1
+            max_samples = int(cfg.simulation.ssa.sim_time / cfg.simulation.ssa.sample_interval) + 1
             t_sim_start = time.perf_counter()
             times, states, (arrs, deps) = run_replications_jax(
                 num_replications=cfg.simulation.num_replications,
@@ -94,8 +94,8 @@ def main(raw_cfg: DictConfig) -> None:
                 arrival_rate=sc.arrival_rate,
                 service_rates=mu_jax,
                 alpha=float(p.get("alpha", 1.0)),
-                sim_time=cfg.simulation.sim_time,
-                sample_interval=cfg.simulation.sample_interval,
+                sim_time=cfg.simulation.ssa.sim_time,
+                sample_interval=cfg.simulation.ssa.sample_interval,
                 base_seed=cfg.simulation.seed,
                 max_samples=max_samples,
                 policy_type=p["jax_idx"],
@@ -131,9 +131,10 @@ def main(raw_cfg: DictConfig) -> None:
                     arrival_rate=sc.arrival_rate,
                     service_rates=mu,
                     policy=policy,
-                    sim_time=cfg.simulation.sim_time,
-                    sample_interval=cfg.simulation.sample_interval,
+                    sim_time=cfg.simulation.ssa.sim_time,
+                    sample_interval=cfg.simulation.ssa.sample_interval,
                     rng=rng,
+                    max_events=cfg.simulation.ssa.max_events,
                 )
                 avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
                 q_res[lbl].append(float(avg_q.sum()))

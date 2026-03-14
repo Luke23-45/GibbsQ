@@ -40,7 +40,7 @@ class NeuralCurriculumTrainer:
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.temperature = float(cfg.simulation.temperature)
+        self.temperature = float(cfg.simulation.dga.temperature)
         
         # Weight decay regularizes large routing weights.
         self.learning_rate = float(cfg.neural_training.learning_rate)
@@ -122,13 +122,25 @@ class NeuralCurriculumTrainer:
         plt.xlabel('Global Epoch')
         plt.ylabel('Expected Queue Length $\\mathbb{E}[Q]$')
         plt.grid(True, alpha=0.3)
-        plt.axvline(x=20, color='gray', linestyle='--', alpha=0.5, label='Shift to T=2000')
-        plt.axvline(x=50, color='gray', linestyle=':', alpha=0.5, label='Shift to T=5000')
+        # Plot phase transition markers from curriculum config
+        cumulative = 0
+        for phase_idx, phase in enumerate(self.cfg.neural_training.curriculum[:-1]):
+            cumulative += phase[0]
+            next_T = self.cfg.neural_training.curriculum[phase_idx + 1][1]
+            plt.axvline(x=cumulative, color='gray', linestyle='--', alpha=0.5, label=f'Shift to T={next_T}')
         plt.legend()
         plt.tight_layout()
         
-        plt.savefig(self.run_dir / "n_gibbsq_training_curve.png", dpi=300)
+        plot_path = self.run_dir / "n_gibbsq_training_curve.png"
+        plt.savefig(plot_path, dpi=300)
         plt.close()
+
+        if self.run_logger:
+            try:
+                import wandb
+                self.run_logger.log({"training_curve": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
 
         model_path = self.run_dir / "n_gibbsq_weights.eqx"
         eqx.tree_serialise_leaves(model_path, model)
@@ -156,7 +168,7 @@ def main(raw_cfg: DictConfig):
     trainer = NeuralCurriculumTrainer(cfg, run_dir, run_logger)
     
     # Execute deterministic seeded training
-    seed_key = jax.random.PRNGKey(42)
+    seed_key = jax.random.PRNGKey(cfg.simulation.seed)
     trainer.execute(seed_key)
 
 if __name__ == "__main__":

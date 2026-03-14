@@ -14,7 +14,7 @@ Extra arguments passed natively to the underlying Hydra application.
 
 .EXAMPLE
 .\run_experiment.ps1 drift
-.\run_experiment.ps1 sweep system.num_servers=5 simulation.sim_time=5000
+.\run_experiment.ps1 sweep system.num_servers=5 simulation.ssa.sim_time=5000
 .\run_experiment.ps1 policy +simulation.export_trajectories=True
 #>
 [CmdletBinding()]
@@ -48,7 +48,7 @@ if (-not $Experiment) {
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Green
     Write-Host "  .\run_experiment.ps1 drift"
-    Write-Host "  .\run_experiment.ps1 sweep system.num_servers=5 simulation.sim_time=5000"
+    Write-Host "  .\run_experiment.ps1 sweep system.num_servers=5 simulation.ssa.sim_time=5000"
     Write-Host "  .\run_experiment.ps1 policy +simulation.export_trajectories=True"
     exit 1
 }

@@ -54,12 +54,14 @@ def train_routing_agent(raw_cfg: DictConfig):
         'num_servers': N,
         'arrival_rate': arrival_rate,
         'service_rates': service_rates,
-        'sim_steps': int(cfg.simulation.sim_time), # Max jumps per trajectory during training
-        'temperature': 0.1
+        'sim_steps': cfg.simulation.dga.sim_steps, # Max jumps per trajectory during training
+        'temperature': float(cfg.simulation.dga.temperature)
     }
     
-    # Initialize alpha (start at 0.0 = Uniform Routing)
-    alpha = jnp.float32(0.0) 
+    # Initialize alpha at small positive value. Softmax(-alpha*Q) approaches
+    # uniform as alpha->0, so 0.1 is near-uniform but avoids the hard clip
+    # at line 112 corrupting Adam's momentum when alpha drifts negative.
+    alpha = jnp.float32(0.1) 
     
     # --- Optimizer Setup ---
     learning_rate = float(cfg.neural_training.dga_learning_rate)
@@ -71,11 +73,11 @@ def train_routing_agent(raw_cfg: DictConfig):
     # signature: alpha, arrival_rate, service_rates, key, num_servers, sim_steps, temperature
     loss_grad_fn = jax.jit(
         jax.value_and_grad(expected_queue_loss, argnums=0),
-        static_argnums=(4, 5) 
+        static_argnums=(4, 5, 7) 
     )
     
-    num_epochs = raw_cfg.get("train_epochs", 30)
-    key = jax.random.PRNGKey(42)
+    num_epochs = cfg.train_epochs
+    key = jax.random.PRNGKey(cfg.simulation.seed)
     
     history_alpha = []
     history_loss = []
@@ -108,7 +110,9 @@ def train_routing_agent(raw_cfg: DictConfig):
         updates, opt_state = optimizer.update(grad, opt_state)
         alpha = optax.apply_updates(alpha, updates)
         
-        # Clip alpha to be non-negative (can't route away from short queues)
+        # Safety clip: alpha < 0 would route TO long queues (catastrophic).
+        # NOTE: If this clip activates, Adam's momentum state becomes stale.
+        # The init at 0.1 and typical gradient direction make this very rare.
         alpha = jnp.maximum(alpha, 0.0)
 
         # Log to WandB

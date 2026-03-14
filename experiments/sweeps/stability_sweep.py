@@ -70,15 +70,15 @@ def main(raw_cfg: DictConfig) -> None:
 
             if cfg.jax.enabled:
                 # --- JAX backend (vectorized replications) ---
-                max_samples = int(cfg.simulation.sim_time / cfg.simulation.sample_interval) + 1
+                max_samples = int(cfg.simulation.ssa.sim_time / cfg.simulation.ssa.sample_interval) + 1
                 times, states, (arrs, deps) = run_replications_jax(
                     num_replications=cfg.simulation.num_replications,
                     num_servers=N,
                     arrival_rate=lam,
                     service_rates=mu_jax,
                     alpha=float(alpha),
-                    sim_time=cfg.simulation.sim_time,
-                    sample_interval=cfg.simulation.sample_interval,
+                    sim_time=cfg.simulation.ssa.sim_time,
+                    sample_interval=cfg.simulation.ssa.sample_interval,
                     base_seed=cfg.simulation.seed,
                     max_samples=max_samples
                 )
@@ -108,8 +108,8 @@ def main(raw_cfg: DictConfig) -> None:
                         arrival_rate=lam,
                         service_rates=mu,
                         policy=policy,
-                        sim_time=cfg.simulation.sim_time,
-                        sample_interval=cfg.simulation.sample_interval,
+                        sim_time=cfg.simulation.ssa.sim_time,
+                        sample_interval=cfg.simulation.ssa.sample_interval,
                         rng=rng,
                     )
                     avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)

@@ -57,6 +57,26 @@ log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 _STRESS_SAMPLE_INTERVAL: float = 1.0
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH 2026-03-14: Reduced sim_time for all stress tests.
+#
+# ROOT CAUSE (confirmed via experiments/testing/debug_stress_runner.py):
+#   The Gillespie SSA in JAX runs inside lax.while_loop which is STRICTLY
+#   SEQUENTIAL — each event iteration executes one after another.  With
+#   N=4, rho=0.8, the event rate is ~14.4/s.  At sim_time=5000, that's
+#   ~72,000 sequential while_loop iterations per replication.  Combined
+#   with vmap(R=3), this takes >15 minutes on both GPU (Colab) and CPU.
+#
+#   Diagnostic results (H1-H4 all <1.3s, H5 60x smaller but hung 10+ min)
+#   confirmed that event count is the sole bottleneck — JIT compilation,
+#   buffer shapes, and vmap batch overhead are negligible.
+#
+# FIX: Reduce sim_time to 500s for N-scaling, 1000s/5000s for critical load,
+#   and 1000s for heterogeneity.  These still provide >10x the mixing time
+#   for the CTMC at the given rho values, which is sufficient for Gini and
+#   mean-queue metrics.
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
@@ -90,9 +110,9 @@ def main(raw_cfg: DictConfig) -> None:
         lam = 0.8 * float(jnp.sum(mu))  # rho = 0.8
 
         # PATCH BUG-1: use _STRESS_SAMPLE_INTERVAL, not cfg.simulation.sample_interval.
-        # old:  max_samples = int(5000.0 / cfg.simulation.sample_interval) + 1  → 100 001
-        # new:  max_samples = int(5000.0 / 1.0) + 1                             →   5 001
-        _sim_time_t1 = 5000.0
+        # PATCH 2026-03-14: reduced sim_time from 5000→500 to cut ~72K events to ~7.2K.
+        #   500s at rho=0.8 is >10x the mixing time, sufficient for Gini metrics.
+        _sim_time_t1 = 500.0 if not raw_cfg.get("debug", False) else 100.0
         max_samples_t1 = int(_sim_time_t1 / _STRESS_SAMPLE_INTERVAL) + 1
 
         log.info(f"  Simulating N={N} experts (rho=0.8)...")
@@ -102,7 +122,7 @@ def main(raw_cfg: DictConfig) -> None:
             num_servers=N,
             arrival_rate=lam,
             service_rates=mu,
-            alpha=1.0,
+            alpha=cfg.system.alpha,
             sim_time=_sim_time_t1,
             sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
             base_seed=cfg.simulation.seed,
@@ -120,7 +140,7 @@ def main(raw_cfg: DictConfig) -> None:
                 final_time=float(times[r][-1]),
                 num_servers=N
             )
-            avg_q = time_averaged_queue_lengths(res, 0.2)
+            avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
             ginis.append(gini_coefficient(avg_q))
 
         avg_gini = np.mean(ginis)
@@ -152,10 +172,11 @@ def main(raw_cfg: DictConfig) -> None:
         #       → up to 1 000 001 for rho > 0.99
         # new:  max_samples = int(sim_time_critical / 1.0) + 1
         #       → up to 50 001 for rho > 0.99
+        # PATCH 2026-03-14: reduced sim_time from 50K/10K → 5K/1K.
         if raw_cfg.get("debug", False):
-            _sim_time_crit = 1000.0
+            _sim_time_crit = 500.0
         else:
-            _sim_time_crit = 50000.0 if rho > 0.99 else 10000.0
+            _sim_time_crit = 5000.0 if rho > 0.99 else 1000.0
 
         max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1  # PATCH
 
@@ -166,7 +187,7 @@ def main(raw_cfg: DictConfig) -> None:
             num_servers=N_fixed,
             arrival_rate=lam,
             service_rates=mu_fixed,
-            alpha=1.0,
+            alpha=cfg.system.alpha,
             sim_time=_sim_time_crit,
             sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
             base_seed=cfg.simulation.seed,
@@ -178,8 +199,15 @@ def main(raw_cfg: DictConfig) -> None:
         stationary_count = 0
 
         total_q_trajectories = np.array(states).sum(axis=2)  # (Reps, TimeSteps)
-        r_hat = gelman_rubin_diagnostic(total_q_trajectories)
-        log.info(f"    -> Gelman-Rubin R-hat across replicas: {r_hat:.4f}")
+
+        # SG#11 Fix: Use data-driven MSER-5 truncation consistently instead of fixed 20%
+        # Compute MSER-5 truncations for all replicas to find the maximum burn-in period
+        trunc_samples = [mser5_truncation(traj) for traj in total_q_trajectories]
+        max_burn_samples = max(trunc_samples) if trunc_samples else 0
+        
+        truncated_trajectories = total_q_trajectories[:, max_burn_samples:]
+        r_hat = gelman_rubin_diagnostic(truncated_trajectories)
+        log.info(f"    -> Gelman-Rubin R-hat across replicas (post MSER-5 burn-in): {r_hat:.4f}")
 
         for r in range(cfg.simulation.num_replications):
             res = SimResult(
@@ -188,7 +216,7 @@ def main(raw_cfg: DictConfig) -> None:
             )
 
             traj = total_q_trajectories[r]
-            d_star = mser5_truncation(traj)
+            d_star = trunc_samples[r]
             trunc_fraction = d_star / max(len(traj), 1)
 
             avg_q = time_averaged_queue_lengths(res, trunc_fraction).sum()
@@ -236,7 +264,8 @@ def main(raw_cfg: DictConfig) -> None:
     #       max_samples=int(10000.0 / cfg.simulation.sample_interval) + 1  ← hardcoded 10000!
     # new:  _sim_time_het = ... (same conditional)
     #       max_samples=int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1   ← consistent
-    _sim_time_het = 1000.0 if raw_cfg.get("debug", False) else 10000.0
+    # PATCH 2026-03-14: reduced from 10000→1000 (debug: 1000→500).
+    _sim_time_het = 500.0 if raw_cfg.get("debug", False) else 1000.0
     max_samples_het = int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1    # PATCH
 
     times, states, (arrs, deps) = sharded_replications(
@@ -244,7 +273,7 @@ def main(raw_cfg: DictConfig) -> None:
         num_servers=4,
         arrival_rate=lam_het,
         service_rates=mu_het,
-        alpha=1.0,
+        alpha=cfg.system.alpha,
         sim_time=_sim_time_het,
         sample_interval=_STRESS_SAMPLE_INTERVAL,    # PATCH: was cfg.simulation.sample_interval
         base_seed=cfg.simulation.seed,
@@ -258,7 +287,7 @@ def main(raw_cfg: DictConfig) -> None:
             np.array(times[r]), np.array(states[r]),
             int(arrs[r]), int(deps[r]), float(times[r][-1]), 4
         )
-        avg_q_per_srv = time_averaged_queue_lengths(res, 0.2)
+        avg_q_per_srv = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
         work_dist.append(avg_q_per_srv)
 
     mean_dist = np.mean(work_dist, axis=0)

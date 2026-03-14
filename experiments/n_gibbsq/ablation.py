@@ -28,6 +28,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy, expected_queue_loss
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -46,7 +47,8 @@ class AblationRouter(NeuralRouter):
         
         if ablate_zero:
             # Re-initialize the final layer with standard Lecun normal
-            k = jax.random.split(key, 1)[0]
+            # Using index 3 to ensure it doesn't collide with super().__init__'s splits (0, 1, 2)
+            k = jax.random.split(key, 4)[3]
             l3 = eqx.nn.Linear(hidden_size, num_servers, key=k)
             self.layers = self.layers[:-1] + [l3]
 
@@ -67,8 +69,8 @@ class AblationStudy:
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
         self.arrival_rate = float(cfg.system.arrival_rate)
-        self.sim_steps = int(cfg.simulation.sim_time)
-        self.temperature = float(cfg.simulation.temperature)
+        self.sim_steps = cfg.simulation.dga.sim_steps
+        self.temperature = float(cfg.simulation.dga.temperature)
 
     def execute(self, key: PRNGKeyArray):
         """Runs all ablation variants."""
@@ -90,7 +92,7 @@ class AblationStudy:
             if name == "No Routing (Random)":
                 loss = simulate_dga_jax(
                     self.num_servers, self.arrival_rate, self.service_rates, jnp.zeros(self.num_servers), 
-                    self.sim_steps, keys[4], self.temperature, default_policy
+                    self.sim_steps, keys[2], self.temperature, default_policy
                 )
             else:
                 router = AblationRouter(self.num_servers, 64, keys[0], a_log, a_zero)
@@ -102,7 +104,7 @@ class AblationStudy:
                 train_key = keys[1]
                 
                 def _loss_fn(m, k):
-                    return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, 2000, self.temperature, evaluate_model)
+                    return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, self.sim_steps, self.temperature, evaluate_model)
                 
                 @eqx.filter_jit
                 def train_step(model_t, opt_state_t, key_t):
@@ -111,8 +113,9 @@ class AblationStudy:
                     new_model = eqx.apply_updates(model_t, updates)
                     return l, new_model, new_opt_state
                 
-                log.info(f"   [Training] {name} for 20 epochs at T=2000...")
-                for ep in range(20):
+                ablation_epochs = self.cfg.train_epochs
+                log.info(f"   [Training] {name} for {ablation_epochs} epochs at T={self.sim_steps}...")
+                for ep in range(ablation_epochs):
                     train_key, subkey = jax.random.split(train_key)
                     l, router, opt_state = train_step(router, opt_state, subkey)
                 
@@ -124,6 +127,11 @@ class AblationStudy:
             
             results[name] = float(loss)
             log.info(f"   {name:<25} | Final Eval Loss: {results[name]:.4f}")
+
+            append_metrics_jsonl({
+                "variant": name,
+                "loss": float(loss)
+            }, self.run_dir / "metrics.jsonl")
 
         self._plot(results)
 
@@ -152,6 +160,11 @@ class AblationStudy:
         
         if self.run_logger:
             self.run_logger.log({"ablation_results": results})
+            try:
+                import wandb
+                self.run_logger.log({"ablation_chart": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
@@ -166,7 +179,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     study = AblationStudy(cfg, run_dir, run_logger)
-    study.execute(jax.random.PRNGKey(888))
+    study.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 if __name__ == "__main__":
     main()

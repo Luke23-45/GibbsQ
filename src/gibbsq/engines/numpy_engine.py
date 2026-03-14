@@ -122,6 +122,7 @@ def simulate(
     sample_interval: float       = 0.1,
     rng:             np.random.Generator | None = None,
     log_interval:    float       = 0.0,
+    max_events:      int | None  = None,
 ) -> SimResult:
     """
     Run one replication of the Gillespie SSA.
@@ -189,6 +190,7 @@ def simulate(
     next_log = log_interval if log_interval > 0 else sim_time + 1.0
 
     # ── Main event loop ──
+    total_events = 0
     while t < sim_time:
 
         # 1.  Routing probabilities
@@ -240,6 +242,11 @@ def simulate(
             Q[srv] -= 1                              # safe: rate is 0 if Q=0
             departure_count += 1
 
+        # 6b. Enforce max_events ceiling (SG-1.2 fix)
+        total_events += 1
+        if max_events is not None and total_events >= max_events:
+            break
+
         # 7.  Record snapshots at fixed intervals
         while next_sample <= t and sample_idx < max_samples:
             times_buf[sample_idx]  = next_sample
@@ -288,6 +295,7 @@ def run_replications(
     num_replications: int  = 5,
     base_seed:       int   = 42,
     log_interval:    float = 0.0,
+    max_events:      int | None = None,
 ) -> list[SimResult]:
     """
     Run *num_replications* independent replications.
@@ -310,6 +318,7 @@ def run_replications(
             sample_interval=sample_interval,
             rng=rng,
             log_interval=log_interval,
+            max_events=max_events,
         )
         log.info(
             f"  → {result.arrival_count:,} arrivals, "

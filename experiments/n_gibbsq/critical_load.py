@@ -22,6 +22,7 @@ from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -38,8 +39,8 @@ class CriticalLoadTest:
         self.run_logger = run_logger
         self.num_servers = cfg.system.num_servers
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
-        self.sim_steps = 20000 # Increased horizon to see explosion
-        self.temperature = float(cfg.simulation.temperature)
+        self.sim_steps = cfg.simulation.dga.sim_steps
+        self.temperature = float(cfg.simulation.dga.temperature)
         
         # Symmetrical and Extreme ρ range
         self.rho_vals = list(cfg.generalization.rho_boundary_vals)
@@ -58,6 +59,11 @@ class CriticalLoadTest:
         skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
+        # SG#16 Fix: Validate that the loaded model matches the current config
+        if model.l1.weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+            return
+        
         total_capacity = jnp.sum(self.service_rates)
         
         neural_results = []
@@ -66,31 +72,46 @@ class CriticalLoadTest:
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
         
-        # Pre-generate unique key pairs for each ρ value (stochastic independence)
-        rho_keys = jax.random.split(k_sweep, len(self.rho_vals) * 2)
+        # Pre-generate shared CRN keys for each ρ value (SG-13.5 fix)
+        rho_keys = jax.random.split(k_sweep, len(self.rho_vals))
+        
+        # Vectorized simulation for variance reduction (SG-13.4 fix)
+        num_reps = int(self.cfg.simulation.num_replications)
+        vmap_simulate = jax.jit(
+            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)),
+            static_argnames=("num_servers", "sim_steps", "apply_fn")
+        )
         
         for idx, rho in enumerate(self.rho_vals):
             arrival_rate = rho * total_capacity
             
-            # Each ρ point gets its OWN unique keys
-            k_n = rho_keys[idx * 2]
-            k_g = rho_keys[idx * 2 + 1]
+            # CRN: shared key for both neural and GibbsQ (SG-13.5 fix)
+            k_shared = rho_keys[idx]
+            rep_keys = jax.random.split(k_shared, num_reps)
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
-            # Neural Evaluation
-            n_loss = simulate_dga_jax(
-                self.num_servers, arrival_rate, self.service_rates, model, self.sim_steps, k_n, self.temperature, evaluate_model
+            # Neural Evaluation with vmap replications (SG-13.4 fix)
+            n_loss_array = vmap_simulate(
+                self.num_servers, arrival_rate, self.service_rates, model, self.sim_steps, rep_keys, self.temperature, evaluate_model
             )
-            neural_results.append(float(n_loss))
+            n_loss = float(jnp.mean(n_loss_array))
+            neural_results.append(n_loss)
             
-            # GibbsQ Evaluation
-            g_loss = simulate_dga_jax(
-                self.num_servers, arrival_rate, self.service_rates, jnp.float32(0.5), self.sim_steps, k_g, self.temperature, default_policy
+            # GibbsQ Evaluation with vmap replications and CRN
+            g_loss_array = vmap_simulate(
+                self.num_servers, arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), self.sim_steps, rep_keys, self.temperature, default_policy
             )
-            gibbs_results.append(float(g_loss))
+            g_loss = float(jnp.mean(g_loss_array))
+            gibbs_results.append(g_loss)
             
             log.info(f"   => N-GibbsQ E[Q]: {n_loss:.2f} | GibbsQ E[Q]: {g_loss:.2f}")
+
+            append_metrics_jsonl({
+                "rho": float(rho),
+                "neural_eq": n_loss,
+                "gibbs_eq": g_loss
+            }, self.run_dir / "metrics.jsonl")
 
         self._plot(self.rho_vals, neural_results, gibbs_results)
 
@@ -120,6 +141,11 @@ class CriticalLoadTest:
                 "critical_load/neural_eq": neural_r,
                 "critical_load/gibbs_eq": gibbs_r
             })
+            try:
+                import wandb
+                self.run_logger.log({"critical_load_curve": wandb.Image(str(plot_path))})
+            except Exception:
+                pass
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
@@ -134,7 +160,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     test = CriticalLoadTest(cfg, run_dir, run_logger)
-    test.execute(jax.random.PRNGKey(321))
+    test.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 if __name__ == "__main__":
     main()
