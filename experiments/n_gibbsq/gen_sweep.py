@@ -19,6 +19,8 @@ Sweeps (2-D grid):
 
 NOTE: N-scaling (varying server count) is NOT implemented in this sweep.
       The model is evaluated only on the same N it was trained on.
+
+SG-D FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -31,13 +33,34 @@ from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 import numpy as np
 import matplotlib.pyplot as plt
+import functools
 from gibbsq.core import constants
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.numpy_engine import simulate, SimResult
+from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+
+
+class _NeuralSSAPolicy:
+    """Identical to eval.py."""
+    def __init__(self, model):
+        import jax as _jax
+        self._model = model
+        @eqx.filter_jit
+        def _forward(m, x): return _jax.nn.softmax(m(x))
+        self._forward = _forward
+        @functools.lru_cache(maxsize=131072)
+        def _get_probs(q_tuple):
+            probs = self._forward(self._model, jnp.array(q_tuple, dtype=jnp.float32))
+            probs_np = np.array(probs, dtype=np.float64)
+            return probs_np / probs_np.sum()
+        self._get_probs = _get_probs
+    def __call__(self, Q, rng): return self._get_probs(tuple(Q))
+
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -56,13 +79,15 @@ class GeneralizationSweeper:
         self.run_logger = run_logger
         self.temperature = float(cfg.simulation.dga.temperature)
         self.sim_steps = cfg.simulation.dga.sim_steps  # Enough to see steady state
+        self.ssa_sim_time = cfg.simulation.ssa.sim_time
+        self.ssa_sample_interval = cfg.simulation.ssa.sample_interval
 
 
     def execute(self, key: PRNGKeyArray):
         """Runs the multi-dimensional sweep."""
         k_load, k_grid = jax.random.split(key)
         
-        # 1. Load trained model (Trained on N=4, [100,1,1,1], arrival=95)
+        # 1. Load trained model
         # SG#5 FIX: Use fixed canonical pointer path (config-independent).
         pointer_path = Path("outputs") / "small" / "latest_weights.txt"
         if not pointer_path.exists():
@@ -100,14 +125,10 @@ class GeneralizationSweeper:
             log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
             return
         
-        # SG-4 FIX: Replace single-sample DGA calls with replicated vmap_simulate.
-        # A single sample has 95% CI ≈ ±40% of the mean (see stats_bench.py variance).
-        # Using cfg.simulation.num_replications (default 30) reduces SE by ~5.5×.
-        _cell_reps = int(self.cfg.simulation.num_replications)
-        vmap_simulate = jax.jit(
-            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)),
-            static_argnums=(0, 4, 7)
-        )
+        # SG-4 FIX: Replace single-sample DGA calls with replicated SSA.
+        _cell_reps   = int(self.cfg.simulation.num_replications)
+        _neural_ssa  = _NeuralSSAPolicy(model)  # one instance, reused across all cells
+        _max_s_cell  = int(self.ssa_sim_time / self.ssa_sample_interval) + 1
 
         # Pre-generate unique keys for each grid cell (stochastic independence)
         total_cells = len(scale_vals) * len(rho_vals)
@@ -122,18 +143,50 @@ class GeneralizationSweeper:
             for j, rho in enumerate(rho_vals):
                 lambda_rate = float(rho * total_cap)
                 
-                # CRN: use the SAME key for both neural and GibbsQ (SG-11.5 fix)
-                k_shared = cell_keys[cell_idx]
+                _cell_seed = int(jax.random.bits(jax.random.fold_in(cell_keys[cell_idx], 0))) & 0x7FFFFFFF
                 cell_idx += 1
-                
-                # Expand the shared cell key into per-replication keys (CRN preserved).
-                cell_rep_keys = jax.random.split(k_shared, _cell_reps)
+                _mu_np = np.array(mu, dtype=np.float64)
 
-                n_loss_arr = vmap_simulate(self.cfg.system.num_servers, lambda_rate, mu, model, self.sim_steps, cell_rep_keys, self.temperature, evaluate_model)
-                g_loss_arr = vmap_simulate(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(self.cfg.system.alpha), self.sim_steps, cell_rep_keys, self.temperature, default_policy)
+                # GibbsQ on true SSA
+                times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                    num_replications=_cell_reps,
+                    num_servers=self.cfg.system.num_servers,
+                    arrival_rate=lambda_rate,
+                    service_rates=jnp.array(_mu_np),
+                    alpha=float(self.cfg.system.alpha),
+                    sim_time=self.ssa_sim_time,
+                    sample_interval=self.ssa_sample_interval,
+                    base_seed=_cell_seed,
+                    max_samples=_max_s_cell,
+                    policy_type=3,
+                )
+                g_vals = []
+                for _r in range(_cell_reps):
+                    _res = SimResult(
+                        times=np.array(times_g[_r]), states=np.array(states_g[_r]),
+                        arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
+                        final_time=float(times_g[_r][-1]),
+                        num_servers=self.cfg.system.num_servers,
+                    )
+                    g_vals.append(float(time_averaged_queue_lengths(
+                        _res, self.cfg.simulation.burn_in_fraction).sum()))
+                g_loss = float(np.mean(g_vals))
 
-                n_loss = float(jnp.mean(n_loss_arr))
-                g_loss = float(jnp.mean(g_loss_arr))
+                # Neural on true SSA
+                _max_ev = int((lambda_rate + _mu_np.sum()) * self.ssa_sim_time * 1.5) + 1000
+                n_vals = []
+                for _rep in range(_cell_reps):
+                    _rng = np.random.default_rng(_cell_seed + _rep)
+                    _res_n = simulate(
+                        num_servers=self.cfg.system.num_servers,
+                        arrival_rate=lambda_rate, service_rates=_mu_np,
+                        policy=_neural_ssa, sim_time=self.ssa_sim_time,
+                        sample_interval=self.ssa_sample_interval,
+                        rng=_rng, max_events=_max_ev,
+                    )
+                    n_vals.append(float(time_averaged_queue_lengths(
+                        _res_n, self.cfg.simulation.burn_in_fraction).sum()))
+                n_loss = float(np.mean(n_vals))
                 
                 # Ratio: GibbsQ / Neural. > 1.0 means Neural is better.
                 ratio = float(g_loss / max(n_loss, constants.NUMERICAL_STABILITY_EPSILON))

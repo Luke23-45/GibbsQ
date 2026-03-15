@@ -13,7 +13,7 @@ system:
   alpha: 1.0
 
 simulation:
-  num_replications: 3
+  num_replications: 10
   seed: 42
   burn_in_fraction: 0.2
   export_trajectories: false
@@ -47,8 +47,9 @@ neural_training:
   dga_learning_rate: 1e-3
   weight_decay: 1e-4
   curriculum:
-    - [5, 100]
-    - [10, 500]
+    - [10, 200]
+    - [20, 1000]
+    - [20, 3000]
 
 jax:
   enabled: false

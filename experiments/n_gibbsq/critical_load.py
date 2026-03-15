@@ -5,6 +5,8 @@ Tests N-GibbsQ as ρ → 1, where queueing systems become unstable.
 
 Compares the neural router's expected queue length against GibbsQ
 at load factors approaching the critical boundary.
+
+SG-D FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -17,12 +19,33 @@ from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 import matplotlib.pyplot as plt
 import numpy as np
+import functools
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.numpy_engine import simulate, SimResult
+from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+
+
+class _NeuralSSAPolicy:
+    """Identical to eval.py."""
+    def __init__(self, model):
+        import jax as _jax
+        self._model = model
+        @eqx.filter_jit
+        def _forward(m, x): return _jax.nn.softmax(m(x))
+        self._forward = _forward
+        @functools.lru_cache(maxsize=131072)
+        def _get_probs(q_tuple):
+            probs = self._forward(self._model, jnp.array(q_tuple, dtype=jnp.float32))
+            probs_np = np.array(probs, dtype=np.float64)
+            return probs_np / probs_np.sum()
+        self._get_probs = _get_probs
+    def __call__(self, Q, rng): return self._get_probs(tuple(Q))
+
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -41,6 +64,8 @@ class CriticalLoadTest:
         self.service_rates = jnp.array(cfg.system.service_rates, dtype=jnp.float32)
         self.sim_steps = cfg.simulation.dga.sim_steps
         self.temperature = float(cfg.simulation.dga.temperature)
+        self.ssa_sim_time = cfg.simulation.ssa.sim_time
+        self.ssa_sample_interval = cfg.simulation.ssa.sample_interval
         
         # Symmetrical and Extreme ρ range
         self.rho_vals = list(cfg.generalization.rho_boundary_vals)
@@ -78,55 +103,66 @@ class CriticalLoadTest:
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
         
-        # Pre-generate shared CRN keys for each ρ value; static_argnums replaces static_argnames
-        rho_keys = jax.random.split(k_sweep, len(self.rho_vals))
-        
-        # Vectorized simulation (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
         num_reps = int(self.cfg.simulation.num_replications)
-        vmap_simulate = jax.jit(
-            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)),
-            static_argnums=(0, 4, 7)
-        )
+        _neural_ssa = _NeuralSSAPolicy(model)
         
         for idx, rho in enumerate(self.rho_vals):
             arrival_rate = rho * total_capacity
-            
-            # CRN: shared key for both neural and GibbsQ (SG-13.5 fix)
-            k_shared = rho_keys[idx]
-            rep_keys = jax.random.split(k_shared, num_reps)
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
             _base_rho = 0.8
             _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
             # SG#9 FIX: Linear mixing-time scaling is correct for fixed N
-            # (spectral gap ∝ (1-ρ) for fixed-N birth-death chains; see
-            # Goldberg & Li 2022, Oper. Res. bounds that scale as 1/(1-ρ)).
-            # The prior cap of 200_000 was binding at ρ=0.999 where the formula
-            # predicts 5000 × 200 = 1,000,000 steps. Raise cap to 2_000_000
-            # to accommodate the full linear prediction.
-            _uncapped_steps = round(self.sim_steps * _rho_factor)
-            rho_adjusted_steps = min(_uncapped_steps, 2_000_000)
-            if _uncapped_steps > 2_000_000:
+            # Translate DGA step scaling to SSA sim_time scaling (linear, same formula)
+            # Cap at 20x base sim_time: SSA is much more expensive per unit time than
+            # DGA steps, so the original 400x DGA cap is infeasible for SSA.
+            _SIM_TIME_CAP = 20.0
+            _rho_sim_time = min(self.ssa_sim_time * _rho_factor, self.ssa_sim_time * _SIM_TIME_CAP)
+            if _rho_factor > _SIM_TIME_CAP:
                 log.warning(
-                    f"  [!] rho={rho:.4f}: mixing-time formula predicts "
-                    f"{_uncapped_steps:,} steps but cap is 2,000,000. "
-                    f"E[Q] near criticality may be underestimated (stationarity "
-                    f"not guaranteed). Interpret rho>{rho:.3f} results cautiously."
+                    f"  [!] rho={rho:.4f}: sim_time cap reached at "
+                    f"{_SIM_TIME_CAP:.0f}x base. E[Q] near criticality may be underestimated."
                 )
+            _max_s = int(_rho_sim_time / self.ssa_sample_interval) + 1
+            _mu_np = np.array(self.service_rates, dtype=np.float64)
+            _rho_seed = self.cfg.simulation.seed + idx * 1000
 
-            # Neural Evaluation with vmap replications (SG-13.4 fix)
-            n_loss_array = vmap_simulate(
-                self.num_servers, arrival_rate, self.service_rates, model, rho_adjusted_steps, rep_keys, self.temperature, evaluate_model
+            # GibbsQ on true SSA
+            times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                num_replications=num_reps, num_servers=self.num_servers,
+                arrival_rate=float(arrival_rate), service_rates=jnp.array(_mu_np),
+                alpha=float(self.cfg.system.alpha), sim_time=_rho_sim_time,
+                sample_interval=self.ssa_sample_interval, base_seed=_rho_seed,
+                max_samples=_max_s, policy_type=3,
             )
-            n_loss = float(jnp.mean(n_loss_array))
+            g_vals = []
+            for _r in range(num_reps):
+                _res = SimResult(
+                    times=np.array(times_g[_r]), states=np.array(states_g[_r]),
+                    arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
+                    final_time=float(times_g[_r][-1]), num_servers=self.num_servers,
+                )
+                g_vals.append(float(time_averaged_queue_lengths(
+                    _res, self.cfg.simulation.burn_in_fraction).sum()))
+            g_loss = float(np.mean(g_vals))
+
+            # Neural on true SSA
+            _max_ev = int((float(arrival_rate) + _mu_np.sum()) * _rho_sim_time * 1.5) + 1000
+            n_vals = []
+            for _rep in range(num_reps):
+                _rng = np.random.default_rng(_rho_seed + _rep)
+                _res_n = simulate(
+                    num_servers=self.num_servers, arrival_rate=float(arrival_rate),
+                    service_rates=_mu_np, policy=_neural_ssa,
+                    sim_time=_rho_sim_time, sample_interval=self.ssa_sample_interval,
+                    rng=_rng, max_events=_max_ev,
+                )
+                n_vals.append(float(time_averaged_queue_lengths(
+                    _res_n, self.cfg.simulation.burn_in_fraction).sum()))
+            n_loss = float(np.mean(n_vals))
+
             neural_results.append(n_loss)
-            
-            # GibbsQ Evaluation with vmap replications and CRN
-            g_loss_array = vmap_simulate(
-                self.num_servers, arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), rho_adjusted_steps, rep_keys, self.temperature, default_policy
-            )
-            g_loss = float(jnp.mean(g_loss_array))
             gibbs_results.append(g_loss)
             
             log.info(f"   => N-GibbsQ E[Q]: {n_loss:.2f} | GibbsQ E[Q]: {g_loss:.2f}")
@@ -147,8 +183,8 @@ class CriticalLoadTest:
         plt.plot(rho_vals, gibbs_r, marker='o', color='#e74c3c', linestyle='--', linewidth=2, label='GibbsQ (Baseline)')
         
         plt.yscale('log')
-        plt.title('N-GibbsQ Stability Boundary Performance ($\mathbb{E}[Q]$ vs $\\rho$)')
-        plt.xlabel('Load Factor $\\rho = \lambda / \sum \mu_i$')
+        plt.title('N-GibbsQ Stability Boundary Performance ($\\mathbb{E}[Q]$ vs $\\rho$)')
+        plt.xlabel('Load Factor $\\rho = \\lambda / \\sum \\mu_i$')
         plt.ylabel('Expected Queue Length (Log Scale)')
         plt.grid(True, which="both", ls="-", alpha=0.3)
         plt.legend()

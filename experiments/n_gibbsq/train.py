@@ -8,6 +8,7 @@ Starts with short simulation horizons and increases over epochs.
 import jax
 import jax.numpy as jnp
 import optax
+import math
 import equinox as eqx
 import matplotlib.pyplot as plt
 import logging
@@ -46,7 +47,7 @@ class NeuralCurriculumTrainer:
         self.learning_rate = float(cfg.neural_training.learning_rate)
         self.optimizer = optax.adamw(learning_rate=self.learning_rate, weight_decay=float(cfg.neural_training.weight_decay))
 
-    def _loss_fn(self, model: NeuralRouter, key: PRNGKeyArray, sim_steps: int) -> jnp.float32:
+    def _loss_fn(self, model: NeuralRouter, key: PRNGKeyArray, sim_steps: int, temperature: float) -> jnp.float32:
         """Computes the expected queue length over a specific horizon."""
         return expected_queue_loss(
             params=model,
@@ -55,7 +56,7 @@ class NeuralCurriculumTrainer:
             key=key,
             num_servers=self.num_servers,
             sim_steps=sim_steps,
-            temperature=self.temperature,
+            temperature=temperature,
             apply_fn=evaluate_model
         )
 
@@ -75,14 +76,25 @@ class NeuralCurriculumTrainer:
         log.info(f"{'Epoch':<8} | {'Horizon':<8} | {'Loss (E[Q])':<15} | {'Max ||w||':<15}")
         log.info("-" * 55)
 
-        for phase_epochs, T_horizon in curriculum:
-            log.info(f"--- Entering Curriculum Phase: Horizon T={T_horizon} ---")
+        # Temperature annealing: linearly decay from base temperature to
+        # a near-hard assignment (0.05) across curriculum phases.  This
+        # shrinks the DGA→SSA domain gap because the final training
+        # phases use Gumbel-Softmax closer to a hard argmax.
+        _min_temp = 0.05
+        num_phases = len(curriculum)
+        
+        for phase_idx, (phase_epochs, T_horizon) in enumerate(curriculum):
+            if num_phases > 1:
+                phase_temp = self.temperature - (self.temperature - _min_temp) * (phase_idx / (num_phases - 1))
+            else:
+                phase_temp = self.temperature
+            log.info(f"--- Entering Curriculum Phase: Horizon T={T_horizon}, temp={phase_temp:.3f} ---")
             
             # Re-compile JIT for the specific static horizon T
             @eqx.filter_jit
             def train_step(model_t: NeuralRouter, opt_state_t: optax.OptState, key_t: PRNGKeyArray):
                 # Dynamically bind the filter_value_and_grad so it acts on `model_t` (the first arg)
-                loss_fn = lambda m, k, s: self._loss_fn(m, k, s)
+                loss_fn = lambda m, k, s: self._loss_fn(m, k, s, phase_temp)
                 loss, grads = eqx.filter_value_and_grad(loss_fn)(model_t, key_t, T_horizon)
                 
                 updates, new_opt_state = self.optimizer.update(grads, opt_state_t, model_t)
@@ -131,7 +143,7 @@ class NeuralCurriculumTrainer:
         # SG#10 FIX: Refuse to serialise if the training run produced
         # no finite losses (all steps were NaN/skipped). An empty or
         # all-NaN history_loss means the model was never updated.
-        valid_losses = [l for l in history_loss if not (l != l)]  # filters NaN
+        valid_losses = [l for l in history_loss if math.isfinite(l)]
         if not valid_losses:
             log.error(
                 "[!] _save_assets: No finite loss recorded. "

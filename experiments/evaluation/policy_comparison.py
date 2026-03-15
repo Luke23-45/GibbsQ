@@ -344,10 +344,17 @@ def main(raw_cfg: DictConfig) -> None:
                         out_dir / "qtotal_compare.png"
                     )
             else:
-                log.info("[SG#1] Neural weight file not found — skipping SSA neural eval.")
+                log.warning(
+                    "[SG#1] INCOMPLETE RESULTS: Neural weight file not found — "
+                    "SSA neural eval SKIPPED. Parity figures absent from this run. "
+                    "Run: python -m experiments.n_gibbsq.train first."
+                )
         else:
-            log.info("[SG#1] No trained NeuralRouter found — skipping SSA neural eval.")
-            log.info("         Run: python -m experiments.n_gibbsq.train first.")
+            log.warning(
+                "[SG#1] INCOMPLETE RESULTS: No trained NeuralRouter found — "
+                "SSA neural eval SKIPPED. Parity figures absent from this run. "
+                "Run: python -m experiments.n_gibbsq.train first."
+            )
     except ImportError as _e:
         log.warning(f"[SG#1] Could not load neural policy ({_e}). Skipping SSA neural eval.")
 

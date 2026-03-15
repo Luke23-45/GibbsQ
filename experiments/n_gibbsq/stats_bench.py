@@ -2,6 +2,8 @@
 N-GibbsQ Phase VII: Statistical Benchmark
 -----------------------------------------
 Statistical comparison of N-GibbsQ vs GibbsQ over 30 seeds.
+
+SG-D FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -15,12 +17,33 @@ from jaxtyping import Array, Float, PRNGKeyArray
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
+import functools
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.numpy_engine import simulate, SimResult
+from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+
+
+class _NeuralSSAPolicy:
+    """Bridges NeuralRouter → NumPy SSA. See eval.py for canonical version."""
+    def __init__(self, model):
+        import jax as _jax
+        self._model = model
+        @eqx.filter_jit
+        def _forward(m, x): return _jax.nn.softmax(m(x))
+        self._forward = _forward
+        @functools.lru_cache(maxsize=131072)
+        def _get_probs(q_tuple):
+            probs = self._forward(self._model, jnp.array(q_tuple, dtype=jnp.float32))
+            probs_np = np.array(probs, dtype=np.float64)
+            return probs_np / probs_np.sum()
+        self._get_probs = _get_probs
+    def __call__(self, Q, rng): return self._get_probs(tuple(Q))
+
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -43,16 +66,10 @@ class StatsBenchmark:
         
         # Pull replicates from simulation config.
         self.num_samples = int(cfg.simulation.num_replications)
-        
-        # Vectorized simulation function (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
-        self.vmap_simulate = jax.jit(
-            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)), 
-            static_argnums=(0, 4, 7)
-        )
 
     def execute(self, key: PRNGKeyArray):
         """Runs the 30-seed showdown."""
-        k_gibbs, k_neural, k_load = jax.random.split(key, 3)
+        _k1, _k2, k_load = jax.random.split(key, 3)
         
         log.info(f"Initiating statistical comparison (n={self.num_samples} seeds).")
         log.info(f"Environment: N={self.num_servers}, rho={self.arrival_rate / jnp.sum(self.service_rates):.2f}")
@@ -78,22 +95,53 @@ class StatsBenchmark:
             log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
             return
         
-        # --- 2. Run Parallel Benchmark ---
-        seeds = jax.random.split(k_neural, self.num_samples)
-        
-        log.info(f"Running {self.num_samples} Neural simulations...")
-        neural_losses = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, model, self.sim_steps, seeds, self.temperature, evaluate_model
+        # --- 2. Benchmark on True Gillespie SSA ---
+        _sc  = self.cfg.simulation
+        _ssa = _sc.ssa
+        _max_samples = int(_ssa.sim_time / _ssa.sample_interval) + 1
+        _mu_np = np.array(self.service_rates, dtype=np.float64)
+
+        log.info(f"Running {self.num_samples} GibbsQ SSA simulations...")
+        times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+            num_replications=self.num_samples,
+            num_servers=self.num_servers,
+            arrival_rate=self.arrival_rate,
+            service_rates=jnp.array(_mu_np),
+            alpha=float(self.cfg.system.alpha),
+            sim_time=_ssa.sim_time,
+            sample_interval=_ssa.sample_interval,
+            base_seed=_sc.seed,
+            max_samples=_max_samples,
+            policy_type=3,
         )
-        
-        log.info(f"Running {self.num_samples} GibbsQ simulations...")
-        gibbs_losses = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), self.sim_steps, seeds, self.temperature, default_policy
-        )
-        
-        # Convert to numpy for scientific analysis
-        neural_data = np.array(neural_losses)
-        gibbs_data = np.array(gibbs_losses)
+        gibbs_list = []
+        for _r in range(self.num_samples):
+            _res = SimResult(
+                times=np.array(times_g[_r]), states=np.array(states_g[_r]),
+                arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
+                final_time=float(times_g[_r][-1]), num_servers=self.num_servers,
+            )
+            gibbs_list.append(float(
+                time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+        gibbs_data = np.array(gibbs_list)
+
+        log.info(f"Running {self.num_samples} Neural SSA simulations...")
+        _neural_policy = _NeuralSSAPolicy(model)
+        _np_max_ev = int(
+            (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
+        ) + 1000
+        neural_list = []
+        for _rep in range(self.num_samples):
+            _rng = np.random.default_rng(_sc.seed + _rep)
+            _res = simulate(
+                num_servers=self.num_servers, arrival_rate=self.arrival_rate,
+                service_rates=_mu_np, policy=_neural_policy,
+                sim_time=_ssa.sim_time, sample_interval=_ssa.sample_interval,
+                rng=_rng, max_events=_np_max_ev,
+            )
+            neural_list.append(float(
+                time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+        neural_data = np.array(neural_list)
         
         self._analyze(neural_data, gibbs_data)
 
@@ -133,7 +181,7 @@ class StatsBenchmark:
         plt.figure(figsize=(10, 6))
         plt.boxplot([gibbs_data, neural_data], tick_labels=['GibbsQ (Baseline)', 'N-GibbsQ (Proposed)'])
         plt.title(f'Performance Distribution Comparison (n={self.num_samples} seeds)')
-        plt.ylabel('Expected Queue Length $\mathbb{E}[Q]$')
+        plt.ylabel('Expected Queue Length $\\mathbb{E}[Q]$')
         plt.grid(True, alpha=0.3)
         plot_path = self.run_dir / "stats_boxplot.png"
         plt.savefig(plot_path, dpi=300)

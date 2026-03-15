@@ -3,6 +3,8 @@ N-GibbsQ evaluation: neural vs analytical parity.
 
 Compares trained NeuralRouter against scalar-alpha GibbsQ
 routing policy in a heterogeneous server environment.
+
+SG-C FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -14,17 +16,49 @@ from pathlib import Path
 from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 
+import numpy as np
+import functools
+
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
 from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.numpy_engine import simulate, SimResult
+from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
+
+class _NeuralSSAPolicy:
+    """
+    Bridges NeuralRouter → NumPy SSA engine for true-CTMC evaluation.
+    Identical in logic to the adapter in policy_comparison.py (SG#1 fix block).
+    """
+    def __init__(self, model: "NeuralRouter") -> None:
+        import jax as _jax
+        self._model = model
+
+        @eqx.filter_jit
+        def _forward(m, x):
+            return _jax.nn.softmax(m(x))
+        self._forward = _forward
+
+        @functools.lru_cache(maxsize=131072)
+        def _get_probs(q_tuple):
+            Q_jax = jnp.array(q_tuple, dtype=jnp.float32)
+            probs = self._forward(self._model, Q_jax)
+            probs_np = np.array(probs, dtype=np.float64)
+            return probs_np / probs_np.sum()
+        self._get_probs = _get_probs
+
+    def __call__(self, Q: "np.ndarray", rng: "np.random.Generator") -> "np.ndarray":
+        return self._get_probs(tuple(Q))
+
+
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
-    """Pure functional bridge required by the DGA engine."""
+    """Retained for __init__ type contract; not called in the patched execute()."""
     return model(Q)
 
 class NeuralTuringTest:
@@ -43,29 +77,45 @@ class NeuralTuringTest:
 
         # We run multiple replications to get statistically stable results
         self.num_reps = int(cfg.simulation.num_replications)
-        
-        # JIT-compile vectorized simulation (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
-        self.vmap_simulate = jax.jit(
-            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)), 
-            static_argnums=(0, 4, 7)
-        )
 
     def execute(self, key: PRNGKeyArray):
-        """Executes the parity test."""
-        k1, k2 = jax.random.split(key, 2)
+        """Executes the parity test on the true Gillespie SSA (not DGA surrogate)."""
+        _k_unused, k2 = jax.random.split(key, 2)
         
         log.info(f"Environment: N={self.num_servers}, Load={self.arrival_rate}")
-        
-        # --- 1. The Expert: GibbsQ (Analytically Optimal) ---
-        optimal_alpha = jnp.float32(self.cfg.system.alpha)
-        log.info(f"\n[GibbsQ baseline (alpha={optimal_alpha})]")
-        
-        # CRN: use shared keys for both neural and GibbsQ for variance reduction
-        shared_keys = jax.random.split(k1, self.num_reps)
-        gibbsq_loss_array = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, optimal_alpha, self.sim_steps, shared_keys, self.temperature, default_policy
+
+        _sc  = self.cfg.simulation
+        _ssa = _sc.ssa
+        _max_samples = int(_ssa.sim_time / _ssa.sample_interval) + 1
+        _mu_np = np.array(self.service_rates, dtype=np.float64)
+
+        # --- 1. GibbsQ on the true Gillespie SSA ---
+        optimal_alpha = float(self.cfg.system.alpha)
+        log.info(f"\n[GibbsQ SSA baseline (alpha={optimal_alpha})]")
+        times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+            num_replications=self.num_reps,
+            num_servers=self.num_servers,
+            arrival_rate=self.arrival_rate,
+            service_rates=jnp.array(_mu_np),
+            alpha=optimal_alpha,
+            sim_time=_ssa.sim_time,
+            sample_interval=_ssa.sample_interval,
+            base_seed=_sc.seed,
+            max_samples=_max_samples,
+            policy_type=3,   # softmax
         )
-        mean_gibbsq_loss = float(jnp.mean(gibbsq_loss_array))
+        g_means = []
+        for _r in range(self.num_reps):
+            _res = SimResult(
+                times=np.array(times_g[_r]),
+                states=np.array(states_g[_r]),
+                arrival_count=int(arrs_g[_r]),
+                departure_count=int(deps_g[_r]),
+                final_time=float(times_g[_r][-1]),
+                num_servers=self.num_servers,
+            )
+            g_means.append(float(time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+        mean_gibbsq_loss = float(np.mean(g_means))
         
         # --- 2. The Challenger: N-GibbsQ (Neural Network) ---
         log.info("\n[Loading Challenger: N-GibbsQ Neural Router]")
@@ -100,12 +150,26 @@ class NeuralTuringTest:
             log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
             return
 
-        
-        neural_keys = shared_keys  # CRN: same keys as GibbsQ
-        n_gibbsq_loss_array = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, model, self.sim_steps, neural_keys, self.temperature, evaluate_model
-        )
-        mean_neural_loss = float(jnp.mean(n_gibbsq_loss_array))
+        # --- 3. NeuralRouter on the true Gillespie SSA via NumPy engine ---
+        _neural_policy = _NeuralSSAPolicy(model)
+        _np_max_events = int(
+            (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
+        ) + 1000
+        n_means = []
+        for _rep in range(self.num_reps):
+            _rng = np.random.default_rng(_sc.seed + _rep)
+            _res = simulate(
+                num_servers=self.num_servers,
+                arrival_rate=self.arrival_rate,
+                service_rates=_mu_np,
+                policy=_neural_policy,
+                sim_time=_ssa.sim_time,
+                sample_interval=_ssa.sample_interval,
+                rng=_rng,
+                max_events=_np_max_events,
+            )
+            n_means.append(float(time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+        mean_neural_loss = float(np.mean(n_means))
         
         self._report_results(mean_gibbsq_loss, mean_neural_loss)
 
