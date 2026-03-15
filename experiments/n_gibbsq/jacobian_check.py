@@ -68,6 +68,13 @@ class JacobianValidator:
         
         # Initialize a small router to keep Jacobian matrix manageable
         model = NeuralRouter(num_servers=self.num_servers, hidden_size=16, key=k1)
+        # PATCH SG3: Cast all model parameters to float64 to match jax_enable_x64 mode.
+        # eqx.nn.Linear initialises weights as float32 by default even when x64 is enabled.
+        # With float32 weights and epsilon=1e-7 (near float32 machine epsilon ~1.19e-7),
+        # central finite differences suffer catastrophic cancellation.
+        params_f64, static = eqx.partition(model, eqx.is_array)
+        params_f64 = jax.tree_util.tree_map(lambda x: x.astype(jnp.float64), params_f64)
+        model = eqx.combine(params_f64, static)
         
         log.info(f"Numerical Precision: FP64 (Enforced)")
         log.info(f"Perturbation (epsilon): {self.epsilon}")

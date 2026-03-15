@@ -64,6 +64,9 @@ class SimState(NamedTuple):
     key:             jax.random.PRNGKey
     arrival_count:   jnp.ndarray    # scalar int
     departure_count: jnp.ndarray    # scalar int
+    sample_idx:      jnp.ndarray    # scalar int — index of next sample slot to write
+    times_buf:       jnp.ndarray    # shape (max_samples,) — accumulated sample times
+    states_buf:      jnp.ndarray    # shape (max_samples, N) — accumulated sample states
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,7 @@ class SimParams:
     sim_time:        float
     sample_interval: float
     max_events:      int            # Static bound for lax.scan
+    max_samples:     int            # Static bound for sample buffer
     policy_type:     int            # 0: Uniform, 1: Prop, 2: JSQ, 3: Softmax, 4: Power-of-d
     d:               int            # for Power-of-d (default 2)
 
@@ -128,7 +132,7 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
 #  Gillespie Step (Scan Body)
 # ──────────────────────────────────────────────────────────────
 
-def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, tuple[jnp.ndarray, jnp.ndarray]]:
+def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     """Single Gillespie event logic for lax.scan."""
     k1, k2, k3, k4 = jax.random.split(state.key, 4)
     
@@ -175,10 +179,49 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, tuple[jn
         Q=final_Q,
         key=k3,
         arrival_count=final_arrival_count,
-        departure_count=final_departure_count
+        departure_count=final_departure_count,
+        sample_idx=state.sample_idx,
+        times_buf=state.times_buf,
+        states_buf=state.states_buf,
     )
     
-    return next_state, (state.t, state.Q)
+    # ── Online sample recording ────────────────────────────────────────────
+    # Write the state BEFORE this event for any sample boundary that final_t crossed.
+    # At typical Gillespie rates (large N, high event density), tau << sample_interval,
+    # so at most one boundary is crossed per step. A fori_loop handles the rare
+    # multi-boundary case without dynamic shapes.
+    def _write_one(carry, _):
+        idx, t_buf, s_buf = carry
+        sample_t = idx.astype(jnp.float32) * params.sample_interval
+        should = (
+            (idx < params.max_samples) &
+            (sample_t <= params.sim_time) &
+            (final_t >= sample_t)
+        )
+        t_buf   = t_buf.at[idx].set(jnp.where(should, sample_t, t_buf[idx]))
+        s_buf   = s_buf.at[idx].set(jnp.where(should, state.Q,  s_buf[idx]))
+        new_idx = idx + jnp.where(should, 1, 0)
+        return (new_idx, t_buf, s_buf), None
+
+    # Bound the inner loop to 4 iterations — handles bursts of up to 4 crossings
+    # per step (sufficient for all realistic sample_interval >= 0.1 s settings).
+    (new_sample_idx, new_times_buf, new_states_buf), _ = lax.scan(
+        _write_one,
+        (next_state.sample_idx, next_state.times_buf, next_state.states_buf),
+        xs=None,
+        length=4,
+    )
+    next_state = SimState(
+        t=next_state.t,
+        Q=next_state.Q,
+        key=next_state.key,
+        arrival_count=next_state.arrival_count,
+        departure_count=next_state.departure_count,
+        sample_idx=new_sample_idx,
+        times_buf=new_times_buf,
+        states_buf=new_states_buf,
+    )
+    return next_state, None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -208,38 +251,36 @@ def _simulate_jax_impl(
         sim_time=sim_time,
         sample_interval=sample_interval,
         max_events=max_events,
+        max_samples=max_samples,
         policy_type=policy_type,
         d=d
     )
     
+    # Pre-allocate sample buffers in init_state (O(max_samples × N), not O(max_events × N))
     init_state = SimState(
         t=0.0,
         Q=jnp.zeros(num_servers, dtype=jnp.int32),
         key=key,
         arrival_count=0,
-        departure_count=0
+        departure_count=0,
+        sample_idx=jnp.array(0, dtype=jnp.int32),
+        times_buf=jnp.zeros(max_samples, dtype=jnp.float32),
+        states_buf=jnp.zeros((max_samples, num_servers), dtype=jnp.int32),
     )
     
-    # O(E): Generate the raw stochastic trajectory exactly
-    final_state, (all_times, all_states) = lax.scan(
+    # O(E): Advance the CTMC; samples are recorded into carry-state buffers inline.
+    # Per-step scan outputs are None — no O(max_events × N) array is ever materialised.
+    final_state, _ = lax.scan(
         lambda s, _: scan_body(s, _, params),
         init_state,
         None,
         length=params.max_events
     )
     
-    # O(S log E): Interpolate onto the unified time grid
-    query_times = jnp.arange(max_samples) * sample_interval
-    
-    # searchsorted(side='right') gives index where query_time would be inserted
-    # subtracting 1 gives the state interval that query_time falls into
-    idxs = jnp.searchsorted(all_times, query_times, side='right') - 1
-    idxs = jnp.clip(idxs, 0, params.max_events - 1)
-    
-    sampled_states = all_states[idxs]
-    
-    # We drop the massive all_times and all_states trajectory arrays here. 
-    # JAX XLA naturally garbage collects intermediate arrays not returned.
+    # Extract the inline-recorded sample buffers directly from carry state.
+    # Memory used: O(max_samples × N) — a ~5500x reduction for N=1024 vs prior design.
+    query_times    = final_state.times_buf
+    sampled_states = final_state.states_buf
     
     # Safety Check: Did we truncate because max_events was too small?
     # Valid if we reached sim_time OR if the simulation halted (arrival_rate = 0)

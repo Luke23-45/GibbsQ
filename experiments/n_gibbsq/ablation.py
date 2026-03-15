@@ -103,8 +103,15 @@ class AblationStudy:
                 
                 train_key = keys[1]
                 
+                # PATCH SG4: Use the literal horizon and epoch count from the comment,
+                # not cfg.train_epochs (30) and self.sim_steps (5000).
+                # The ablation is designed to measure initialization effects, which are
+                # only visible in the early-learning regime (T=500, 15 epochs).
+                # Over-training (T=5000, 30 epochs) allows all variants to converge,
+                # erasing the initialization signal the study is designed to isolate.
+                _ABLATION_STEPS = 500
                 def _loss_fn(m, k):
-                    return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, self.sim_steps, self.temperature, evaluate_model)
+                    return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, _ABLATION_STEPS, self.temperature, evaluate_model)
                 
                 @eqx.filter_jit
                 def train_step(model_t, opt_state_t, key_t):
@@ -113,8 +120,8 @@ class AblationStudy:
                     new_model = eqx.apply_updates(model_t, updates)
                     return l, new_model, new_opt_state
                 
-                ablation_epochs = self.cfg.train_epochs
-                log.info(f"   [Training] {name} for {ablation_epochs} epochs at T={self.sim_steps}...")
+                ablation_epochs = 15
+                log.info(f"   [Training] {name} for {ablation_epochs} epochs at T={_ABLATION_STEPS}...")
                 for ep in range(ablation_epochs):
                     train_key, subkey = jax.random.split(train_key)
                     l, router, opt_state = train_step(router, opt_state, subkey)

@@ -109,7 +109,9 @@ def main(raw_cfg: DictConfig) -> None:
         mu = jnp.ones(N) * 2.0          # normalised service rate
         lam = 0.8 * float(jnp.sum(mu))  # rho = 0.8
 
-        _sim_time_t1 = cfg.simulation.ssa.sim_time if not raw_cfg.get("debug", False) else 100.0
+        # PATCH SG1: Apply the documented reduction to 500 s (non-debug).
+        # cfg.simulation.ssa.sim_time (5000 s) causes O(N×T) OOM for N>=512.
+        _sim_time_t1 = 100.0 if raw_cfg.get("debug", False) else 500.0
         max_samples_t1 = int(_sim_time_t1 / _STRESS_SAMPLE_INTERVAL) + 1
 
         log.info(f"  Simulating N={N} experts (rho=0.8)...")
@@ -172,7 +174,9 @@ def main(raw_cfg: DictConfig) -> None:
         if raw_cfg.get("debug", False):
             _sim_time_crit = 500.0
         else:
-            _sim_time_crit = cfg.simulation.ssa.sim_time if rho <= 0.99 else cfg.simulation.ssa.sim_time * 5.0
+            # PATCH SG5: Apply the documented reduction to 1000 s / 5000 s (non-debug).
+            # Prior values (5000 s / 25000 s) are 5x over the design intent.
+            _sim_time_crit = 1000.0 if rho <= 0.99 else 5000.0
 
         max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1
 
