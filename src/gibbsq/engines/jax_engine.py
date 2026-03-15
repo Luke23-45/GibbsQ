@@ -14,7 +14,9 @@ from typing import NamedTuple
 from dataclasses import dataclass
 
 
-RATE_EPSILON = 1e-12
+from gibbsq.core import constants
+
+RATE_EPSILON = constants.RATE_GUARD_EPSILON
 
 
 def _validate_inputs(
@@ -82,6 +84,7 @@ class SimParams:
     max_samples:     int            # Static bound for sample buffer
     policy_type:     int            # 0: Uniform, 1: Prop, 2: JSQ, 3: Softmax, 4: Power-of-d
     d:               int            # for Power-of-d (default 2)
+    scan_sampling_chunk: int        # Max events recorded per step
 
 
 # ──────────────────────────────────────────────────────────────
@@ -203,13 +206,13 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
         new_idx = idx + jnp.where(should, 1, 0)
         return (new_idx, t_buf, s_buf), None
 
-    # Bound the inner loop to 4 iterations — handles bursts of up to 4 crossings
-    # per step (sufficient for all realistic sample_interval >= 0.1 s settings).
+    # Bound the inner loop to scan_sampling_chunk iterations — handles bursts of crossings
+    # per step.
     (new_sample_idx, new_times_buf, new_states_buf), _ = lax.scan(
         _write_one,
         (next_state.sample_idx, next_state.times_buf, next_state.states_buf),
         xs=None,
-        length=4,
+        length=params.scan_sampling_chunk,
     )
     next_state = SimState(
         t=next_state.t,
@@ -228,7 +231,7 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
 #  Public API
 # ──────────────────────────────────────────────────────────────
 
-@partial(jax.jit, static_argnames=("num_servers", "max_samples", "max_events", "policy_type", "d"))
+@partial(jax.jit, static_argnames=("num_servers", "max_samples", "max_events", "policy_type", "d", "scan_sampling_chunk"))
 def _simulate_jax_impl(
     num_servers:     int,
     arrival_rate:    float,
@@ -240,7 +243,8 @@ def _simulate_jax_impl(
     max_samples:     int,
     max_events:      int,
     policy_type:     int = 3,
-    d:               int = 2
+    d:               int = 2,
+    scan_sampling_chunk: int = 4
 ):
     """Hardware-accelerated simulation of the GibbsQ network using SOTA scan+search."""
     params = SimParams(
@@ -253,7 +257,8 @@ def _simulate_jax_impl(
         max_events=max_events,
         max_samples=max_samples,
         policy_type=policy_type,
-        d=d
+        d=d,
+        scan_sampling_chunk=scan_sampling_chunk
     )
     
     # Pre-allocate sample buffers in init_state (O(max_samples × N), not O(max_events × N))
@@ -299,7 +304,10 @@ def simulate_jax(
     key:             jax.random.PRNGKey,
     max_samples:     int,
     policy_type:     int = 3,
-    d:               int = 2
+    d:               int = 2,
+    max_events_multiplier: float = 1.5,
+    max_events_buffer: int = 1000,
+    scan_sampling_chunk: int = 4
 ):
     """Validated wrapper around the jitted JAX simulation kernel."""
     _validate_inputs(
@@ -314,9 +322,9 @@ def simulate_jax(
     )
     
     import numpy as np
-    # Calculate MaxEvents dynamically for mathematical safety
+    # Calculate MaxEvents dynamically using the expanded configuration tunables
     max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
-    max_events = int(max_theoretical_rate * sim_time * 1.5) + 1000
+    max_events = int(max_theoretical_rate * sim_time * max_events_multiplier) + max_events_buffer
     
     times, states, counts, is_valid = _simulate_jax_impl(
         num_servers=num_servers,
@@ -330,16 +338,17 @@ def simulate_jax(
         max_events=max_events,
         policy_type=policy_type,
         d=d,
+        scan_sampling_chunk=scan_sampling_chunk
     )
     
     import warnings
     if not np.asarray(is_valid).item():
-        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the 1.5x multiplier.", RuntimeWarning, stacklevel=2)
+        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the multiplier (current={max_events_multiplier}x).", RuntimeWarning, stacklevel=2)
         
     return times, states, counts
 
 
-@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "max_events", "policy_type", "d"))
+@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "max_events", "policy_type", "d", "scan_sampling_chunk"))
 def _run_replications_jax_impl(
     num_replications: int,
     num_servers:      int,
@@ -352,7 +361,8 @@ def _run_replications_jax_impl(
     max_samples:      int,
     max_events:       int,
     policy_type:      int = 3,
-    d:                int = 2
+    d:                int = 2,
+    scan_sampling_chunk: int = 4
 ):
     """Run replications in parallel across available accelerator lanes."""
     keys = jax.random.split(jax.random.PRNGKey(base_seed), num_replications)
@@ -368,7 +378,8 @@ def _run_replications_jax_impl(
         max_samples=max_samples,
         max_events=max_events,
         policy_type=policy_type,
-        d=d
+        d=d,
+        scan_sampling_chunk=scan_sampling_chunk
     )
 
     return jax.vmap(v_sim)(keys)
@@ -385,7 +396,10 @@ def run_replications_jax(
     base_seed:        int,
     max_samples:      int,
     policy_type:      int = 3,
-    d:                int = 2
+    d:                int = 2,
+    max_events_multiplier: float = 1.5,
+    max_events_buffer: int = 1000,
+    scan_sampling_chunk: int = 4
 ):
     """Validated wrapper around vmapped JAX replications."""
     if num_replications < 1:
@@ -406,8 +420,8 @@ def run_replications_jax(
     # Calculate MaxEvents dynamically for mathematical safety
     # The maximum theoretical event rate is the arrival rate plus the sum of all service rates
     max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
-    # Apply a 1.5x multiplier to account for extreme stochasticity, plus a buffer
-    max_events = int(max_theoretical_rate * sim_time * 1.5) + 1000
+    # Apply the configurable multiplier and buffer to account for extreme stochasticity
+    max_events = int(max_theoretical_rate * sim_time * max_events_multiplier) + max_events_buffer
     
     times, states, counts, is_valid = _run_replications_jax_impl(
         num_replications=num_replications,
@@ -422,13 +436,14 @@ def run_replications_jax(
         max_events=max_events,
         policy_type=policy_type,
         d=d,
+        scan_sampling_chunk=scan_sampling_chunk
     )
     
     # VRAM footprint safety check: Extract boolean back to Host
     import warnings
     # Verify that all replications ran to completion successfully
     if not np.all(np.asarray(is_valid)):
-        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the 1.5x multiplier.", RuntimeWarning, stacklevel=2)
+        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the multiplier (current={max_events_multiplier}x).", RuntimeWarning, stacklevel=2)
         
     return times, states, counts
 

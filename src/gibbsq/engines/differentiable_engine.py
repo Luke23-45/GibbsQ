@@ -10,6 +10,7 @@ import jax.numpy as jnp
 from jax import lax
 from functools import partial
 from typing import NamedTuple, Any, Callable
+from gibbsq.core import constants
 
 def default_policy(params: jnp.float32, Q: jnp.float32) -> jnp.float32:
     return -params * Q
@@ -41,20 +42,18 @@ def _dga_step(
 
     # 2. Relaxed Propensities
     arrival_rates = arrival_rate * probs
-    # Differentiable approximation of 𝟙(Q > 0).  Centred at Q = 0 with
-    # steepness 50 so sigmoid(0.1*50) ≈ 0.993 — near-full departure rate
-    # by Q = 0.1.  Previous version used (Q - 0.5)*20, biasing E[Q] upward.
-    departure_rates = service_rates * jax.nn.sigmoid(state.Q * 50.0)
+    # steepness (constants.DGA_INDICATOR_STEEPNESS) provides a sharp transition.
+    departure_rates = service_rates * jax.nn.sigmoid(state.Q * constants.DGA_INDICATOR_STEEPNESS)
 
     rates = jnp.concatenate([arrival_rates, departure_rates])
     a0 = jnp.sum(rates)
 
     # 3. Expected Holding Time (Deterministic for variance reduction)
-    tau = 1.0 / jnp.maximum(a0, 1e-9)
+    tau = 1.0 / jnp.maximum(a0, constants.NUMERICAL_STABILITY_EPSILON)
 
     # 4. Gumbel-Softmax Event Selection
-    gumbels = -jnp.log(-jnp.log(jax.random.uniform(k1, shape=rates.shape) + 1e-9) + 1e-9)
-    event_weights = jax.nn.softmax((jnp.log(rates + 1e-9) + gumbels) / temperature)
+    gumbels = -jnp.log(-jnp.log(jax.random.uniform(k1, shape=rates.shape) + constants.GUMBEL_SMOOTHING) + constants.GUMBEL_SMOOTHING)
+    event_weights = jax.nn.softmax((jnp.log(rates + constants.GUMBEL_SMOOTHING) + gumbels) / temperature)
 
     # 5. Continuous State Update
     arr_updates = event_weights[:num_servers]
@@ -114,7 +113,7 @@ def simulate_dga_jax(
     final_state, _ = jax.lax.scan(body_fun, init_state, xs=None, length=sim_steps)
     
     # Return time-averaged E[Q_total]
-    return final_state.expected_Q_tot / jnp.maximum(final_state.t, 1e-9)
+    return final_state.expected_Q_tot / jnp.maximum(final_state.t, constants.NUMERICAL_STABILITY_EPSILON)
 
 
 def simulate_dga_jax_dynamic_steps(
@@ -154,7 +153,7 @@ def simulate_dga_jax_dynamic_steps(
         )
 
     final_state = jax.lax.fori_loop(0, sim_steps, body_fun, init_state)
-    return final_state.expected_Q_tot / jnp.maximum(final_state.t, 1e-9)
+    return final_state.expected_Q_tot / jnp.maximum(final_state.t, constants.NUMERICAL_STABILITY_EPSILON)
 
 def expected_queue_loss(
     params: Any,

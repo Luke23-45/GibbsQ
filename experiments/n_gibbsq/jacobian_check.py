@@ -18,6 +18,7 @@ from pathlib import Path
 from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 import time
+import dataclasses
 
 from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import expected_queue_loss
@@ -66,8 +67,10 @@ class JacobianValidator:
         """Performs the full Jacobian vs CFD showdown."""
         k1, k2 = jax.random.split(key)
         
-        # Initialize a small router to keep Jacobian matrix manageable
-        model = NeuralRouter(num_servers=self.num_servers, hidden_size=16, key=k1)
+        # Initialize a small router to keep Jacobian matrix manageable.
+        # Use dataclasses.replace because NeuralConfig is a plain @dataclass, not a JAX pytree.
+        check_config = dataclasses.replace(self.cfg.neural, hidden_size=16)
+        model = NeuralRouter(num_servers=self.num_servers, config=check_config, key=k1)
         # PATCH SG3: Cast all model parameters to float64 to match jax_enable_x64 mode.
         # eqx.nn.Linear initialises weights as float32 by default even when x64 is enabled.
         # With float32 weights and epsilon=1e-7 (near float32 machine epsilon ~1.19e-7),
@@ -136,7 +139,7 @@ class JacobianValidator:
         log.info("=" * 50)
         log.info(f"Max Relative Error:  {max_rel_err:.2e}")
         log.info(f"Mean Relative Error: {mean_rel_err:.2e}")
-        log.info(f"Status: {'PASS' if max_rel_err < 1e-2 else 'FAIL'}")
+        log.info(f"Status: {'PASS' if max_rel_err < self.cfg.verification.jacobian_rel_tol else 'FAIL'}")
         log.info("=" * 50)
 
         # Logging to WandB
@@ -151,7 +154,7 @@ class JacobianValidator:
             "max_rel_gradient_error": max_rel_err,
             "mean_rel_gradient_error": mean_rel_err,
             "sim_steps": self.sim_steps,
-            "status": "PASS" if max_rel_err < 1e-2 else "FAIL"
+            "status": "PASS" if max_rel_err < self.cfg.verification.jacobian_rel_tol else "FAIL"
         }, self.run_dir / "metrics.jsonl")
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")

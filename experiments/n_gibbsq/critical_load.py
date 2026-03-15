@@ -50,7 +50,7 @@ class CriticalLoadTest:
         k_load, k_sweep = jax.random.split(key)
         
         # 1. Load trained model
-        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
         if not pointer_path.exists():
             log.error(f"Latest weights not found at {pointer_path}. Run training first.")
             return
@@ -59,7 +59,7 @@ class CriticalLoadTest:
         if not model_path.exists():
             log.error(f"Trained weights not found at {model_path}. Run training first.")
             return
-        skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k_load)
+        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config

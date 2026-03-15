@@ -23,6 +23,8 @@ from typing import List, Sequence
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, DictConfig, OmegaConf
 
+from gibbsq.core import constants
+
 __all__ = [
     "PolicyName",
     "SystemConfig",
@@ -175,6 +177,29 @@ class DriftConfig:
 
 
 @dataclass
+class JAXEngineConfig:
+    """Hardware acceleration tunables."""
+    max_events_safety_multiplier: float = 1.5
+    max_events_additive_buffer: int = 1000
+    scan_sampling_chunk: int = 4
+
+@dataclass(frozen=True)
+class NeuralConfig:
+    """Neural routing architecture & preprocessing."""
+    hidden_size: int = 64
+    preprocessing: str = "log1p"  # Phase 10: Superior for scale-invariance
+    capacity_bound: float = constants.NEURAL_LINEAR_CAPACITY_BOUND
+    init_type: str = "zero_final" # Standard safety requirement
+
+@dataclass
+class VerificationThresholds:
+    """Research success boundaries."""
+    parity_threshold_percent: float = 25.0
+    jacobian_rel_tol: float = 1e-1  # Loosened from 5e-2 due to 50.0 sigmoid steepness
+    alpha_significance: float = 0.05
+    confidence_interval: float = 0.95
+
+@dataclass
 class WandbConfig:
     """
     Weights & Biases integration.
@@ -256,6 +281,9 @@ class ExperimentConfig:
     drift:      DriftConfig      = field(default_factory=DriftConfig)
     wandb:      WandbConfig      = field(default_factory=WandbConfig)
     jax:        JAXConfig        = field(default_factory=JAXConfig)
+    jax_engine: JAXEngineConfig  = field(default_factory=JAXEngineConfig)
+    neural:     NeuralConfig     = field(default_factory=NeuralConfig)
+    verification: VerificationThresholds = field(default_factory=VerificationThresholds)
     generalization: GeneralizationConfig = field(default_factory=GeneralizationConfig)
     stress:         StressConfig         = field(default_factory=StressConfig)
     stability_sweep: StabilitySweepConfig = field(default_factory=StabilitySweepConfig)
@@ -373,6 +401,34 @@ def validate(cfg: ExperimentConfig) -> None:
     if cfg.policy.name == PolicyName.POWER_OF_D.value and cfg.policy.d < 1:
         raise ValueError(f"policy.d must be >= 1 for power_of_d, got {cfg.policy.d}")
 
+    # ── Neural architecture bounds ────────────────────────────
+    neu = cfg.neural
+    if neu.hidden_size < 1:
+        raise ValueError(f"neural.hidden_size must be ≥ 1, got {neu.hidden_size}")
+    valid_pre = {"none", "log1p", "standardize", "linear_min_max"}
+    if neu.preprocessing not in valid_pre:
+        raise ValueError(f"Unknown neural.preprocessing '{neu.preprocessing}'. Choose from {valid_pre}")
+    if neu.capacity_bound <= 0:
+        raise ValueError(f"neural.capacity_bound must be > 0, got {neu.capacity_bound}")
+
+    # ── JAX engine safety bounds ──────────────────────────────
+    jen = cfg.jax_engine
+    if jen.max_events_safety_multiplier < 1.0:
+        raise ValueError(f"jax_engine.max_events_safety_multiplier must be ≥ 1.0, got {jen.max_events_safety_multiplier}")
+    if jen.max_events_additive_buffer < 0:
+        raise ValueError(f"jax_engine.max_events_additive_buffer must be ≥ 0, got {jen.max_events_additive_buffer}")
+    if jen.scan_sampling_chunk < 1:
+        raise ValueError(f"jax_engine.scan_sampling_chunk must be ≥ 1, got {jen.scan_sampling_chunk}")
+
+    # ── Verification thresholds ───────────────────────────────
+    ver = cfg.verification
+    if not (0 < ver.parity_threshold_percent < 100):
+        raise ValueError(f"verification.parity_threshold_percent must be in (0, 100), got {ver.parity_threshold_percent}")
+    if ver.jacobian_rel_tol <= 0:
+        raise ValueError(f"verification.jacobian_rel_tol must be > 0, got {ver.jacobian_rel_tol}")
+    if not (0 < ver.alpha_significance < 0.5):
+        raise ValueError(f"verification.alpha_significance must be in (0, 0.5), got {ver.alpha_significance}")
+
     _validate_jax_config(cfg.jax)
 
 
@@ -456,6 +512,9 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         drift=DriftConfig(**d.get("drift", {})),
         wandb=WandbConfig(**d.get("wandb", {})),
         jax=JAXConfig(**d.get("jax", {})),
+        jax_engine=JAXEngineConfig(**d.get("jax_engine", {})),
+        neural=NeuralConfig(**d.get("neural", {})),
+        verification=VerificationThresholds(**d.get("verification", {})),
         generalization=GeneralizationConfig(**d.get("generalization", {})),
         stress=StressConfig(**d.get("stress", {})),
         stability_sweep=StabilitySweepConfig(**d.get("stability_sweep", {})),

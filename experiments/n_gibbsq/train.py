@@ -62,7 +62,7 @@ class NeuralCurriculumTrainer:
     def execute(self, key: PRNGKeyArray):
         """Executes the curriculum training loop."""
         key, subkey = jax.random.split(key)
-        model = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=subkey)
+        model = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=subkey)
         opt_state = self.optimizer.init(eqx.filter(model, eqx.is_array))
 
         # Curriculum Schedule: (Epochs, Simulation_Horizon)
@@ -146,7 +146,9 @@ class NeuralCurriculumTrainer:
         eqx.tree_serialise_leaves(model_path, model)
         
         # Write a pointer to the latest weights directory for downstream phases.
-        pointer_path = self.run_dir.parent / "latest_weights.txt"
+        pointer_dir = Path(self.cfg.output_dir) / "small"
+        pointer_dir.mkdir(parents=True, exist_ok=True)
+        pointer_path = pointer_dir / "latest_weights.txt"
         pointer_path.write_text(str(model_path.resolve()), encoding='utf-8')
         
         log.info("-" * 55)

@@ -70,8 +70,8 @@ class NeuralTuringTest:
         # --- 2. The Challenger: N-GibbsQ (Neural Network) ---
         log.info("\n[Loading Challenger: N-GibbsQ Neural Router]")
         
-        # Read the pointer to the latest dynamically generated run
-        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
+        # Read the pointer from the centralized 'small' directory
+        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
         
         if not pointer_path.exists():
             log.error(f"Weights pointer not found at {pointer_path}. You must run training (n_gibbsq/train.py) first.")
@@ -84,8 +84,8 @@ class NeuralTuringTest:
             log.error(f"Trained weight file missing at {model_path}. Please rerun training (train.py).")
             return
 
-        # Re-initialize skeleton and load weights securely
-        skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k2)
+        # Re-initialize skeleton and load weights securely using the validated NeuralConfig
+        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k2)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
@@ -118,9 +118,9 @@ class NeuralTuringTest:
             log.info("\n[+] OUTCOME: Neural router matched or exceeded analytical baseline.")
             log.info("    Performance gap: <= 0%.")
             status = "MATCHED"
-        elif perc < 25.0:
+        elif perc < self.cfg.verification.parity_threshold_percent:
             log.info(f"\n[+] OUTCOME: Neural router within {perc:.1f}% of analytical baseline.")
-            log.info("    Neural router converged near analytical optimum.")
+            log.info(f"    Neural router converged near analytical optimum (threshold={self.cfg.verification.parity_threshold_percent}%).")
             status = "SUCCESS"
         else:
             log.warning(f"\n[-] OUTCOME: The Neural Network failed to match GibbsQ by {perc:.1f}%.")

@@ -21,6 +21,7 @@ from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 import matplotlib.pyplot as plt
 import numpy as np
+import dataclasses
 
 import optax
 
@@ -39,24 +40,20 @@ def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float
 
 class AblationRouter(NeuralRouter):
     """Modified router for ablation testing."""
-    ablate_log: bool = eqx.field(static=True)
-
-    def __init__(self, num_servers, hidden_size, key, ablate_log=False, ablate_zero=False):
-        self.ablate_log = ablate_log
-        super().__init__(num_servers, hidden_size, key)
+    def __init__(self, num_servers, config, key, ablate_log=False, ablate_zero=False):
+        # Create a modified config for this ablation variant.
+        # Use dataclasses.replace because NeuralConfig is a plain @dataclass, not a JAX pytree.
+        variant_config = dataclasses.replace(
+            config,
+            preprocessing="none" if ablate_log else config.preprocessing,
+            init_type="standard" if ablate_zero else config.init_type
+        )
         
-        if ablate_zero:
-            # Re-initialize the final layer with standard Lecun normal
-            # Using index 3 to ensure it doesn't collide with super().__init__'s splits (0, 1, 2)
-            k = jax.random.split(key, 4)[3]
-            l3 = eqx.nn.Linear(hidden_size, num_servers, key=k)
-            self.layers = self.layers[:-1] + [l3]
+        super().__init__(num_servers=num_servers, config=variant_config, key=key)
 
     def __call__(self, Q):
-        x = Q if self.ablate_log else jnp.log1p(Q)
-        for layer in self.layers[:-1]:
-            x = jax.nn.relu(layer(x))
-        return self.layers[-1](x)
+        # Delegate to the base class which now supports config-driven preprocessing
+        return super().__call__(Q)
 
 class AblationStudy:
     """
@@ -95,10 +92,10 @@ class AblationStudy:
                     self.sim_steps, keys[2], self.temperature, default_policy
                 )
             else:
-                router = AblationRouter(self.num_servers, 64, keys[0], a_log, a_zero)
+                router = AblationRouter(self.num_servers, self.cfg.neural, keys[0], a_log, a_zero)
                 
-                # Mini-Curriculum Training (15 epochs at T=500) to expose initialization/preprocessing effects
-                optimizer = optax.adamw(learning_rate=3e-3, weight_decay=1e-4)
+                # Use hyperparameters from config
+                optimizer = optax.adamw(learning_rate=self.cfg.neural_training.learning_rate, weight_decay=self.cfg.neural_training.weight_decay)
                 opt_state = optimizer.init(eqx.filter(router, eqx.is_array))
                 
                 train_key = keys[1]
@@ -125,6 +122,7 @@ class AblationStudy:
                 for ep in range(ablation_epochs):
                     train_key, subkey = jax.random.split(train_key)
                     l, router, opt_state = train_step(router, opt_state, subkey)
+                    log.info(f"      Epoch {ep:2d} | Loss: {l:7.4f}")
                 
                 # Evaluate the trained variant over the full long horizon
                 loss = simulate_dga_jax(

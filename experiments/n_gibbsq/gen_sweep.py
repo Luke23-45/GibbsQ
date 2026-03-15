@@ -21,6 +21,7 @@ from omegaconf import DictConfig
 from jaxtyping import Array, Float, PRNGKeyArray
 import numpy as np
 import matplotlib.pyplot as plt
+from gibbsq.core import constants
 
 from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.engines.differentiable_engine import simulate_dga_jax, default_policy
@@ -52,7 +53,7 @@ class GeneralizationSweeper:
         k_load, k_grid = jax.random.split(key)
         
         # 1. Load trained model (Trained on N=4, [100,1,1,1], arrival=95)
-        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
         if not pointer_path.exists():
             log.error(f"Latest weights not found at {pointer_path}. Run training first.")
             return
@@ -79,8 +80,8 @@ class GeneralizationSweeper:
         
         log.info(f"Initiating Generalization Sweep (Scales={scale_vals}, rho={rho_vals})")
         
-        # Load Neural model matching training dimensions
-        skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, hidden_size=64, key=k_load)
+        # Load Neural model matching training dimensions using validated NeuralConfig
+        skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
@@ -108,7 +109,7 @@ class GeneralizationSweeper:
                 g_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(self.cfg.system.alpha), self.sim_steps, k_shared, self.temperature, default_policy)
                 
                 # Ratio: GibbsQ / Neural. > 1.0 means Neural is better.
-                ratio = float(g_loss / jnp.maximum(n_loss, 1e-9))
+                ratio = float(g_loss / jnp.maximum(n_loss, constants.NUMERICAL_STABILITY_EPSILON))
                 grid[i, j] = ratio
                 log.info(f"   Scale={scale:5.1f}x | rho={rho:.2f} | Improvement={ratio:.2f}x")
 

@@ -30,6 +30,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from gibbsq.core.policies import RoutingPolicy
+from gibbsq.core import constants
 
 __all__ = [
     "SimResult",
@@ -205,7 +206,7 @@ def simulate(
                 f"got min={probs.min()}, max={probs.max()}"
             )
         probs_sum = probs.sum()
-        if not np.isclose(probs_sum, 1.0, rtol=1e-10, atol=1e-12):
+        if not np.isclose(probs_sum, 1.0, rtol=1e-10, atol=constants.RATE_GUARD_EPSILON):
             raise ValueError(
                 f"policy probabilities must sum to 1.0, got {probs_sum}"
             )
@@ -217,7 +218,7 @@ def simulate(
 
         # 3.  Total propensity
         a0 = rates.sum()
-        if a0 <= 0.0:
+        if a0 <= constants.RATE_GUARD_EPSILON:
             break                # degenerate — no events possible
 
         # 4.  Draw holding time  ~ Exp(a0)
