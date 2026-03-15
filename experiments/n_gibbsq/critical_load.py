@@ -94,16 +94,23 @@ class CriticalLoadTest:
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
+            # SG-3 FIX: Scale sim_steps by the mixing-time multiplier.
+            # Mixing time is O(1/(1−ρ)); base_rho=0.8 is where sim_steps was calibrated.
+            # Cap at 200_000 to bound memory usage at rho→1.
+            _base_rho = 0.8
+            _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
+            rho_adjusted_steps = min(round(self.sim_steps * _rho_factor), 200_000)
+
             # Neural Evaluation with vmap replications (SG-13.4 fix)
             n_loss_array = vmap_simulate(
-                self.num_servers, arrival_rate, self.service_rates, model, self.sim_steps, rep_keys, self.temperature, evaluate_model
+                self.num_servers, arrival_rate, self.service_rates, model, rho_adjusted_steps, rep_keys, self.temperature, evaluate_model
             )
             n_loss = float(jnp.mean(n_loss_array))
             neural_results.append(n_loss)
             
             # GibbsQ Evaluation with vmap replications and CRN
             g_loss_array = vmap_simulate(
-                self.num_servers, arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), self.sim_steps, rep_keys, self.temperature, default_policy
+                self.num_servers, arrival_rate, self.service_rates, jnp.float32(self.cfg.system.alpha), rho_adjusted_steps, rep_keys, self.temperature, default_policy
             )
             g_loss = float(jnp.mean(g_loss_array))
             gibbs_results.append(g_loss)

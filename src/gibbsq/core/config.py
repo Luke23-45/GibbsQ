@@ -96,13 +96,10 @@ class SSAConfig:
         Total simulation horizon  T > 0  (continuous time seconds).
     sample_interval : float
         Time between trajectory snapshot samples  Δt > 0.
-    max_events : int
-        Event budget — hard ceiling on Gillespie events to prevent runaway.
     """
 
     sim_time:        float = 5000.0
     sample_interval: float = 1.0
-    max_events:      int   = 100_000
 
 
 @dataclass
@@ -491,6 +488,9 @@ def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
     sim_dict = dict(sim_dict)  # shallow copy
     ssa_raw = sim_dict.pop("ssa", {})
     dga_raw = sim_dict.pop("dga", {})
+    # SG-1 FIX: max_events was removed from SSAConfig; pop it from any YAML that
+    # still carries it so SSAConfig(**ssa_raw) does not raise TypeError on upgrade.
+    ssa_raw.pop("max_events", None)
     return SimulationConfig(
         ssa=SSAConfig(**ssa_raw),
         dga=DGAConfig(**dga_raw),

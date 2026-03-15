@@ -58,21 +58,30 @@ def train_routing_agent(raw_cfg: DictConfig):
         'temperature': float(cfg.simulation.dga.temperature)
     }
     
-    # Initialize alpha at small positive value. Softmax(-alpha*Q) approaches
-    # uniform as alpha->0, so 0.1 is near-uniform but avoids the hard clip
-    # at line 112 corrupting Adam's momentum when alpha drifts negative.
-    alpha = jnp.float32(0.1) 
-    
+    # SG-2 FIX: Reparametrise via softplus so alpha = softplus(raw_alpha) > 0 always.
+    # This eliminates the alpha ≥ 0 hard clip that was corrupting Adam's momentum state
+    # (Optax invariant: opt_state must correspond to the unmodified parameter trajectory).
+    # softplus^{-1}(0.1) = log(exp(0.1) − 1) ≈ −2.2518, giving alpha₀ ≈ 0.1 at epoch 0.
+    raw_alpha = jnp.float32(-2.2518)
+
     # --- Optimizer Setup ---
     learning_rate = float(cfg.neural_training.dga_learning_rate)
     optimizer = optax.adam(learning_rate)
-    opt_state = optimizer.init(alpha)
+    opt_state = optimizer.init(raw_alpha)
     
     # --- Training Loop ---
-    # We use value_and_grad and mark num_servers, sim_steps as static
-    # signature: alpha, arrival_rate, service_rates, key, num_servers, sim_steps, temperature
+    # Wrapper: differentiates through softplus so JAX computes dL/d(raw_alpha)
+    # via the chain rule dL/d(alpha) · sigmoid(raw_alpha) automatically.
+    def _raw_alpha_loss(raw_a, arrival_rate, service_rates, key,
+                        num_servers, sim_steps, temperature, apply_fn):
+        return expected_queue_loss(
+            jax.nn.softplus(raw_a),
+            arrival_rate, service_rates, key,
+            num_servers, sim_steps, temperature, apply_fn,
+        )
+
     loss_grad_fn = jax.jit(
-        jax.value_and_grad(expected_queue_loss, argnums=0),
+        jax.value_and_grad(_raw_alpha_loss, argnums=0),
         static_argnums=(4, 5, 7),  # num_servers, sim_steps, apply_fn
     )
     
@@ -90,9 +99,11 @@ def train_routing_agent(raw_cfg: DictConfig):
     for epoch in range(num_epochs):
         key, subkey = jax.random.split(key)
         
-        # Forward pass and backpropagation through the CTMC!
+        # alpha derived from raw_alpha for use in routing (and for logging).
+        alpha = jax.nn.softplus(raw_alpha)
+
         loss, grad = loss_grad_fn(
-            alpha, 
+            raw_alpha, 
             params['arrival_rate'], 
             params['service_rates'], 
             subkey, 
@@ -109,12 +120,9 @@ def train_routing_agent(raw_cfg: DictConfig):
         
         # Optax update step
         updates, opt_state = optimizer.update(grad, opt_state)
-        alpha = optax.apply_updates(alpha, updates)
-        
-        # Safety clip: alpha < 0 would route TO long queues (catastrophic).
-        # NOTE: If this clip activates, Adam's momentum state becomes stale.
-        # The init at 0.1 and typical gradient direction make this very rare.
-        alpha = jnp.maximum(alpha, 0.0)
+        raw_alpha = optax.apply_updates(raw_alpha, updates)
+        # No clip needed: softplus(raw_alpha) > 0 for all finite raw_alpha.
+        alpha = jax.nn.softplus(raw_alpha)  # updated value for WandB / jsonl logging
 
         # Log to WandB
         if run:

@@ -88,6 +88,16 @@ class GeneralizationSweeper:
         if model.layers[0].weight.shape[1] != self.cfg.system.num_servers:
             log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
             return
+        
+        # SG-4 FIX: Replace single-sample DGA calls with replicated vmap_simulate.
+        # A single sample has 95% CI ≈ ±40% of the mean (see stats_bench.py variance).
+        # Using cfg.simulation.num_replications (default 30) reduces SE by ~5.5×.
+        _cell_reps = int(self.cfg.simulation.num_replications)
+        vmap_simulate = jax.jit(
+            jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)),
+            static_argnums=(0, 4, 7)
+        )
+
         # Pre-generate unique keys for each grid cell (stochastic independence)
         total_cells = len(scale_vals) * len(rho_vals)
         cell_keys = jax.random.split(k_grid, total_cells)
@@ -105,11 +115,17 @@ class GeneralizationSweeper:
                 k_shared = cell_keys[cell_idx]
                 cell_idx += 1
                 
-                n_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, model, self.sim_steps, k_shared, self.temperature, evaluate_model)
-                g_loss = simulate_dga_jax(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(self.cfg.system.alpha), self.sim_steps, k_shared, self.temperature, default_policy)
+                # Expand the shared cell key into per-replication keys (CRN preserved).
+                cell_rep_keys = jax.random.split(k_shared, _cell_reps)
+
+                n_loss_arr = vmap_simulate(self.cfg.system.num_servers, lambda_rate, mu, model, self.sim_steps, cell_rep_keys, self.temperature, evaluate_model)
+                g_loss_arr = vmap_simulate(self.cfg.system.num_servers, lambda_rate, mu, jnp.float32(self.cfg.system.alpha), self.sim_steps, cell_rep_keys, self.temperature, default_policy)
+
+                n_loss = float(jnp.mean(n_loss_arr))
+                g_loss = float(jnp.mean(g_loss_arr))
                 
                 # Ratio: GibbsQ / Neural. > 1.0 means Neural is better.
-                ratio = float(g_loss / jnp.maximum(n_loss, constants.NUMERICAL_STABILITY_EPSILON))
+                ratio = float(g_loss / max(n_loss, constants.NUMERICAL_STABILITY_EPSILON))
                 grid[i, j] = ratio
                 log.info(f"   Scale={scale:5.1f}x | rho={rho:.2f} | Improvement={ratio:.2f}x")
 

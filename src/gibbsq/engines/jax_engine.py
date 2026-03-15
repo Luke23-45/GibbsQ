@@ -161,7 +161,11 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     # 3. State update
     u = jax.random.uniform(k2) * safe_a0
     cumrates = jnp.cumsum(rates)
-    event = jnp.sum(cumrates < u)
+    # SG-5 FIX: Clamp event index to [0, 2N−1] before branching.
+    # When a0 ≤ RATE_EPSILON, safe_a0 > a0 so u can exceed cumrates[-1],
+    # making jnp.sum(cumrates < u) = 2N (out-of-bounds). The minimum
+    # eliminates the latent OOB scatter and the silent JAX index clamp.
+    event = jnp.minimum(jnp.sum(cumrates < u), 2 * params.num_servers - 1)
     
     is_arrival = event < params.num_servers
     srv_idx = jnp.where(is_arrival, event, event - params.num_servers)

@@ -24,7 +24,6 @@ simulation:
   ssa:
     sim_time: 1000.0
     sample_interval: 1.0
-    max_events: 100000
   dga:
     sim_steps: 5000
     temperature: 0.5
