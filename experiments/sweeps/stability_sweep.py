@@ -44,6 +44,13 @@ def main(raw_cfg: DictConfig) -> None:
     out_dir = run_dir
     (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
 
+    # SG#4 FIX: Enforce that the sweep is actually sweeping a softmax policy
+    # as originally intended, rather than silently running whatever is in the config.
+    assert cfg.policy.name == "softmax", (
+        f"Stability sweep requires policy.name == 'softmax', "
+        f"but config has '{cfg.policy.name}'."
+    )
+
     alpha_values = np.array(cfg.stability_sweep.alpha_vals)
     rho_values = np.array(cfg.stability_sweep.rho_vals)
 
@@ -106,7 +113,7 @@ def main(raw_cfg: DictConfig) -> None:
                     last_res = res
             else:
                 # --- STANDARD NUMPY EXECUTION (Sequential) ---
-                policy = make_policy("softmax", alpha=float(alpha))
+                policy = make_policy(cfg.policy.name, alpha=float(alpha))
                 # Dynamic max_events ceiling matches the JAX engine formula and
                 # makes the NumPy path consistent with policy_comparison.py (SG#2/3 fix).
                 _np_max_events = int(

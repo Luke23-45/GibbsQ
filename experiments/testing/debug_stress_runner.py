@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
 log = logging.getLogger(__name__)
 
 
-def run_diagnostic():
+def _legacy_run_diagnostic_DEPRECATED():
     log.info("=" * 70)
     log.info("  GibbsQ Stress Test Diagnostic Runner")
     log.info("=" * 70)

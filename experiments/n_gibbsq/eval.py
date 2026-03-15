@@ -71,18 +71,25 @@ class NeuralTuringTest:
         log.info("\n[Loading Challenger: N-GibbsQ Neural Router]")
         
         # Read the pointer from the centralized 'small' directory
-        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
-        
+        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
+        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
+
         if not pointer_path.exists():
-            log.error(f"Weights pointer not found at {pointer_path}. You must run training (n_gibbsq/train.py) first.")
-            return
-            
+            raise FileNotFoundError(
+                f"Model pointer not found at '{pointer_path.resolve()}'.\n"
+                f"  Run training first: python -m experiments.n_gibbsq.train\n"
+                f"  (Training must complete without NaN losses.)"
+            )
+
         model_path_str = pointer_path.read_text(encoding='utf-8').strip()
         model_path = Path(model_path_str)
-        
+
         if not model_path.exists():
-            log.error(f"Trained weight file missing at {model_path}. Please rerun training (train.py).")
-            return
+            raise FileNotFoundError(
+                f"Weight file missing at '{model_path}'.\n"
+                f"  Pointer file '{pointer_path}' references a file that no longer exists.\n"
+                f"  Rerun training: python -m experiments.n_gibbsq.train"
+            )
 
         # Re-initialize skeleton and load weights securely using the validated NeuralConfig
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k2)

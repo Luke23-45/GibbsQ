@@ -50,15 +50,18 @@ class CriticalLoadTest:
         k_load, k_sweep = jax.random.split(key)
         
         # 1. Load trained model
-        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
+        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
+        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
-            return
-        
+            raise FileNotFoundError(
+                f"Model pointer not found at '{pointer_path.resolve()}'. "
+                f"Run training first: python -m experiments.n_gibbsq.train"
+            )
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
         if not model_path.exists():
-            log.error(f"Trained weights not found at {model_path}. Run training first.")
-            return
+            raise FileNotFoundError(
+                f"Weight file missing at '{model_path}'. Rerun training."
+            )
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
@@ -94,12 +97,23 @@ class CriticalLoadTest:
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
-            # SG-3 FIX: Scale sim_steps by the mixing-time multiplier.
-            # Mixing time is O(1/(1−ρ)); base_rho=0.8 is where sim_steps was calibrated.
-            # Cap at 200_000 to bound memory usage at rho→1.
             _base_rho = 0.8
             _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
-            rho_adjusted_steps = min(round(self.sim_steps * _rho_factor), 200_000)
+            # SG#9 FIX: Linear mixing-time scaling is correct for fixed N
+            # (spectral gap ∝ (1-ρ) for fixed-N birth-death chains; see
+            # Goldberg & Li 2022, Oper. Res. bounds that scale as 1/(1-ρ)).
+            # The prior cap of 200_000 was binding at ρ=0.999 where the formula
+            # predicts 5000 × 200 = 1,000,000 steps. Raise cap to 2_000_000
+            # to accommodate the full linear prediction.
+            _uncapped_steps = round(self.sim_steps * _rho_factor)
+            rho_adjusted_steps = min(_uncapped_steps, 2_000_000)
+            if _uncapped_steps > 2_000_000:
+                log.warning(
+                    f"  [!] rho={rho:.4f}: mixing-time formula predicts "
+                    f"{_uncapped_steps:,} steps but cap is 2,000,000. "
+                    f"E[Q] near criticality may be underestimated (stationarity "
+                    f"not guaranteed). Interpret rho>{rho:.3f} results cautiously."
+                )
 
             # Neural Evaluation with vmap replications (SG-13.4 fix)
             n_loss_array = vmap_simulate(

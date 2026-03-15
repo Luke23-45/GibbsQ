@@ -1,6 +1,15 @@
 """
 Differentiable Gillespie Algorithm (DGA) for Soft-JSQ.
 
+SG#6 DISCLOSURE: The DGA is a continuous-state deterministic surrogate model.
+It is NOT a true continuous-time Markov chain (CTMC). It replaces discrete
+stochastic Poisson/Exponential jumps with expected drift tracking over
+deterministic time steps. It is designed EXCLUSIVELY to provide a smooth
+loss landscape for gradient-based training of routing policies.
+
+All scientific evaluations and stability claims must be validated using the
+exact Gillespie SSA (see engines/numpy_engine.py or jax_engine.py run_replications_jax).
+
 Uses continuous-state relaxations and Gumbel-Softmax for jump selection,
 allowing gradients (via jax.grad) to flow from the final queueing metrics
 back to the routing parameters (alpha).
@@ -82,6 +91,11 @@ def simulate_dga_jax(
 ) -> jnp.float32:
     """
     Runs a Differentiable Gillespie simulation for `sim_steps` jumps.
+    
+    WARNING (SG#6): This returns the expected queue length under the 
+    continuous DGA surrogate model. It is a biased estimator of the true 
+    CTMC queue length and should NOT be used for parity benchmarks or 
+    stability bounds without explicit disclaimer.
     
     Returns
     -------

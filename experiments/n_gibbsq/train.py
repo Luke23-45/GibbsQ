@@ -94,6 +94,18 @@ class NeuralCurriculumTrainer:
                 loss, model, opt_state = train_step(model, opt_state, subkey)
                 loss_val = float(loss)
                 
+                # SG#10 FIX: Skip update and warn on non-finite loss.
+                # A NaN/Inf loss means the DGA trajectory overflowed (tau→∞
+                # when a0→0). Applying NaN gradients corrupts the optimizer
+                # momentum state and produces invalid weight files.
+                if not jnp.isfinite(loss):
+                    log.warning(
+                        f"  [!] Epoch {epoch_count}: Non-finite loss={loss_val:.4f}. "
+                        f"Skipping gradient update. Check arrival_rate/service_rates ratio."
+                    )
+                    epoch_count += 1
+                    continue
+
                 # Model health telemetry
                 max_w = float(max([jnp.max(jnp.abs(l.weight)) for l in model.layers if hasattr(l, 'weight')]))
                 
@@ -116,6 +128,17 @@ class NeuralCurriculumTrainer:
 
     def _save_assets(self, model: NeuralRouter, history_loss: list):
         """Persists model weights and loss trajectory."""
+        # SG#10 FIX: Refuse to serialise if the training run produced
+        # no finite losses (all steps were NaN/skipped). An empty or
+        # all-NaN history_loss means the model was never updated.
+        valid_losses = [l for l in history_loss if not (l != l)]  # filters NaN
+        if not valid_losses:
+            log.error(
+                "[!] _save_assets: No finite loss recorded. "
+                "Model weights NOT saved. Re-run training with a stable config."
+            )
+            return
+
         plt.figure(figsize=(8, 5))
         plt.plot(history_loss, color='purple', linewidth=2)
         plt.title('N-GibbsQ Curriculum Training Convergence')
@@ -145,11 +168,16 @@ class NeuralCurriculumTrainer:
         model_path = self.run_dir / "n_gibbsq_weights.eqx"
         eqx.tree_serialise_leaves(model_path, model)
         
-        # Write a pointer to the latest weights directory for downstream phases.
-        pointer_dir = Path(self.cfg.output_dir) / "small"
+        # SG#5 FIX: Write pointer to a FIXED canonical path, independent of
+        # cfg.output_dir. All downstream eval scripts read from this same path.
+        # Using a config-relative path caused silent mismatch when training
+        # ran with small.yaml (output_dir="outputs/small") while eval used
+        # default.yaml (output_dir="outputs").
+        pointer_dir = Path("outputs") / "small"
         pointer_dir.mkdir(parents=True, exist_ok=True)
         pointer_path = pointer_dir / "latest_weights.txt"
         pointer_path.write_text(str(model_path.resolve()), encoding='utf-8')
+        log.info(f"[SG#5] Model pointer written to: {pointer_path.resolve()}")
         
         log.info("-" * 55)
         log.info(f"Training Complete! Final Loss: {history_loss[-1]:.4f}")

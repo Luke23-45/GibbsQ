@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
 log = logging.getLogger(__name__)
 
 
-def run_scaling_test():
+def _legacy_run_scaling_test_DEPRECATED():
     log.info("=" * 70)
     log.info("  sim_time Scaling Test (N=4, R=1)")
     log.info("=" * 70)

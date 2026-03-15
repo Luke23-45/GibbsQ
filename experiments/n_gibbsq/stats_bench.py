@@ -58,15 +58,18 @@ class StatsBenchmark:
         log.info(f"Environment: N={self.num_servers}, rho={self.arrival_rate / jnp.sum(self.service_rates):.2f}")
         
         # --- 1. Load Model ---
-        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
+        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
+        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
-            return
-        
+            raise FileNotFoundError(
+                f"Model pointer not found at '{pointer_path.resolve()}'. "
+                f"Run training first: python -m experiments.n_gibbsq.train"
+            )
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
         if not model_path.exists():
-            log.error(f"Trained weights not found at {model_path}. Run training first.")
-            return
+            raise FileNotFoundError(
+                f"Weight file missing at '{model_path}'. Rerun training."
+            )
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         

@@ -194,7 +194,10 @@ class NeuralConfig:
 class VerificationThresholds:
     """Research success boundaries."""
     parity_threshold_percent: float = 25.0
-    jacobian_rel_tol: float = 1e-1  # Loosened from 5e-2 due to 50.0 sigmoid steepness
+    # SG#3 FIX: Reverted dangerous 10% tolerance for gradient checks. 
+    # With the softer DGA steepness (Constants.DGA_INDICATOR_STEEPNESS = 5.0), 
+    # the finite-difference check passes reliably at the mathematically sound 5% threshold.
+    jacobian_rel_tol: float = 5e-2
     alpha_significance: float = 0.05
     confidence_interval: float = 0.95
 

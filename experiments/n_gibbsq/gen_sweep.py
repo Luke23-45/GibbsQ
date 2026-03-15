@@ -3,6 +3,16 @@ N-GibbsQ generalization sweep.
 
 Tests N-GibbsQ generalization to unseen configurations at FIXED server count.
 
+PREREQUISITE (SG#8): This sweep evaluates a model trained with the SAME
+config that is active when this script runs. Train first:
+  python -m experiments.n_gibbsq.train --config-name <your-config>
+The model architecture (num_servers, hidden_size) must match the active config.
+The SG#16 check (model.layers[0].weight.shape[1] == num_servers) enforces this.
+
+The "rate-scale" and "load" axes below vary the OPERATING CONDITIONS, not the
+model architecture. The model is never re-trained during the sweep — it is
+evaluated zero-shot on each (scale, rho) grid cell.
+
 Sweeps (2-D grid):
 - Rate-Scale Axis: Uniform scaling of all service rates (config: generalization.scale_vals).
 - Load Axis:       Arrival-rate ρ (config: generalization.rho_grid_vals).
@@ -53,24 +63,25 @@ class GeneralizationSweeper:
         k_load, k_grid = jax.random.split(key)
         
         # 1. Load trained model (Trained on N=4, [100,1,1,1], arrival=95)
-        pointer_path = Path(self.cfg.output_dir) / "small" / "latest_weights.txt"
+        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
+        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
-            return
-        
+            raise FileNotFoundError(
+                f"Model pointer not found at '{pointer_path.resolve()}'. "
+                f"Run training first: python -m experiments.n_gibbsq.train"
+            )
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
         if not model_path.exists():
-            log.error(f"Trained weights not found at {model_path}. Run training first.")
-            return
+            raise FileNotFoundError(
+                f"Weight file missing at '{model_path}'. Rerun training."
+            )
         
-        # Generalization Test Design:
-        # The model was trained on [100,1,1,1] at ρ≈0.92.
-        # We test: can it handle UNSEEN load conditions and service rate SCALES?
-        # We preserve the STRUCTURE (1 fast + 3 slow) but vary:
-        #   - Service Rate Scale: [100,1,1,1] x {0.5, 1.0, 2.0, 5.0, 10.0}
-        #   - Load Factor ρ: {0.5, 0.7, 0.85, 0.95, 0.98}
-        # This tests if the model learned the PRINCIPLE of "route to fast server"
-        # not just specific weight values for one config.
+        # SG#8 FIX: Removed stale comment referencing "[100,1,1,1]" training
+        # config (not part of this codebase). The sweep design is:
+        #   base_rates  = cfg.system.service_rates (matches training config)
+        #   Scale axis  = base_rates × generalization.scale_vals
+        #   Load axis   = generalization.rho_grid_vals × total_capacity(scaled)
+        # The model evaluates zero-shot on each (scale, rho) grid cell.
         
         scale_vals = list(self.cfg.generalization.scale_vals)  # Multiply base rates
         rho_vals = list(self.cfg.generalization.rho_grid_vals)
