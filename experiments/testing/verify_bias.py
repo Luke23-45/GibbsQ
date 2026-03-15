@@ -54,10 +54,16 @@ class BiasVerification:
             # --- DGA Evaluation ---
             dga_keys = jax.random.split(k1, self.num_reps)
             
-            # adjust steps based on rho as done in critical_load
+            # SG-6 FIX: sim_steps is a static JAX arg. Scaling it by rho 
+            # triggers a recompile for every load factor, potentially 
+            # causing CPU timeouts or GPU OOM at high rho.
+            rho_adjusted_steps = self.dga_sim_steps
+            
+            # SSA sim_time expansion must remain rho-proportional (independent of DGA steps)
             _base_rho = 0.8
             _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
-            rho_adjusted_steps = min(round(self.dga_sim_steps * _rho_factor), 2_000_000)
+
+
 
             dga_loss_arr = self.vmap_dga(
                 self.num_servers, lam, self.service_rates, 

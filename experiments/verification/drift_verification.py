@@ -67,7 +67,17 @@ def main(raw_cfg: DictConfig) -> None:
         log.info(f"Bound violations: {res.violations:,}")
         
         if res.violations > 0:
-            log.error("VIOLATIONS DETECTED: Exact drift exceeds analytical upper bound.")
+            log.error(
+                f"VIOLATIONS DETECTED: {res.violations:,} states have exact drift "
+                f"exceeding the analytical upper bound. "
+                f"Foster-Lyapunov proof FAILS for alpha={alpha}, "
+                f"lam={lam}, cap={sum(mu):.4f}. All results are INVALID."
+            )
+            raise RuntimeError(
+                f"Proof violation at {res.violations} states. "
+                "Halt: paper results cannot be generated from an invalid proof basis."
+            )
+
 
         if N == 2:
             f1 = out_dir / "drift_heatmap.png"

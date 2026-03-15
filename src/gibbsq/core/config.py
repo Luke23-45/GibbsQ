@@ -263,7 +263,9 @@ class NeuralTrainingConfig:
     learning_rate: float = 3e-3
     weight_decay: float = 1e-4
     dga_learning_rate: float = 0.5
+    min_temperature: float = 0.1   # SG-1 FIX: was in YAML but missing from dataclass
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
+
 
 
 # ──────────────────────────────────────────────────────────────

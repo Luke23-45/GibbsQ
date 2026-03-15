@@ -76,7 +76,9 @@ class CriticalLoadTest:
         
         # 1. Load trained model
         # SG#5 FIX: Use fixed canonical pointer path (config-independent).
-        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
+        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        pointer_path = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
+
         if not pointer_path.exists():
             raise FileNotFoundError(
                 f"Model pointer not found at '{pointer_path.resolve()}'. "
@@ -111,16 +113,21 @@ class CriticalLoadTest:
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
-            # SG#1 FIX: Scale sim_time with theoretical CTMC mixing time.
-            # Mixing time ~ O(1/(1-rho)^2) (Meyn & Tweedie 1993, §4).
-            # Use min(100/(1-rho)^2, 100_000) as a compute-budget cap.
-            _mixing_budget = 100.0 / max((1.0 - float(rho)) ** 2, 1e-12)
-            _rho_sim_time = min(_mixing_budget, 100_000.0)
-            if _rho_sim_time >= 100_000.0:
+            # SG#9 FIX: Linear mixing-time scaling is correct for fixed N
+            # (spectral gap ∝ (1-ρ) for fixed-N birth-death chains; see
+            # Goldberg & Li 2022, Oper. Res. bounds that scale as 1/(1-ρ)).
+            # The Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
+            # the many-server asymptotic regime where both N and λ grow.
+            _base_rho = 0.8
+            _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
+            _uncapped_sim_time = self.ssa_sim_time * _rho_factor
+            _rho_sim_time = min(_uncapped_sim_time, 200_000.0)
+            if _uncapped_sim_time > 200_000.0:
                 log.warning(
-                    f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
-                    f"(theoretical mixing time ~ {_mixing_budget:.0f}s). "
-                    f"E[Q] near criticality may be underestimated."
+                    f"  [!] rho={rho:.4f}: mixing-time formula predicts "
+                    f"{_uncapped_sim_time:,.0f}s sim_time but cap is 200,000s. "
+                    f"E[Q] near criticality may be underestimated (stationarity "
+                    f"not guaranteed). Interpret rho>{rho:.3f} results cautiously."
                 )
             _max_s = int(_rho_sim_time / self.ssa_sample_interval) + 1
             _mu_np = np.array(self.service_rates, dtype=np.float64)

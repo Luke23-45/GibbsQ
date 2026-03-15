@@ -211,17 +211,18 @@ def main(raw_cfg: DictConfig) -> None:
 
         total_q_trajectories = np.array(states).sum(axis=2)  # (Reps, TimeSteps)
 
-        # SG#4 FIX: Mask zero-padded trailing entries from JAX pre-allocated buffers.
-        # JAX states_buf is initialized with jnp.zeros; unfilled slots appear as Q=0.
-        # MSER-5 interprets trailing zeros as a downward trend and inflates truncation.
-        # Clip each trajectory to its valid length using times_buf > 0 as a mask.
+        # construction below.  total_q_trajectories was already patched but
+        # SimResult.states was not — causing trailing-zero bias in E[Q].
+        valid_lens = []
         for r in range(cfg.simulation.num_replications):
             _valid_mask = np.array(times[r]) > 0
             _valid_mask[0] = True  # t=0 initial snapshot is always valid
             _valid_len = int(np.sum(_valid_mask))
+            valid_lens.append(_valid_len)
             if _valid_len < total_q_trajectories.shape[1]:
                 # Fill trailing zeros with the last valid sample (flat tail, not biased)
                 total_q_trajectories[r, _valid_len:] = total_q_trajectories[r, _valid_len - 1]
+
 
         # SG#11 Fix: Use data-driven MSER-5 truncation consistently instead of fixed 20%
         # Compute MSER-5 truncations for all replicas to find the maximum burn-in period
@@ -233,10 +234,20 @@ def main(raw_cfg: DictConfig) -> None:
         log.info(f"    -> Gelman-Rubin R-hat across replicas (post MSER-5 burn-in): {r_hat:.4f}")
 
         for r in range(cfg.simulation.num_replications):
+            # SG-2 FIX: apply the same flat-tail fill to the raw states array
+            # that was already applied to total_q_trajectories above.
+            # Without this, time_averaged_queue_lengths averages zero-padded
+            # JAX buffer slots and biases E[Q] downward at high rho.
+            _np_states_r = np.array(states[r])
+            _vl = valid_lens[r]
+            if _vl < _np_states_r.shape[0]:
+                _np_states_r[_vl:] = _np_states_r[_vl - 1]
+
             res = SimResult(
-                np.array(times[r]), np.array(states[r]),
+                np.array(times[r]), _np_states_r,
                 int(arrs[r]), int(deps[r]), float(times[r][-1]), N_fixed
             )
+
 
             traj = total_q_trajectories[r]
             d_star = trunc_samples[r]

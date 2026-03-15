@@ -71,6 +71,10 @@ def main(raw_cfg: DictConfig) -> None:
 
         for j, alpha in enumerate(alpha_values):
             completed += 1
+            # SG#3 FIX: Assign a unique, non-overlapping seed block per grid cell.
+            # cell_seed = base + (i * n_alpha + j) * num_replications
+            _cell_seed = cfg.simulation.seed + (i * n_alpha + j) * cfg.simulation.num_replications
+            
             rep_means = []
             rep_stationary_flags: list[bool] = []
             last_res = None
@@ -92,7 +96,7 @@ def main(raw_cfg: DictConfig) -> None:
                     alpha=float(alpha),
                     sim_time=_sim_time,
                     sample_interval=_sample_interval,
-                    base_seed=cfg.simulation.seed,
+                    base_seed=_cell_seed,
                     max_samples=max_samples
                 )
                 
@@ -122,7 +126,7 @@ def main(raw_cfg: DictConfig) -> None:
                     * 1.5
                 ) + 1000
                 for rep in range(cfg.simulation.num_replications):
-                    rng = np.random.default_rng(cfg.simulation.seed + rep)
+                    rng = np.random.default_rng(_cell_seed + rep)
                     res = simulate(
                         num_servers=N,
                         arrival_rate=lam,

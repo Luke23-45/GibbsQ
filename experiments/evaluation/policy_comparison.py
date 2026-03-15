@@ -280,7 +280,9 @@ def main(raw_cfg: DictConfig) -> None:
         from gibbsq.core.neural_policies import NeuralRouter
         from pathlib import Path as _Path
 
-        _ptr = _Path("outputs") / "small" / "latest_weights.txt"
+        _PROJECT_ROOT = _Path(__file__).resolve().parents[2]
+        _ptr = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
+
         if _ptr.exists():
             _model_path = _Path(_ptr.read_text(encoding="utf-8").strip())
             if _model_path.exists():

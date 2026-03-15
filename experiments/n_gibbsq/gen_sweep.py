@@ -89,7 +89,9 @@ class GeneralizationSweeper:
         
         # 1. Load trained model
         # SG#5 FIX: Use fixed canonical pointer path (config-independent).
-        pointer_path = Path("outputs") / "small" / "latest_weights.txt"
+        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        pointer_path = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
+
         if not pointer_path.exists():
             raise FileNotFoundError(
                 f"Model pointer not found at '{pointer_path.resolve()}'. "

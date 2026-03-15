@@ -1,18 +1,27 @@
 """
 Differentiable Gillespie Algorithm (DGA) for Soft-JSQ.
 
-SG#6 DISCLOSURE: The DGA is a continuous-state deterministic surrogate model.
-It is NOT a true continuous-time Markov chain (CTMC). It replaces discrete
-stochastic Poisson/Exponential jumps with expected drift tracking over
-deterministic time steps. It is designed EXCLUSIVELY to provide a smooth
-loss landscape for gradient-based training of routing policies.
+SG#6 — SURROGATE DISCLOSURE:
+==============================
+The DGA is a **differentiable surrogate** of the true CTMC (Gillespie SSA),
+not an exact simulation. Key differences from the true process:
 
-All scientific evaluations and stability claims must be validated using the
-exact Gillespie SSA (see engines/numpy_engine.py or jax_engine.py run_replications_jax).
+1. EVENT SIMULTANEITY: Each DGA step applies fractional arrival AND departure
+   updates simultaneously via Gumbel-Softmax weights. A true CTMC has exactly
+   one event per step.
 
-Uses continuous-state relaxations and Gumbel-Softmax for jump selection,
-allowing gradients (via jax.grad) to flow from the final queueing metrics
-back to the routing parameters (alpha).
+2. CONTINUOUS STATE: Queue lengths Q are real-valued (not integer). The
+   soft indicator replaces the hard 1(Q>0) predicate.
+
+3. TEMPERATURE BIAS: At temperature=0.5 (default), Gumbel-Softmax weights
+   are not sharply peaked. The surrogate bias decreases as temperature → 0,
+   but gradient magnitude also decreases.
+
+CONSEQUENCE FOR THE PAPER: DGA-measured E[Q] and SSA-measured E[Q] are
+correlated but not identical. Results labeled "E[Q]" from this engine must
+be described as "DGA surrogate E[Q]" in paper text. For true steady-state
+E[Q] comparisons use the SSA engine (jax_engine.py or numpy_engine.py).
+The SSA evaluation of the trained NeuralRouter is in policy_comparison.py.
 """
 import jax
 import jax.numpy as jnp
@@ -90,17 +99,17 @@ def simulate_dga_jax(
     apply_fn: Callable = default_policy,
 ) -> jnp.float32:
     """
-    Runs a Differentiable Gillespie simulation for `sim_steps` jumps.
-    
-    WARNING (SG#6): This returns the expected queue length under the 
-    continuous DGA surrogate model. It is a biased estimator of the true 
-    CTMC queue length and should NOT be used for parity benchmarks or 
-    stability bounds without explicit disclaimer.
-    
+    Runs a Differentiable Gillespie **surrogate** simulation for `sim_steps` steps.
+
+    This is a biased but differentiable approximation of the true CTMC.
+    See module docstring for the full disclosure of surrogate bias.
+    Use the SSA engines (numpy_engine.py, jax_engine.py) for unbiased E[Q].
+
     Returns
     -------
     jnp.float32
-        The time-averaged expected total queue length.
+        Time-averaged surrogate expected total queue length E_DGA[Q].
+        This is NOT the same as the true CTMC steady-state E_SSA[Q].
     """
     
     def body_fun(carry, _):

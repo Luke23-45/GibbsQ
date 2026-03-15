@@ -183,11 +183,12 @@ class NeuralCurriculumTrainer:
         eqx.tree_serialise_leaves(model_path, model)
         
         # SG#5 FIX: Write pointer to a FIXED canonical path, independent of
-        # cfg.output_dir. All downstream eval scripts read from this same path.
-        # Using a config-relative path caused silent mismatch when training
-        # ran with small.yaml (output_dir="outputs/small") while eval used
-        # default.yaml (output_dir="outputs").
-        pointer_dir = Path("outputs") / "small"
+        # CWD.  Path(__file__).resolve().parents[2] is the project root
+        # regardless of which directory Python is invoked from (Jupyter,
+        # CI runners, direct sub-directory invocation, etc.).
+        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        pointer_dir = _PROJECT_ROOT / "outputs" / "small"
+
         pointer_dir.mkdir(parents=True, exist_ok=True)
         pointer_path = pointer_dir / "latest_weights.txt"
         pointer_path.write_text(str(model_path.resolve()), encoding='utf-8')
