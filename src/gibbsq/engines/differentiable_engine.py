@@ -42,8 +42,11 @@ def _dga_step(
 
     # 2. Relaxed Propensities
     arrival_rates = arrival_rate * probs
-    # steepness (constants.DGA_INDICATOR_STEEPNESS) provides a sharp transition.
-    departure_rates = service_rates * jax.nn.sigmoid(state.Q * constants.DGA_INDICATOR_STEEPNESS)
+    # Soft indicator 1−exp(−k·Q): exactly 0 at Q=0 (proof invariant: empty server
+    # has zero departure rate) and →1 for large Q, with non-vanishing gradient k
+    # at Q=0.  Replaces sigmoid(0)=0.5 which caused systematic downward bias in E[Q].
+    _soft_indicator = 1.0 - jnp.exp(-state.Q * constants.DGA_INDICATOR_STEEPNESS)
+    departure_rates = service_rates * _soft_indicator
 
     rates = jnp.concatenate([arrival_rates, departure_rates])
     a0 = jnp.sum(rates)

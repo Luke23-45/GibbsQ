@@ -84,6 +84,7 @@ def main(raw_cfg: DictConfig) -> None:
 
         # Selective use of JAX backend (all policies 0-4 now supported)
         use_jax = cfg.jax.enabled
+        last_res = None   # initialise before if/else so export guard is always defined
         
         if use_jax:
             # --- JAX backend ---
@@ -116,6 +117,7 @@ def main(raw_cfg: DictConfig) -> None:
                 gini_res[lbl].append(gini_coefficient(avg_q))
                 sojourn_res[lbl].append(sojourn_time_estimate(res, sc.arrival_rate, cfg.simulation.burn_in_fraction))
                 last_res = res
+            log.info("  timing[%s]: jax_total=%.2fs", lbl, time.perf_counter() - t_sim_start)
         else:
             # --- STANDARD NUMPY EXECUTION ---
             # Compute a safe dynamic max_events ceiling that mirrors the JAX engine

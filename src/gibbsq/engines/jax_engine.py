@@ -244,7 +244,7 @@ def _simulate_jax_impl(
     max_events:      int,
     policy_type:     int = 3,
     d:               int = 2,
-    scan_sampling_chunk: int = 4
+    scan_sampling_chunk: int = 16
 ):
     """Hardware-accelerated simulation of the GibbsQ network using SOTA scan+search."""
     params = SimParams(
@@ -307,7 +307,7 @@ def simulate_jax(
     d:               int = 2,
     max_events_multiplier: float = 1.5,
     max_events_buffer: int = 1000,
-    scan_sampling_chunk: int = 4
+    scan_sampling_chunk: int = 16
 ):
     """Validated wrapper around the jitted JAX simulation kernel."""
     _validate_inputs(
@@ -362,7 +362,7 @@ def _run_replications_jax_impl(
     max_events:       int,
     policy_type:      int = 3,
     d:                int = 2,
-    scan_sampling_chunk: int = 4
+    scan_sampling_chunk: int = 16
 ):
     """Run replications in parallel across available accelerator lanes."""
     keys = jax.random.split(jax.random.PRNGKey(base_seed), num_replications)
@@ -399,7 +399,7 @@ def run_replications_jax(
     d:                int = 2,
     max_events_multiplier: float = 1.5,
     max_events_buffer: int = 1000,
-    scan_sampling_chunk: int = 4
+    scan_sampling_chunk: int = 16
 ):
     """Validated wrapper around vmapped JAX replications."""
     if num_replications < 1:

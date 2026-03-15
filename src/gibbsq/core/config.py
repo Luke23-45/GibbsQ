@@ -181,7 +181,9 @@ class JAXEngineConfig:
     """Hardware acceleration tunables."""
     max_events_safety_multiplier: float = 1.5
     max_events_additive_buffer: int = 1000
-    scan_sampling_chunk: int = 4
+    # 16 gives P(miss | a0=1.0, interval=1.0) = exp(-16) < 2e-7 per event —
+    # covers the worst-case debug configs while adding negligible no-op iterations.
+    scan_sampling_chunk: int = 16
 
 @dataclass(frozen=True)
 class NeuralConfig:

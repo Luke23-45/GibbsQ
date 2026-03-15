@@ -44,10 +44,10 @@ class StatsBenchmark:
         # Pull replicates from simulation config.
         self.num_samples = int(cfg.simulation.num_replications)
         
-        # Vectorized simulation function
+        # Vectorized simulation function (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
         self.vmap_simulate = jax.jit(
             jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)), 
-            static_argnames=("num_servers", "sim_steps", "apply_fn")
+            static_argnums=(0, 4, 7)
         )
 
     def execute(self, key: PRNGKeyArray):
@@ -103,13 +103,13 @@ class StatsBenchmark:
         # 1. Paired T-Test
         t_stat, p_val = stats.ttest_rel(neural_data, gibbs_data)
         
-        # 2. Cohen's d (Effect Size)
-        # d = (M1 - M2) / SD_pooled, where SD_pooled = sqrt((s1^2 + s2^2) / 2)
-        sd_pooled = np.sqrt((n_std**2 + g_std**2) / 2)
-        cohen_d = (n_mean - g_mean) / sd_pooled if sd_pooled > 0 else 0.0
-        
-        # 3. 95% Confidence Interval for the difference
+        # 2. Cohen's d — paired design: d = mean(diff) / std(diff, ddof=1)
+        #    (Cohen 1988, Ch.2; pooled-SD formula is only valid for independent samples)
         diff = neural_data - gibbs_data
+        _diff_std = float(np.std(diff, ddof=1))
+        cohen_d = float(np.mean(diff) / _diff_std) if _diff_std > 0.0 else 0.0
+        
+        # 3. 95% Confidence Interval for the difference (reuses diff from above)
         ci_low, ci_high = stats.t.interval(0.95, len(diff)-1, loc=np.mean(diff), scale=stats.sem(diff))
         
         improvement = (g_mean - n_mean) / g_mean * 100 if g_mean > 0 else 0

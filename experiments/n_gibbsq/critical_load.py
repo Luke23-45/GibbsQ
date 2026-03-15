@@ -75,14 +75,14 @@ class CriticalLoadTest:
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
         
-        # Pre-generate shared CRN keys for each ρ value (SG-13.5 fix)
+        # Pre-generate shared CRN keys for each ρ value; static_argnums replaces static_argnames
         rho_keys = jax.random.split(k_sweep, len(self.rho_vals))
         
-        # Vectorized simulation for variance reduction (SG-13.4 fix)
+        # Vectorized simulation (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
         num_reps = int(self.cfg.simulation.num_replications)
         vmap_simulate = jax.jit(
             jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)),
-            static_argnames=("num_servers", "sim_steps", "apply_fn")
+            static_argnums=(0, 4, 7)
         )
         
         for idx, rho in enumerate(self.rho_vals):

@@ -84,6 +84,11 @@ class AblationStudy:
         results = {}
         
         log.info("Starting Ablation Benchmark...")
+
+        # Horizon for BOTH training and evaluation.  Must be defined before the loop
+        # so both the uniform baseline branch and the neural training branch can use
+        # it consistently.  See PATCH SG4 comment below for rationale.
+        _ABLATION_STEPS = 500
         
         for name, a_log, a_zero in variants:
             if name == "Uniform Routing (Baseline)":
@@ -92,7 +97,7 @@ class AblationStudy:
                 # (params: jnp.float32) and share the JIT cache entry with other callers.
                 loss = simulate_dga_jax(
                     self.num_servers, self.arrival_rate, self.service_rates, jnp.float32(0.0),
-                    self.sim_steps, keys[2], self.temperature, default_policy
+                    _ABLATION_STEPS, keys[2], self.temperature, default_policy
                 )
             else:
                 router = AblationRouter(self.num_servers, self.cfg.neural, keys[0], a_log, a_zero)
@@ -109,7 +114,6 @@ class AblationStudy:
                 # only visible in the early-learning regime (T=500, 15 epochs).
                 # Over-training (T=5000, 30 epochs) allows all variants to converge,
                 # erasing the initialization signal the study is designed to isolate.
-                _ABLATION_STEPS = 500
                 def _loss_fn(m, k):
                     return expected_queue_loss(m, self.arrival_rate, self.service_rates, k, self.num_servers, _ABLATION_STEPS, self.temperature, evaluate_model)
                 
@@ -127,10 +131,11 @@ class AblationStudy:
                     l, router, opt_state = train_step(router, opt_state, subkey)
                     log.info(f"      Epoch {ep:2d} | Loss: {l:7.4f}")
                 
-                # Evaluate the trained variant over the full long horizon
+                # Evaluate at the same T=_ABLATION_STEPS horizon used for training
+                # (apples-to-apples initialization-regime comparison)
                 loss = simulate_dga_jax(
                     self.num_servers, self.arrival_rate, self.service_rates, router, 
-                    self.sim_steps, keys[2], self.temperature, evaluate_model
+                    _ABLATION_STEPS, keys[2], self.temperature, evaluate_model
                 )
             
             results[name] = float(loss)

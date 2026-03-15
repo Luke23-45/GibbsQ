@@ -44,10 +44,10 @@ class NeuralTuringTest:
         # We run multiple replications to get statistically stable results
         self.num_reps = int(cfg.simulation.num_replications)
         
-        # JIT-compile vectorized simulation
+        # JIT-compile vectorized simulation (static_argnums: positions 0=num_servers, 4=sim_steps, 7=apply_fn)
         self.vmap_simulate = jax.jit(
             jax.vmap(simulate_dga_jax, in_axes=(None, None, None, None, None, 0, None, None)), 
-            static_argnames=("num_servers", "sim_steps", "apply_fn")
+            static_argnums=(0, 4, 7)
         )
 
     def execute(self, key: PRNGKeyArray):
