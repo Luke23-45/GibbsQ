@@ -118,6 +118,16 @@ def main(raw_cfg: DictConfig) -> None:
                 last_res = res
         else:
             # --- STANDARD NUMPY EXECUTION ---
+            # Compute a safe dynamic max_events ceiling that mirrors the JAX engine
+            # formula: int(max_theoretical_rate * sim_time * 1.5) + 1000.
+            # The static cfg.simulation.ssa.max_events (100 000) is below the
+            # expected event count for the default config (~117 000), causing silent
+            # trajectory truncation and biased E[Q] estimates.
+            _np_max_events = int(
+                (sc.arrival_rate + float(mu.sum()))
+                * cfg.simulation.ssa.sim_time
+                * 1.5
+            ) + 1000
             t_np_start = time.perf_counter()
             for rep in _iter_with_progress(range(cfg.simulation.num_replications), desc=f"{lbl} reps", total=cfg.simulation.num_replications):
                 rng = np.random.default_rng(cfg.simulation.seed + rep)
@@ -135,7 +145,7 @@ def main(raw_cfg: DictConfig) -> None:
                     sim_time=cfg.simulation.ssa.sim_time,
                     sample_interval=cfg.simulation.ssa.sample_interval,
                     rng=rng,
-                    max_events=cfg.simulation.ssa.max_events,
+                    max_events=_np_max_events,
                 )
                 avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
                 q_res[lbl].append(float(avg_q.sum()))

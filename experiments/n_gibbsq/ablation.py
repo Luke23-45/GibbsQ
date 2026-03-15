@@ -78,7 +78,7 @@ class AblationStudy:
             ("Full Model", False, False),
             ("Ablated: No Log-Norm", True, False),
             ("Ablated: No Zero-Init", False, True),
-            ("No Routing (Random)", "RANDOM", "RANDOM")
+            ("Uniform Routing (Baseline)", "RANDOM", "RANDOM")
         ]
         
         results = {}
@@ -86,9 +86,12 @@ class AblationStudy:
         log.info("Starting Ablation Benchmark...")
         
         for name, a_log, a_zero in variants:
-            if name == "No Routing (Random)":
+            if name == "Uniform Routing (Baseline)":
+                # Uniform routing baseline: softmax(zeros) = 1/N for all servers.
+                # Uses scalar params=0.0 to satisfy default_policy's type contract
+                # (params: jnp.float32) and share the JIT cache entry with other callers.
                 loss = simulate_dga_jax(
-                    self.num_servers, self.arrival_rate, self.service_rates, jnp.zeros(self.num_servers), 
+                    self.num_servers, self.arrival_rate, self.service_rates, jnp.float32(0.0),
                     self.sim_steps, keys[2], self.temperature, default_policy
                 )
             else:

@@ -107,6 +107,13 @@ def main(raw_cfg: DictConfig) -> None:
             else:
                 # --- STANDARD NUMPY EXECUTION (Sequential) ---
                 policy = make_policy("softmax", alpha=float(alpha))
+                # Dynamic max_events ceiling matches the JAX engine formula and
+                # makes the NumPy path consistent with policy_comparison.py (SG#2/3 fix).
+                _np_max_events = int(
+                    (lam + float(mu.sum()))
+                    * cfg.simulation.ssa.sim_time
+                    * 1.5
+                ) + 1000
                 for rep in range(cfg.simulation.num_replications):
                     rng = np.random.default_rng(cfg.simulation.seed + rep)
                     res = simulate(
@@ -117,6 +124,7 @@ def main(raw_cfg: DictConfig) -> None:
                         sim_time=cfg.simulation.ssa.sim_time,
                         sample_interval=cfg.simulation.ssa.sample_interval,
                         rng=rng,
+                        max_events=_np_max_events,
                     )
                     avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
                     rep_means.append(avg_q.sum())

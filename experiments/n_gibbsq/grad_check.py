@@ -45,11 +45,12 @@ class GradientFidelityChecker:
         max_h = cfg.simulation.dga.sim_steps
         self.horizons = [h for h in [100, 500, 1000, 2500, 5000] if h <= max_h]
 
-        # Use forward-mode differentiation over a dynamic-step simulation to
-        # avoid recompilation when sweeping horizon values.
+        # Forward-mode JVP requires sim_steps to be static: lax.fori_loop inside
+        # simulate_dga_jax_dynamic_steps needs a concrete upper bound when traced
+        # under jax.jvp (JAX >= 0.4.7 raises ConcretizationTypeError otherwise).
         self.loss_grad_fn = jax.jit(
             self._loss_and_grad,
-            static_argnums=(4,),
+            static_argnums=(4, 5),
         )
 
     @staticmethod

@@ -19,7 +19,7 @@ from pathlib import Path
 from omegaconf import DictConfig
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.engines.differentiable_engine import expected_queue_loss
+from gibbsq.engines.differentiable_engine import expected_queue_loss, default_policy
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
 
@@ -73,7 +73,7 @@ def train_routing_agent(raw_cfg: DictConfig):
     # signature: alpha, arrival_rate, service_rates, key, num_servers, sim_steps, temperature
     loss_grad_fn = jax.jit(
         jax.value_and_grad(expected_queue_loss, argnums=0),
-        static_argnums=(4, 5, 7) 
+        static_argnums=(4, 5, 7),  # num_servers, sim_steps, apply_fn
     )
     
     num_epochs = cfg.train_epochs
@@ -98,7 +98,8 @@ def train_routing_agent(raw_cfg: DictConfig):
             subkey, 
             params['num_servers'], 
             params['sim_steps'], 
-            params['temperature']
+            params['temperature'],
+            default_policy,  # explicit static arg at index 7 — satisfies static_argnums=(4,5,7)
         )
         
         history_alpha.append(float(alpha))

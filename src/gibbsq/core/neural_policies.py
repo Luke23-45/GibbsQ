@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import equinox as eqx
 from jaxtyping import Array, Float, PRNGKeyArray
 from gibbsq.core.config import NeuralConfig
+from gibbsq.core import constants
 
 class NeuralRouter(eqx.Module):
     """
@@ -62,7 +63,14 @@ class NeuralRouter(eqx.Module):
         elif self.config.preprocessing == "linear_min_max":
             # Normalized by theoretical capacity bound
             x = Q / self.config.capacity_bound
-        else:
+        elif self.config.preprocessing == "standardize":
+            # Z-score normalization across the N server queue lengths.
+            # When all queues are equal (std == 0), numerator is zero so x == 0
+            # regardless of epsilon, giving uniform routing logits — correct behavior.
+            mean_q = jnp.mean(Q)
+            std_q = jnp.std(Q)
+            x = (Q - mean_q) / (std_q + constants.NUMERICAL_STABILITY_EPSILON)
+        else:  # preprocessing == "none"
             x = Q
 
         for layer in self.layers[:-1]:
