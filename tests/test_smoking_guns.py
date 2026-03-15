@@ -14,8 +14,6 @@ from gibbsq.engines.jax_engine import (
     run_replications_jax,
     SimState,
     SimParams,
-    body_fun,
-    cond_fun,
     get_probs,
 )
 
@@ -264,6 +262,7 @@ class TestPowerOfDPolicyBugs:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,  # Power-of-d
             d=3,  # Sample all servers
         )
@@ -290,6 +289,7 @@ class TestPowerOfDPolicyBugs:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,
             d=10,  # d > N
         )
@@ -313,6 +313,7 @@ class TestPowerOfDPolicyBugs:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,
             d=2,
         )
@@ -387,6 +388,7 @@ class TestNumericalStabilityBugs:
             alpha=1e-10,  # Very small alpha
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )

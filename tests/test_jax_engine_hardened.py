@@ -38,6 +38,7 @@ class TestGetProbsCorrectness:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=0,  # Uniform
             d=2,
         )
@@ -58,6 +59,7 @@ class TestGetProbsCorrectness:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=1,  # Proportional
             d=2,
         )
@@ -78,6 +80,7 @@ class TestGetProbsCorrectness:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=2,  # JSQ
             d=2,
         )
@@ -98,6 +101,7 @@ class TestGetProbsCorrectness:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )
@@ -119,6 +123,7 @@ class TestGetProbsCorrectness:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,  # Power-of-d
             d=3,  # Sample all servers
         )
@@ -255,6 +260,7 @@ class TestJaxSimulationInvariants:
                 alpha=1.0,
                 sim_time=10.0,
                 sample_interval=1.0,
+                max_events=1000,
                 policy_type=policy_type,
                 d=2,
             )
@@ -275,6 +281,7 @@ class TestJaxSimulationInvariants:
                 alpha=1.0,
                 sim_time=10.0,
                 sample_interval=1.0,
+                max_events=1000,
                 policy_type=policy_type,
                 d=2,
             )
@@ -335,6 +342,7 @@ class TestJaxSimulationEdgeCases:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,  # Power-of-d
             d=3,  # Sample all servers
         )
@@ -359,6 +367,7 @@ class TestJaxSimulationEdgeCases:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=4,  # Power-of-d
             d=10,  # Greater than N
         )
@@ -387,6 +396,7 @@ class TestJaxSimulationNumericalStability:
             alpha=1.0,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )
@@ -407,6 +417,7 @@ class TestJaxSimulationNumericalStability:
             alpha=1e-10,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )
@@ -428,6 +439,7 @@ class TestJaxSimulationNumericalStability:
             alpha=1e6,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )

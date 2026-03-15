@@ -245,6 +245,13 @@ def simulate(
         # 6b. Enforce max_events ceiling (SG-1.2 fix)
         total_events += 1
         if max_events is not None and total_events >= max_events:
+            import warnings
+            warnings.warn(
+                f"NumPy engine max_events={max_events} exhausted at t={t:.2f} "
+                f"before sim_time={sim_time}. Trajectory may be truncated.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             break
 
         # 7.  Record snapshots at fixed intervals

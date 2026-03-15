@@ -1,12 +1,25 @@
 """
-GibbsQ Stress Test Diagnostic Runner (Standalone)
+DEPRECATED: GibbsQ Stress Test Diagnostic Runner (Standalone)
 ===================================================
-Inlines the essential JAX simulation kernel to avoid any package import issues.
-Measures JIT COMPILATION TIME vs EXECUTION TIME separately.
-
-Usage:
-  python debug_stress_diag.py
+This file contains the outdated `lax.while_loop` engine logic, which 
+has been replaced by `lax.scan` in the main `jax_engine.py`.
+It is retained only as a historical artifact and will not run.
 """
+
+import sys
+import logging
+
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+log = logging.getLogger(__name__)
+
+def run_diagnostic():
+    log.error("This diagnostic script is DEPRECATED and Disabled.")
+    log.error("The JAX engine has been fully rewritten using lax.scan.")
+    sys.exit(1)
+
+if __name__ == "__main__":
+    run_diagnostic()
+
 
 import sys
 import time

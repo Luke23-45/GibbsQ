@@ -63,7 +63,7 @@ def _dga_step(
     new_Q = jax.nn.relu(state.Q + arr_updates + dep_updates)
     new_t = state.t + tau
 
-    current_Q_tot = jnp.sum(new_Q)
+    current_Q_tot = jnp.sum(state.Q)
     new_expected_Q = state.expected_Q_tot + (current_Q_tot * tau)
     return DGASimState(t=new_t, Q=new_Q, key=k2, expected_Q_tot=new_expected_Q)
 

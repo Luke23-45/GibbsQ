@@ -109,10 +109,7 @@ def main(raw_cfg: DictConfig) -> None:
         mu = jnp.ones(N) * 2.0          # normalised service rate
         lam = 0.8 * float(jnp.sum(mu))  # rho = 0.8
 
-        # PATCH BUG-1: use _STRESS_SAMPLE_INTERVAL, not cfg.simulation.sample_interval.
-        # PATCH 2026-03-14: reduced sim_time from 5000→500 to cut ~72K events to ~7.2K.
-        #   500s at rho=0.8 is >10x the mixing time, sufficient for Gini metrics.
-        _sim_time_t1 = 500.0 if not raw_cfg.get("debug", False) else 100.0
+        _sim_time_t1 = cfg.simulation.ssa.sim_time if not raw_cfg.get("debug", False) else 100.0
         max_samples_t1 = int(_sim_time_t1 / _STRESS_SAMPLE_INTERVAL) + 1
 
         log.info(f"  Simulating N={N} experts (rho=0.8)...")
@@ -124,9 +121,9 @@ def main(raw_cfg: DictConfig) -> None:
             service_rates=mu,
             alpha=cfg.system.alpha,
             sim_time=_sim_time_t1,
-            sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
+            sample_interval=_STRESS_SAMPLE_INTERVAL,
             base_seed=cfg.simulation.seed,
-            max_samples=max_samples_t1,                # PATCH: now 5 001 instead of 100 001
+            max_samples=max_samples_t1,
             policy_type=3  # Softmax
         )
 
@@ -172,13 +169,12 @@ def main(raw_cfg: DictConfig) -> None:
         #       → up to 1 000 001 for rho > 0.99
         # new:  max_samples = int(sim_time_critical / 1.0) + 1
         #       → up to 50 001 for rho > 0.99
-        # PATCH 2026-03-14: reduced sim_time from 50K/10K → 5K/1K.
         if raw_cfg.get("debug", False):
             _sim_time_crit = 500.0
         else:
-            _sim_time_crit = 5000.0 if rho > 0.99 else 1000.0
+            _sim_time_crit = cfg.simulation.ssa.sim_time if rho <= 0.99 else cfg.simulation.ssa.sim_time * 5.0
 
-        max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1  # PATCH
+        max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1
 
         log.info(f"  Simulating rho={rho:.3f} (T={_sim_time_crit})...")
 
@@ -189,9 +185,9 @@ def main(raw_cfg: DictConfig) -> None:
             service_rates=mu_fixed,
             alpha=cfg.system.alpha,
             sim_time=_sim_time_crit,
-            sample_interval=_STRESS_SAMPLE_INTERVAL,   # PATCH: was cfg.simulation.sample_interval
+            sample_interval=_STRESS_SAMPLE_INTERVAL,
             base_seed=cfg.simulation.seed,
-            max_samples=max_samples_crit,              # PATCH: now ≤ 50 001
+            max_samples=max_samples_crit,
             policy_type=3
         )
 

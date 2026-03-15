@@ -31,6 +31,7 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
+# Use "small" config (N=2) by default for grid-based drift verification
 @hydra.main(version_base=None, config_path="../../configs", config_name="small")
 def main(raw_cfg: DictConfig) -> None:
     # 1. Parse and validate

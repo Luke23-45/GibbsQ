@@ -33,10 +33,12 @@ temp
 *.png
 *.pdf
 docs/plan
+docs/logs
 # OS
 .DS_Store
 Thumbs.db
-logs.md
+
 large_logs.md
 small_logs.md
 report_suggestion.md
+# logs.md

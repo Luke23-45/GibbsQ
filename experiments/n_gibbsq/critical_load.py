@@ -50,18 +50,21 @@ class CriticalLoadTest:
         k_load, k_sweep = jax.random.split(key)
         
         # 1. Load trained model
-        pointer_path = Path(__file__).resolve().parent.parent.parent / "outputs" / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error("Latest weights not found. Run training first.")
+            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
             return
         
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
+        if not model_path.exists():
+            log.error(f"Trained weights not found at {model_path}. Run training first.")
+            return
         skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.l1.weight.shape[1] != self.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+        if model.layers[0].weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
             return
         
         total_capacity = jnp.sum(self.service_rates)

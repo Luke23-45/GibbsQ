@@ -52,12 +52,15 @@ class GeneralizationSweeper:
         k_load, k_grid = jax.random.split(key)
         
         # 1. Load trained model (Trained on N=4, [100,1,1,1], arrival=95)
-        pointer_path = Path(__file__).resolve().parent.parent.parent / "outputs" / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error("Latest weights not found. Run training first.")
+            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
             return
         
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
+        if not model_path.exists():
+            log.error(f"Trained weights not found at {model_path}. Run training first.")
+            return
         
         # Generalization Test Design:
         # The model was trained on [100,1,1,1] at ρ≈0.92.
@@ -81,8 +84,8 @@ class GeneralizationSweeper:
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.l1.weight.shape[1] != self.cfg.system.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
+        if model.layers[0].weight.shape[1] != self.cfg.system.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
             return
         # Pre-generate unique keys for each grid cell (stochastic independence)
         total_cells = len(scale_vals) * len(rho_vals)

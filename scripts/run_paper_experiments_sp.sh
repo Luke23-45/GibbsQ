@@ -37,15 +37,7 @@ done
 # Set positional arguments back to passed args for downstream scripts
 set -- "${PASSED_ARGS[@]}"
 
-# Determine scale-specific experiment overlay suffix from Hydra args.
-# Example: --config-name small -> +experiment=*_small
-EXP_SUFFIX=""
-ARG_STRING="$*"
-if [[ "$ARG_STRING" == *"--config-name small"* ]]; then
-  EXP_SUFFIX="_small"
-elif [[ "$ARG_STRING" == *"--config-name large"* ]]; then
-  EXP_SUFFIX="_large"
-fi
+
 
 # ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
@@ -67,12 +59,12 @@ fi
 
 if [[ 4 -ge $START_STEP && 4 -le $STOP_STEP ]]; then
   echo -e "\n\033[1;33m[4/10] Running Policy Evaluation Benchmark...\033[0m"
-  "$RUN_SCRIPT" policy "+experiment=policy_comparison${EXP_SUFFIX}" "$@"
+  "$RUN_SCRIPT" policy "+experiment=policy_comparison" "$@"
 fi
 
 if [[ 5 -ge $START_STEP && 5 -le $STOP_STEP ]]; then
   echo -e "\n\033[1;33m[5/10] Running Stability Sweep...\033[0m"
-  "$RUN_SCRIPT" sweep "+experiment=stability_sweep${EXP_SUFFIX}" "$@"
+  "$RUN_SCRIPT" sweep "+experiment=stability_sweep" "$@"
 fi
 
 if [[ 6 -ge $START_STEP && 6 -le $STOP_STEP ]]; then

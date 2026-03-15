@@ -198,6 +198,7 @@ class TestJAXNumericalStability:
             alpha=10.0,  # Amplifies the negative logits
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )
@@ -380,6 +381,7 @@ class TestJAXTrainingReadiness:
                 alpha=alpha,
                 sim_time=10.0,
                 sample_interval=1.0,
+                max_events=1000,
                 policy_type=3,  # Softmax
                 d=2,
             )

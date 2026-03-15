@@ -52,7 +52,7 @@ class NeuralTuringTest:
 
     def execute(self, key: PRNGKeyArray):
         """Executes the parity test."""
-        k1, k2, k3 = jax.random.split(key, 3)
+        k1, k2 = jax.random.split(key, 2)
         
         log.info(f"Environment: N={self.num_servers}, Load={self.arrival_rate}")
         
@@ -60,9 +60,10 @@ class NeuralTuringTest:
         optimal_alpha = jnp.float32(self.cfg.system.alpha)
         log.info(f"\n[GibbsQ baseline (alpha={optimal_alpha})]")
         
-        gibbsq_keys = jax.random.split(k1, self.num_reps)
+        # CRN: use shared keys for both neural and GibbsQ for variance reduction
+        shared_keys = jax.random.split(k1, self.num_reps)
         gibbsq_loss_array = self.vmap_simulate(
-            self.num_servers, self.arrival_rate, self.service_rates, optimal_alpha, self.sim_steps, gibbsq_keys, self.temperature, default_policy
+            self.num_servers, self.arrival_rate, self.service_rates, optimal_alpha, self.sim_steps, shared_keys, self.temperature, default_policy
         )
         mean_gibbsq_loss = float(jnp.mean(gibbsq_loss_array))
         
@@ -70,7 +71,7 @@ class NeuralTuringTest:
         log.info("\n[Loading Challenger: N-GibbsQ Neural Router]")
         
         # Read the pointer to the latest dynamically generated run
-        pointer_path = Path(__file__).resolve().parent.parent.parent / "outputs" / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
         
         if not pointer_path.exists():
             log.error(f"Weights pointer not found at {pointer_path}. You must run training (n_gibbsq/train.py) first.")
@@ -80,7 +81,7 @@ class NeuralTuringTest:
         model_path = Path(model_path_str)
         
         if not model_path.exists():
-            log.error(f"Trained weights not found at {model_path} (from pointer). Run Phase 3 first.")
+            log.error(f"Trained weight file missing at {model_path}. Please rerun training (train.py).")
             return
 
         # Re-initialize skeleton and load weights securely
@@ -88,12 +89,12 @@ class NeuralTuringTest:
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.l1.weight.shape[1] != self.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+        if model.layers[0].weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
             return
 
         
-        neural_keys = jax.random.split(k3, self.num_reps)
+        neural_keys = shared_keys  # CRN: same keys as GibbsQ
         n_gibbsq_loss_array = self.vmap_simulate(
             self.num_servers, self.arrival_rate, self.service_rates, model, self.sim_steps, neural_keys, self.temperature, evaluate_model
         )

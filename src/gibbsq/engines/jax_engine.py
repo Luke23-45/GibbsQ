@@ -58,13 +58,10 @@ def _validate_inputs(
 # ──────────────────────────────────────────────────────────────
 
 class SimState(NamedTuple):
-    """Immutable state for the JAX while_loop."""
+    """Immutable state for the JAX lax.scan."""
     t:               jnp.ndarray    # scalar float
     Q:               jnp.ndarray    # shape (N,) int
     key:             jax.random.PRNGKey
-    sample_idx:      jnp.ndarray    # scalar int
-    times_buf:       jnp.ndarray    # shape (max_samples,) float
-    states_buf:      jnp.ndarray    # shape (max_samples, N) int
     arrival_count:   jnp.ndarray    # scalar int
     departure_count: jnp.ndarray    # scalar int
 
@@ -78,6 +75,7 @@ class SimParams:
     alpha:           float
     sim_time:        float
     sample_interval: float
+    max_events:      int            # Static bound for lax.scan
     policy_type:     int            # 0: Uniform, 1: Prop, 2: JSQ, 3: Softmax, 4: Power-of-d
     d:               int            # for Power-of-d (default 2)
 
@@ -87,215 +85,107 @@ class SimParams:
 # ──────────────────────────────────────────────────────────────
 
 def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp.ndarray:
-    """Policy selector using lax.switch.
+    """Policy selector using static branch resolution."""
+    # Because policy_type is in static_argnames, it is evaluated at compile time.
+    # Using Python conditionals forces XLA to compile ONLY the active branch.
     
-    Args:
-        Q: Queue lengths (shape N)
-        params: Simulation parameters including policy_type and d
-        key: PRNG key for Power-of-d sampling
-    
-    Returns:
-        Routing probabilities (shape N)
-    """
-    
-    def uniform_p(_):
+    if params.policy_type == 0:    # Uniform
         return jnp.ones(params.num_servers) / params.num_servers
-
-    def proportional_p(_):
+        
+    elif params.policy_type == 1:  # Proportional
         return params.service_rates / jnp.sum(params.service_rates)
-
-    def jsq_p(_):
-        # Tie-break uniformly over minimum queues to prevent deterministic pileup on the first server
+        
+    elif params.policy_type == 2:  # JSQ
         is_min = (Q == jnp.min(Q))
         noise = jax.random.uniform(key, shape=Q.shape)
         masked_noise = jnp.where(is_min, noise, -jnp.inf)
         idx = jnp.argmax(masked_noise)
         return jnp.zeros(params.num_servers).at[idx].set(1.0)
-
-    def softmax_p(_):
+        
+    elif params.policy_type == 3:  # Softmax
         logits = -params.alpha * Q.astype(params.service_rates.dtype)
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)
-    
-    def power_of_d_p(_):
-        """Power-of-d choices: sample d servers uniformly, route to shortest.
         
-        Returns a one-hot probability vector at the selected server.
-        This is a deterministic routing policy given the sampled candidates.
-        
-        Note: d is a static argument for JIT compilation, enabling use of
-        lax.dynamic_slice with static slice size.
-        """
+    elif params.policy_type == 4:  # Power-of-d
         N = params.num_servers
-        d_actual = min(params.d, N)  # Clamp d to N (static)
-        
-        # Shuffle all server indices and take first d
-        # This is equivalent to sampling d distinct indices without replacement
+        d_actual = min(params.d, N)
         perm = jax.random.permutation(key, N)
-        
-        # Use dynamic_slice with static size (d is static)
-        candidates = lax.dynamic_slice(perm, (0,), (d_actual,))
-        
-        # Get queue lengths at candidate servers
+        # Static slice is cleanly supported by JAX without dynamic_slice overhead
+        candidates = perm[:d_actual]
         candidate_queues = Q[candidates]
-        
-        # Find the winner (index within candidates of minimum queue)
         winner_local = jnp.argmin(candidate_queues)
-        
-        # Map back to global server index
         winner = candidates[winner_local]
-        
-        # Return one-hot at winner
         return jnp.zeros(N).at[winner].set(1.0)
-
-    # Policy types: 0=Uniform, 1=Proportional, 2=JSQ, 3=Softmax, 4=Power-of-d
-    return lax.switch(
-        params.policy_type, 
-        [uniform_p, proportional_p, jsq_p, softmax_p, power_of_d_p], 
-        None
-    )
+        
+    else:
+        # Fallback to avoid compilation errors
+        return jnp.ones(params.num_servers) / params.num_servers
 
 
 # ──────────────────────────────────────────────────────────────
-#  Gillespie Step
+#  Gillespie Step (Scan Body)
 # ──────────────────────────────────────────────────────────────
 
-def cond_fun(state: SimState, params: SimParams) -> bool:
-    """Loop while time < sim_time and we haven't overfilled buffers."""
-    max_samples = state.times_buf.shape[0]
-    return (state.t < params.sim_time) & (state.sample_idx < max_samples)
-
-
-def body_fun(state: SimState, params: SimParams) -> SimState:
-    """Single Gillespie event and snapshot logic."""
+def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, tuple[jnp.ndarray, jnp.ndarray]]:
+    """Single Gillespie event logic for lax.scan."""
     k1, k2, k3, k4 = jax.random.split(state.key, 4)
     
-    # 1. Probabilities (k4 used for Power-of-d sampling if needed)
+    # 1. Probabilities & Rates
     probs = get_probs(state.Q, params, k4)
-    
-    # 2. Rates
-    # [Arrivals (N), Departures (N)]
     arrival_rates = params.arrival_rate * probs
     departure_rates = params.service_rates * (state.Q > 0).astype(jnp.float32)
     rates = jnp.concatenate([arrival_rates, departure_rates])
     
     a0 = jnp.sum(rates)
+    safe_a0 = jnp.maximum(a0, RATE_EPSILON)
     
-
-    def process_event(s: SimState) -> SimState:
-        """Normal event processing when a0 > 0."""
-        # 3. Draw holding time  ~ Exp(a0)
-        tau = jax.random.exponential(k1) / a0  # a0 > 0 guaranteed here
-        new_t = s.t + tau
-        
-        # 4. Draw event
-        u = jax.random.uniform(k2) * a0
-        cumrates = jnp.cumsum(rates)
-        event = jnp.sum(cumrates < u)
-        
-        # 5. Apply transition
-        is_arrival = event < params.num_servers
-        srv_idx = jnp.where(is_arrival, event, event - params.num_servers)
-        
-        delta = jnp.where(is_arrival, 1, -1)
-        new_Q = s.Q.at[srv_idx].add(delta)
-        
-        new_arrival_count = s.arrival_count + jnp.where(is_arrival, 1, 0)
-        new_departure_count = s.departure_count + jnp.where(is_arrival, 0, 1)
-        
-        # Use a while_loop to fill all samples between old t and new_t
-        def fill_samples(carry):
-            """Fill all sample slots that fall between current t and new_t."""
-            idx, times_b, states_b = carry
-            next_sample_t = idx * params.sample_interval
-            
-            # Check if this sample time is crossed by the event
-            should_record = (new_t >= next_sample_t) & (next_sample_t <= params.sim_time)
-            
-            # Record the state BEFORE the event (s.Q) at this sample time
-            new_times_b = times_b.at[idx].set(
-                jnp.where(should_record, next_sample_t, times_b[idx])
-            )
-            new_states_b = states_b.at[idx].set(
-                jnp.where(should_record, s.Q, states_b[idx])
-            )
-            new_idx = idx + jnp.where(should_record, 1, 0)
-            
-            return (new_idx, new_times_b, new_states_b)
-        
-        
-        # Fill samples until we reach the sample time that new_t falls before
-        # Maximum iterations = max_samples to prevent infinite loop
-        max_iters = s.times_buf.shape[0]
-        final_idx, final_times, final_states = lax.while_loop(
-            lambda carry: (carry[0] < max_iters) & 
-                         (carry[0] * params.sample_interval <= new_t) & 
-                         (carry[0] * params.sample_interval <= params.sim_time),
-            fill_samples,
-            (s.sample_idx, s.times_buf, s.states_buf)
-        )
-        
-        return s._replace(
-            t=new_t,
-            Q=new_Q,
-            key=k3,
-            sample_idx=final_idx,
-            times_buf=final_times,
-            states_buf=final_states,
-            arrival_count=new_arrival_count,
-            departure_count=new_departure_count
-        )
+    # 2. Time update
+    tau = jax.random.exponential(k1) / safe_a0
+    new_t = state.t + tau
     
-    def skip_event(s: SimState) -> SimState:
-        """When a0=0, no events can occur - advance time past sim_time to exit loop."""
-        # Record any remaining samples up to sim_time first
-        max_iters = s.times_buf.shape[0]
-        
-        def fill_remaining(carry):
-            idx, times_b, states_b = carry
-            next_sample_t = idx * params.sample_interval
-            should_record = next_sample_t <= params.sim_time
-            
-            new_times_b = times_b.at[idx].set(
-                jnp.where(should_record, next_sample_t, times_b[idx])
-            )
-            new_states_b = states_b.at[idx].set(
-                jnp.where(should_record, s.Q, states_b[idx])
-            )
-            new_idx = idx + jnp.where(should_record, 1, 0)
-            return (new_idx, new_times_b, new_states_b)
-        
-        
-        final_idx, final_times, final_states = lax.while_loop(
-            lambda carry: (carry[0] < max_iters) & 
-                         (carry[0] * params.sample_interval <= params.sim_time),
-            fill_remaining,
-            (s.sample_idx, s.times_buf, s.states_buf)
-        )
-        
-        return s._replace(
-            t=params.sim_time + 1.0,  # Force loop exit
-            key=k3,
-            sample_idx=final_idx,
-            times_buf=final_times,
-            states_buf=final_states,
-        )
+    # Mathematical Boundary Condition:
+    # State updates ONLY if the event completes inside the simulation window.
+    in_window = (new_t <= params.sim_time) & (a0 > RATE_EPSILON)
+    # Time always advances so we cleanly cross the boundary and halt.
+    time_advances = (state.t < params.sim_time) & (a0 > RATE_EPSILON)
     
-    # Use lax.cond to branch based on whether events are possible
-    return lax.cond(
-        a0 > RATE_EPSILON,  # Threshold for "effectively zero"
-        process_event,
-        skip_event,
-        state
+    # 3. State update
+    u = jax.random.uniform(k2) * safe_a0
+    cumrates = jnp.cumsum(rates)
+    event = jnp.sum(cumrates < u)
+    
+    is_arrival = event < params.num_servers
+    srv_idx = jnp.where(is_arrival, event, event - params.num_servers)
+    delta = jnp.where(is_arrival, 1, -1)
+    
+    new_Q = state.Q.at[srv_idx].add(delta)
+    new_arrival_count = state.arrival_count + jnp.where(is_arrival, 1, 0)
+    new_departure_count = state.departure_count + jnp.where(is_arrival, 0, 1)
+    
+    # 4. Mask updates safely
+    final_t = jnp.where(time_advances, new_t, state.t)
+    final_Q = jnp.where(in_window, new_Q, state.Q)
+    final_arrival_count = jnp.where(in_window, new_arrival_count, state.arrival_count)
+    final_departure_count = jnp.where(in_window, new_departure_count, state.departure_count)
+    
+    next_state = SimState(
+        t=final_t,
+        Q=final_Q,
+        key=k3,
+        arrival_count=final_arrival_count,
+        departure_count=final_departure_count
     )
+    
+    return next_state, (state.t, state.Q)
 
 
 # ──────────────────────────────────────────────────────────────
 #  Public API
 # ──────────────────────────────────────────────────────────────
 
-@partial(jax.jit, static_argnames=("num_servers", "max_samples", "policy_type", "d"))
+@partial(jax.jit, static_argnames=("num_servers", "max_samples", "max_events", "policy_type", "d"))
 def _simulate_jax_impl(
     num_servers:     int,
     arrival_rate:    float,
@@ -305,10 +195,11 @@ def _simulate_jax_impl(
     sample_interval: float,
     key:             jax.random.PRNGKey,
     max_samples:     int,
+    max_events:      int,
     policy_type:     int = 3,
     d:               int = 2
 ):
-    """Hardware-accelerated simulation of the GibbsQ network."""
+    """Hardware-accelerated simulation of the GibbsQ network using SOTA scan+search."""
     params = SimParams(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
@@ -316,36 +207,45 @@ def _simulate_jax_impl(
         alpha=alpha,
         sim_time=sim_time,
         sample_interval=sample_interval,
+        max_events=max_events,
         policy_type=policy_type,
         d=d
     )
-    
-    # Initialize buffers
-    times_buf = jnp.zeros(max_samples)
-    states_buf = jnp.zeros((max_samples, num_servers), dtype=jnp.int32)
-    
-    # Record initial state at t=0
-    times_buf = times_buf.at[0].set(0.0)
-    states_buf = states_buf.at[0].set(jnp.zeros(num_servers, dtype=jnp.int32))
     
     init_state = SimState(
         t=0.0,
         Q=jnp.zeros(num_servers, dtype=jnp.int32),
         key=key,
-        sample_idx=1,  # Start at 1 since index 0 is already filled
-        times_buf=times_buf,
-        states_buf=states_buf,
         arrival_count=0,
         departure_count=0
     )
     
-    final_state = lax.while_loop(
-        lambda s: cond_fun(s, params),
-        lambda s: body_fun(s, params),
-        init_state
+    # O(E): Generate the raw stochastic trajectory exactly
+    final_state, (all_times, all_states) = lax.scan(
+        lambda s, _: scan_body(s, _, params),
+        init_state,
+        None,
+        length=params.max_events
     )
     
-    return final_state.times_buf, final_state.states_buf, (final_state.arrival_count, final_state.departure_count)
+    # O(S log E): Interpolate onto the unified time grid
+    query_times = jnp.arange(max_samples) * sample_interval
+    
+    # searchsorted(side='right') gives index where query_time would be inserted
+    # subtracting 1 gives the state interval that query_time falls into
+    idxs = jnp.searchsorted(all_times, query_times, side='right') - 1
+    idxs = jnp.clip(idxs, 0, params.max_events - 1)
+    
+    sampled_states = all_states[idxs]
+    
+    # We drop the massive all_times and all_states trajectory arrays here. 
+    # JAX XLA naturally garbage collects intermediate arrays not returned.
+    
+    # Safety Check: Did we truncate because max_events was too small?
+    # Valid if we reached sim_time OR if the simulation halted (arrival_rate = 0)
+    is_valid = (final_state.t >= sim_time) | (params.arrival_rate == 0.0)
+    
+    return query_times, sampled_states, (final_state.arrival_count, final_state.departure_count), is_valid
 
 
 def simulate_jax(
@@ -371,7 +271,13 @@ def simulate_jax(
         policy_type=policy_type,
         d=d,
     )
-    return _simulate_jax_impl(
+    
+    import numpy as np
+    # Calculate MaxEvents dynamically for mathematical safety
+    max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
+    max_events = int(max_theoretical_rate * sim_time * 1.5) + 1000
+    
+    times, states, counts, is_valid = _simulate_jax_impl(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
         service_rates=service_rates,
@@ -380,12 +286,19 @@ def simulate_jax(
         sample_interval=sample_interval,
         key=key,
         max_samples=max_samples,
+        max_events=max_events,
         policy_type=policy_type,
         d=d,
     )
+    
+    import warnings
+    if not np.asarray(is_valid).item():
+        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the 1.5x multiplier.", RuntimeWarning, stacklevel=2)
+        
+    return times, states, counts
 
 
-@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "policy_type", "d"))
+@partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "max_events", "policy_type", "d"))
 def _run_replications_jax_impl(
     num_replications: int,
     num_servers:      int,
@@ -396,6 +309,7 @@ def _run_replications_jax_impl(
     sample_interval:  float,
     base_seed:        int,
     max_samples:      int,
+    max_events:       int,
     policy_type:      int = 3,
     d:                int = 2
 ):
@@ -411,12 +325,11 @@ def _run_replications_jax_impl(
         sample_interval=sample_interval,
         key=k,
         max_samples=max_samples,
+        max_events=max_events,
         policy_type=policy_type,
         d=d
     )
 
-    # NOTE: `vmap` exposes batch parallelism to XLA. This is often much faster
-    # than `lax.map` on GPU/TPU for moderate batch sizes used in policy sweeps.
     return jax.vmap(v_sim)(keys)
 
 
@@ -446,7 +359,16 @@ def run_replications_jax(
         policy_type=policy_type,
         d=d,
     )
-    return _run_replications_jax_impl(
+    
+    import numpy as np
+    
+    # Calculate MaxEvents dynamically for mathematical safety
+    # The maximum theoretical event rate is the arrival rate plus the sum of all service rates
+    max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
+    # Apply a 1.5x multiplier to account for extreme stochasticity, plus a buffer
+    max_events = int(max_theoretical_rate * sim_time * 1.5) + 1000
+    
+    times, states, counts, is_valid = _run_replications_jax_impl(
         num_replications=num_replications,
         num_servers=num_servers,
         arrival_rate=arrival_rate,
@@ -456,6 +378,16 @@ def run_replications_jax(
         sample_interval=sample_interval,
         base_seed=base_seed,
         max_samples=max_samples,
+        max_events=max_events,
         policy_type=policy_type,
         d=d,
     )
+    
+    # VRAM footprint safety check: Extract boolean back to Host
+    import warnings
+    # Verify that all replications ran to completion successfully
+    if not np.all(np.asarray(is_valid)):
+        warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the 1.5x multiplier.", RuntimeWarning, stacklevel=2)
+        
+    return times, states, counts
+

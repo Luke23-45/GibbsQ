@@ -58,18 +58,21 @@ class StatsBenchmark:
         log.info(f"Environment: N={self.num_servers}, rho={self.arrival_rate / jnp.sum(self.service_rates):.2f}")
         
         # --- 1. Load Model ---
-        pointer_path = Path(__file__).resolve().parent.parent.parent / "outputs" / "neural_training" / "latest_weights.txt"
+        pointer_path = Path(self.cfg.output_dir) / "neural_training" / "latest_weights.txt"
         if not pointer_path.exists():
-            log.error("Latest weights not found. Run training first.")
+            log.error(f"Latest weights not found at {pointer_path}. Run training first.")
             return
         
         model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
+        if not model_path.exists():
+            log.error(f"Trained weights not found at {model_path}. Run training first.")
+            return
         skeleton = NeuralRouter(num_servers=self.num_servers, hidden_size=64, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.l1.weight.shape[1] != self.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.l1.weight.shape[1]}, but eval config requires N={self.num_servers}.")
+        if model.layers[0].weight.shape[1] != self.num_servers:
+            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
             return
         
         # --- 2. Run Parallel Benchmark ---
@@ -101,11 +104,12 @@ class StatsBenchmark:
         t_stat, p_val = stats.ttest_rel(neural_data, gibbs_data)
         
         # 2. Cohen's d (Effect Size)
-        # d = (M1 - M2) / SD_pooled
-        diff = neural_data - gibbs_data
-        cohen_d = np.mean(diff) / np.std(diff, ddof=1)
+        # d = (M1 - M2) / SD_pooled, where SD_pooled = sqrt((s1^2 + s2^2) / 2)
+        sd_pooled = np.sqrt((n_std**2 + g_std**2) / 2)
+        cohen_d = (n_mean - g_mean) / sd_pooled if sd_pooled > 0 else 0.0
         
         # 3. 95% Confidence Interval for the difference
+        diff = neural_data - gibbs_data
         ci_low, ci_high = stats.t.interval(0.95, len(diff)-1, loc=np.mean(diff), scale=stats.sem(diff))
         
         improvement = (g_mean - n_mean) / g_mean * 100 if g_mean > 0 else 0
@@ -124,7 +128,7 @@ class StatsBenchmark:
         
         # Assets
         plt.figure(figsize=(10, 6))
-        plt.boxplot([gibbs_data, neural_data], labels=['GibbsQ (Baseline)', 'N-GibbsQ (Proposed)'])
+        plt.boxplot([gibbs_data, neural_data], tick_labels=['GibbsQ (Baseline)', 'N-GibbsQ (Proposed)'])
         plt.title(f'Performance Distribution Comparison (n={self.num_samples} seeds)')
         plt.ylabel('Expected Queue Length $\mathbb{E}[Q]$')
         plt.grid(True, alpha=0.3)

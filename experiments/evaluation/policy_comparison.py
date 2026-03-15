@@ -30,7 +30,8 @@ POLICIES = [
     {"name": "uniform",      "label": "Uniform (1/N)",        "jax_idx": 0},
     {"name": "proportional", "label": "Proportional (mu/cap)", "jax_idx": 1},
     {"name": "jsq",          "label": "JSQ (Exact Min)",      "jax_idx": 2},
-    {"name": "power_of_d",   "label": "Power-of-d (d=2)",     "jax_idx": 4, "d": 2}, # 4 = fallback/partial
+    {"name": "power_of_d",   "label": "Power-of-d (d=2)",     "jax_idx": 4, "d": 2}, # Index 4 maps to Power-of-d in jax_engine.py
+    # Intentional alpha sweep for softmax policies (independent of cfg.system.alpha)
     {"name": "softmax",      "label": "Softmax (alpha=0.1)",  "jax_idx": 3, "alpha": 0.1},
     {"name": "softmax",      "label": "Softmax (alpha=1.0)",  "jax_idx": 3, "alpha": 1.0},
     {"name": "softmax",      "label": "Softmax (alpha=10.0)", "jax_idx": 3, "alpha": 10.0},

@@ -70,15 +70,21 @@ def main(raw_cfg: DictConfig) -> None:
 
             if cfg.jax.enabled:
                 # --- JAX backend (vectorized replications) ---
-                max_samples = int(cfg.simulation.ssa.sim_time / cfg.simulation.ssa.sample_interval) + 1
+                # ─────────────────────────────────────────────────────────────────────────
+                # JAX Simulation
+                # ─────────────────────────────────────────────────────────────────────────
+                
+                _sim_time = cfg.simulation.ssa.sim_time
+                _sample_interval = cfg.simulation.ssa.sample_interval
+                max_samples = int(_sim_time / _sample_interval) + 1
                 times, states, (arrs, deps) = run_replications_jax(
                     num_replications=cfg.simulation.num_replications,
                     num_servers=N,
                     arrival_rate=lam,
                     service_rates=mu_jax,
                     alpha=float(alpha),
-                    sim_time=cfg.simulation.ssa.sim_time,
-                    sample_interval=cfg.simulation.ssa.sample_interval,
+                    sim_time=_sim_time,
+                    sample_interval=_sample_interval,
                     base_seed=cfg.simulation.seed,
                     max_samples=max_samples
                 )

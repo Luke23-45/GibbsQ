@@ -1,9 +1,25 @@
 """
-GibbsQ Diagnostic: sim_time scaling test
+DEPRECATED: GibbsQ Diagnostic: sim_time scaling test
 =========================================
-Tests the EXACT relationship between sim_time (= event count) and wall-clock time.
-Uses R=1 replication, N=4 servers to match production N, but varies sim_time.
+This file contains the outdated `lax.while_loop` engine logic, which 
+has been replaced by `lax.scan` in the main `jax_engine.py`.
+It is retained only as a historical artifact and will not run.
 """
+
+import sys
+import logging
+
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+log = logging.getLogger(__name__)
+
+def run_scaling_test():
+    log.error("This diagnostic script is DEPRECATED and Disabled.")
+    log.error("The JAX engine has been fully rewritten using lax.scan.")
+    sys.exit(1)
+
+if __name__ == "__main__":
+    run_scaling_test()
+
 
 import time
 import logging

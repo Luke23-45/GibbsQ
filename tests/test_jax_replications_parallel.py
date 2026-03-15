@@ -47,6 +47,7 @@ def test_vmap_replications_match_lax_map_reference():
         sample_interval=0.5,
         base_seed=123,
         max_samples=11,
+        max_events=1000,
         policy_type=0,
         d=2,
     )

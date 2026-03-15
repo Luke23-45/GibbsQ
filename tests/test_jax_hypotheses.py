@@ -390,6 +390,7 @@ def test_hypothesis_8_softmax_numerical_stability():
             alpha=alpha,
             sim_time=10.0,
             sample_interval=1.0,
+            max_events=1000,
             policy_type=3,  # Softmax
             d=2,
         )
