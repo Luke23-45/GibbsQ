@@ -44,6 +44,7 @@ neural_training:
   learning_rate: 3e-3
   dga_learning_rate: 1e-3
   weight_decay: 1e-4
+  min_temperature: 0.1   # SG#20: Floor for Gumbel-Softmax annealing (was hardcoded 0.05)
   curriculum:
     - [20, 500]
     - [30, 2000]

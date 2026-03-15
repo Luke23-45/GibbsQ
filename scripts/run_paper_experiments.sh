@@ -14,9 +14,17 @@ echo -e "\n\033[1;36m[Initiating Pipeline...]\033[0m\n"
 
 
 # ---------------------------------------------------------
+# Phase 0: DGA Bias Quantification (SG#2 FIX)
+# Must run BEFORE any training or evaluation step.
+# Empirically measures DGA surrogate bias vs true Gillespie SSA.
+# ---------------------------------------------------------
+echo -e "\n\033[1;33m[0/11] Running DGA Bias Verification (SG#2)...\033[0m"
+"$RUN_SCRIPT" bias "$@"
+
+# ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
 # ---------------------------------------------------------
-echo -e "\n\033[1;33m[1/10] Running Drift Verification (Phase 1a)...\033[0m"
+echo -e "\n\033[1;33m[1/11] Running Drift Verification (Phase 1a)...\033[0m"
 "$RUN_SCRIPT" drift "$@"
 
 echo -e "\n\033[1;33m[2/10] Running Model Fidelity Check (Phase 1b)...\033[0m"

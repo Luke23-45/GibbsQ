@@ -77,6 +77,9 @@ case "$EXPERIMENT" in
     "critical")
         PYTHON_SCRIPT="experiments.n_gibbsq.critical_load"
         ;;
+    "bias")
+        PYTHON_SCRIPT="experiments.testing.verify_bias"
+        ;;
     "-h"|"--help"|"help")
         print_usage
         exit 0

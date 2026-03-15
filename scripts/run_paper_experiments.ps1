@@ -35,9 +35,17 @@ Write-Host "==========================================================" -Foregro
 Write-Host "`n[Initiating Pipeline...]`n" -ForegroundColor Cyan
 
 # ---------------------------------------------------------
+# Phase 0: DGA Bias Quantification (SG#2 FIX)
+# Must run BEFORE any training or evaluation step.
+# Empirically measures DGA surrogate bias vs true Gillespie SSA.
+# ---------------------------------------------------------
+Write-Host "`n[0/11] Running DGA Bias Verification (SG#2)..." -ForegroundColor Yellow
+Invoke-Expression "& `"$RunScript`" bias $($HydraArgs -join ' ')"
+
+# ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
 # ---------------------------------------------------------
-Write-Host "`n[1/10] Running Drift Verification (Phase 1a)..." -ForegroundColor Yellow
+Write-Host "`n[1/11] Running Drift Verification (Phase 1a)..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" drift $($HydraArgs -join ' ')"
 
 Write-Host "`n[2/10] Running Model Fidelity Check (Phase 1b)..." -ForegroundColor Yellow

@@ -44,12 +44,12 @@ def main(raw_cfg: DictConfig) -> None:
     out_dir = run_dir
     (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
 
-    # SG#4 FIX: Enforce that the sweep is actually sweeping a softmax policy
-    # as originally intended, rather than silently running whatever is in the config.
-    assert cfg.policy.name == "softmax", (
-        f"Stability sweep requires policy.name == 'softmax', "
-        f"but config has '{cfg.policy.name}'."
-    )
+    # SG#16 FIX: Replace bare assert with if/raise to survive python -O.
+    if cfg.policy.name != "softmax":
+        raise ValueError(
+            f"Stability sweep requires policy.name == 'softmax', "
+            f"but config has '{cfg.policy.name}'."
+        )
 
     alpha_values = np.array(cfg.stability_sweep.alpha_vals)
     rho_values = np.array(cfg.stability_sweep.rho_vals)

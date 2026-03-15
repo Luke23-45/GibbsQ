@@ -151,17 +151,24 @@ class StatsBenchmark:
         n_mean, n_std = np.mean(neural_data), np.std(neural_data, ddof=1)
         g_mean, g_std = np.mean(gibbs_data), np.std(gibbs_data, ddof=1)
         
-        # 1. Paired T-Test
-        t_stat, p_val = stats.ttest_rel(neural_data, gibbs_data)
+        # SG#14 FIX: Use independent-samples t-test.
+        # GibbsQ (JAX PRNG) and Neural (NumPy PRNG) use different random backends,
+        # so samples from matching replication indices are NOT truly paired.
+        t_stat, p_val = stats.ttest_ind(neural_data, gibbs_data)
         
-        # 2. Cohen's d — paired design: d = mean(diff) / std(diff, ddof=1)
-        #    (Cohen 1988, Ch.2; pooled-SD formula is only valid for independent samples)
-        diff = neural_data - gibbs_data
-        _diff_std = float(np.std(diff, ddof=1))
-        cohen_d = float(np.mean(diff) / _diff_std) if _diff_std > 0.0 else 0.0
+        # SG#14 FIX: Cohen's d for independent samples uses pooled SD
+        _n1, _n2 = len(neural_data), len(gibbs_data)
+        _pooled_var = (
+            (_n1 - 1) * np.var(neural_data, ddof=1) + (_n2 - 1) * np.var(gibbs_data, ddof=1)
+        ) / (_n1 + _n2 - 2)
+        _pooled_std = float(np.sqrt(_pooled_var))
+        cohen_d = float((np.mean(neural_data) - np.mean(gibbs_data)) / _pooled_std) if _pooled_std > 0 else 0.0
         
-        # 3. 95% Confidence Interval for the difference (reuses diff from above)
-        ci_low, ci_high = stats.t.interval(0.95, len(diff)-1, loc=np.mean(diff), scale=stats.sem(diff))
+        # 3. 95% Confidence Interval for the difference (independent samples)
+        _diff_mean = np.mean(neural_data) - np.mean(gibbs_data)
+        _diff_se = _pooled_std * np.sqrt(1.0/_n1 + 1.0/_n2)
+        _df = _n1 + _n2 - 2
+        ci_low, ci_high = stats.t.interval(0.95, _df, loc=_diff_mean, scale=_diff_se)
         
         improvement = (g_mean - n_mean) / g_mean * 100 if g_mean > 0 else 0
         

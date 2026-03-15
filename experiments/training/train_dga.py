@@ -172,5 +172,19 @@ def train_routing_agent(raw_cfg: DictConfig):
     log.info(f"Training complete. Final alpha: {float(alpha):.4f}")
     log.info(f"Training plots saved to: {plot_path}")
 
+    # SG#7 FIX: Persist the gradient-optimal alpha to a JSON file.
+    # All downstream experiments (eval.py, policy_comparison.py) must read this
+    # instead of the arbitrary cfg.system.alpha default (1.0).
+    import json
+    alpha_path = out_dir / "optimal_alpha.json"
+    alpha_payload = {
+        "alpha": float(alpha),
+        "final_loss": float(loss),
+        "num_epochs": int(num_epochs),
+        "learning_rate": float(learning_rate),
+    }
+    alpha_path.write_text(json.dumps(alpha_payload, indent=2), encoding="utf-8")
+    log.info(f"[SG#7] Optimal alpha={float(alpha):.4f} persisted to {alpha_path}")
+
 if __name__ == "__main__":
     train_routing_agent()

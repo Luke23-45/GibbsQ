@@ -174,9 +174,20 @@ def main(raw_cfg: DictConfig) -> None:
         if raw_cfg.get("debug", False):
             _sim_time_crit = 500.0
         else:
-            # PATCH SG5: Apply the documented reduction to 1000 s / 5000 s (non-debug).
-            # Prior values (5000 s / 25000 s) are 5x over the design intent.
-            _sim_time_crit = 1000.0 if rho <= 0.99 else 5000.0
+            # SG#1 FIX: Scale sim_time with theoretical CTMC mixing time.
+            # Mixing time ~ O(1/(1-rho)^2) (Meyn & Tweedie 1993, §4).
+            # Use min(100/(1-rho)^2, 100_000) as a compute-budget cap.
+            #   rho=0.90 → 10,000s    rho=0.95 → 40,000s
+            #   rho=0.99 → 100,000s   rho=0.999 → 100,000s (capped)
+            _mixing_budget = 100.0 / max((1.0 - rho) ** 2, 1e-12)
+            _sim_time_crit = min(_mixing_budget, 100_000.0)
+            if _sim_time_crit >= 100_000.0:
+                log.warning(
+                    f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
+                    f"(theoretical mixing time ~ {_mixing_budget:.0f}s). "
+                    f"E[Q] may still be underestimated. Report only rho<=0.999 "
+                    f"and add mixing-time caveat."
+                )
 
         max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1
 
@@ -199,6 +210,18 @@ def main(raw_cfg: DictConfig) -> None:
         stationary_count = 0
 
         total_q_trajectories = np.array(states).sum(axis=2)  # (Reps, TimeSteps)
+
+        # SG#4 FIX: Mask zero-padded trailing entries from JAX pre-allocated buffers.
+        # JAX states_buf is initialized with jnp.zeros; unfilled slots appear as Q=0.
+        # MSER-5 interprets trailing zeros as a downward trend and inflates truncation.
+        # Clip each trajectory to its valid length using times_buf > 0 as a mask.
+        for r in range(cfg.simulation.num_replications):
+            _valid_mask = np.array(times[r]) > 0
+            _valid_mask[0] = True  # t=0 initial snapshot is always valid
+            _valid_len = int(np.sum(_valid_mask))
+            if _valid_len < total_q_trajectories.shape[1]:
+                # Fill trailing zeros with the last valid sample (flat tail, not biased)
+                total_q_trajectories[r, _valid_len:] = total_q_trajectories[r, _valid_len - 1]
 
         # SG#11 Fix: Use data-driven MSER-5 truncation consistently instead of fixed 20%
         # Compute MSER-5 truncations for all replicas to find the maximum burn-in period

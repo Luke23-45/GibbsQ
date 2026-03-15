@@ -65,11 +65,20 @@ def get_run_config(
     capsule_log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = capsule_log_dir / "run.log"
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter(
-        '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
-    ))
-    logging.getLogger().addHandler(file_handler)
+    # SG#18 FIX: Guard against duplicate FileHandler accumulation.
+    # If get_run_config is called multiple times in the same process, each call
+    # would add another FileHandler to the root logger, causing duplicate log lines.
+    _root = logging.getLogger()
+    _existing_log_files = {
+        h.baseFilename for h in _root.handlers
+        if isinstance(h, logging.FileHandler)
+    }
+    if str(log_file.resolve()) not in _existing_log_files:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(
+            '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
+        ))
+        _root.addHandler(file_handler)
     
     # Persist the resolved experiment config into the capsule for absolute traceability
     config_path = run_dir / "config.yaml"

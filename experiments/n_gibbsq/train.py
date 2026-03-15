@@ -80,7 +80,9 @@ class NeuralCurriculumTrainer:
         # a near-hard assignment (0.05) across curriculum phases.  This
         # shrinks the DGA→SSA domain gap because the final training
         # phases use Gumbel-Softmax closer to a hard argmax.
-        _min_temp = 0.05
+        # SG#20 FIX: Read min_temperature from config instead of hardcoded value.
+        # Old value was 0.05, which risks catastrophic forgetting at low temperatures.
+        _min_temp = float(getattr(self.cfg.neural_training, 'min_temperature', 0.1))
         num_phases = len(curriculum)
         
         for phase_idx, (phase_epochs, T_horizon) in enumerate(curriculum):

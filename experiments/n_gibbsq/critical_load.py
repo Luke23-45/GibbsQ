@@ -111,18 +111,16 @@ class CriticalLoadTest:
             
             log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
             
-            _base_rho = 0.8
-            _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
-            # SG#9 FIX: Linear mixing-time scaling is correct for fixed N
-            # Translate DGA step scaling to SSA sim_time scaling (linear, same formula)
-            # Cap at 20x base sim_time: SSA is much more expensive per unit time than
-            # DGA steps, so the original 400x DGA cap is infeasible for SSA.
-            _SIM_TIME_CAP = 20.0
-            _rho_sim_time = min(self.ssa_sim_time * _rho_factor, self.ssa_sim_time * _SIM_TIME_CAP)
-            if _rho_factor > _SIM_TIME_CAP:
+            # SG#1 FIX: Scale sim_time with theoretical CTMC mixing time.
+            # Mixing time ~ O(1/(1-rho)^2) (Meyn & Tweedie 1993, §4).
+            # Use min(100/(1-rho)^2, 100_000) as a compute-budget cap.
+            _mixing_budget = 100.0 / max((1.0 - float(rho)) ** 2, 1e-12)
+            _rho_sim_time = min(_mixing_budget, 100_000.0)
+            if _rho_sim_time >= 100_000.0:
                 log.warning(
-                    f"  [!] rho={rho:.4f}: sim_time cap reached at "
-                    f"{_SIM_TIME_CAP:.0f}x base. E[Q] near criticality may be underestimated."
+                    f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
+                    f"(theoretical mixing time ~ {_mixing_budget:.0f}s). "
+                    f"E[Q] near criticality may be underestimated."
                 )
             _max_s = int(_rho_sim_time / self.ssa_sample_interval) + 1
             _mu_np = np.array(self.service_rates, dtype=np.float64)

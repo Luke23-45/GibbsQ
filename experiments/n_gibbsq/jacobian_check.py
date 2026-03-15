@@ -67,9 +67,10 @@ class JacobianValidator:
         """Performs the full Jacobian vs CFD showdown."""
         k1, k2 = jax.random.split(key)
         
-        # Initialize a small router to keep Jacobian matrix manageable.
-        # Use dataclasses.replace because NeuralConfig is a plain @dataclass, not a JAX pytree.
-        check_config = dataclasses.replace(self.cfg.neural, hidden_size=16)
+        # SG#13 FIX: Use actual model hidden_size (from config) instead of 16.
+        # This makes the Jacobian check validate the EXACT architecture used in training.
+        check_config = dataclasses.replace(self.cfg.neural)
+        log.info(f"Jacobian check using hidden_size={check_config.hidden_size} (matching training)")
         model = NeuralRouter(num_servers=self.num_servers, config=check_config, key=k1)
         # PATCH SG3: Cast all model parameters to float64 to match jax_enable_x64 mode.
         # eqx.nn.Linear initialises weights as float32 by default even when x64 is enabled.

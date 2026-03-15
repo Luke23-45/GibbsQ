@@ -73,6 +73,7 @@ switch ($Experiment.ToLower()) {
     "generalize" { $PythonScript = "experiments.n_gibbsq.gen_sweep" }
     "ablation" { $PythonScript = "experiments.n_gibbsq.ablation" }
     "critical" { $PythonScript = "experiments.n_gibbsq.critical_load" }
+    "bias"     { $PythonScript = "experiments.testing.verify_bias" }
     "-h"       { Get-Help $MyInvocation.MyCommand.Definition; exit 0 }
     "help"     { Get-Help $MyInvocation.MyCommand.Definition; exit 0 }
     default    {
