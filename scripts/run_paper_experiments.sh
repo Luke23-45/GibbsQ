@@ -31,7 +31,7 @@ echo -e "\n\033[1;33m[2/10] Running Model Fidelity Check (Phase 1b)...\033[0m"
 "$RUN_SCRIPT" fidelity "$@"
 
 echo -e "\n\033[1;33m[3/10] Running Jacobian Rigor (AD Check)...\033[0m"
-"$RUN_SCRIPT" jacobian "$@"
+"$RUN_SCRIPT" jacobian simulation.dga.sim_steps=500 "$@"
 
 echo -e "\n\033[1;33m[4/10] Running Policy Evaluation Benchmark...\033[0m"
 "$RUN_SCRIPT" policy "+experiment=policy_comparison" "$@"

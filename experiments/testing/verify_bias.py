@@ -75,7 +75,19 @@ class BiasVerification:
             
             # --- SSA Evaluation ---
             _sc = self.cfg.simulation
-            _rho_sim_time = min(_sc.ssa.sim_time * _rho_factor, _sc.ssa.sim_time * 400.0)
+            # PATCH SG-A: hard compute-budget cap at 20,000 s.
+            # The previous ceiling _sc.ssa.sim_time * 400 = 2,000,000 s was effectively
+            # unbounded.  At rho=0.99 this produced 125M vmapped scan steps → CPU hang.
+            # 20,000 s is ≥ 4 linear mixing times at rho=0.99 — sufficient to characterise
+            # DGA/SSA bias (sole goal of Phase 0). rho <= 0.95 is unaffected.
+            _SG_A_BUDGET = 20_000.0
+            _rho_sim_time = min(_sc.ssa.sim_time * _rho_factor, _SG_A_BUDGET)
+            if _sc.ssa.sim_time * _rho_factor > _SG_A_BUDGET:
+                log.warning(
+                    f"  [SG-A] rho={rho:.3f}: sim_time capped at {_SG_A_BUDGET:.0f}s "
+                    f"(uncapped = {_sc.ssa.sim_time * _rho_factor:.0f}s). "
+                    f"GPU recommended for rho > 0.95."
+                )
             _max_samples = int(_rho_sim_time / _sc.ssa.sample_interval) + 1
             _mu_np = np.array(self.service_rates, dtype=np.float64)
             

@@ -92,7 +92,7 @@ class NeuralTuringTest:
         # SG#8 FIX: Read the gradient-optimal alpha from train_dga.py output.
         # The arbitrary cfg.system.alpha (1.0) is NOT the optimized value.
         import json
-        _alpha_search_root = Path("outputs")
+        _alpha_search_root = Path(__file__).resolve().parents[2] / "outputs"
         _alpha_candidates = sorted(_alpha_search_root.glob("**/dga_training/*/optimal_alpha.json"))
         if _alpha_candidates:
             _alpha_data = json.loads(_alpha_candidates[-1].read_text(encoding="utf-8"))

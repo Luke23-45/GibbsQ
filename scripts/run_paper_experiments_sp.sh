@@ -54,7 +54,7 @@ fi
 
 if [[ 3 -ge $START_STEP && 3 -le $STOP_STEP ]]; then
   echo -e "\n\033[1;33m[3/10] Running Jacobian Rigor (AD Check)...\033[0m"
-  "$RUN_SCRIPT" jacobian "$@"
+  "$RUN_SCRIPT" jacobian simulation.dga.sim_steps=500 "$@"
 fi
 
 if [[ 4 -ge $START_STEP && 4 -le $STOP_STEP ]]; then

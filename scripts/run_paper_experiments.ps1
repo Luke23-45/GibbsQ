@@ -52,7 +52,7 @@ Write-Host "`n[2/10] Running Model Fidelity Check (Phase 1b)..." -ForegroundColo
 Invoke-Expression "& `"$RunScript`" fidelity $($HydraArgs -join ' ')"
 
 Write-Host "`n[3/10] Running Jacobian Rigor (AD Check)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" jacobian $($HydraArgs -join ' ')"
+Invoke-Expression "& `"$RunScript`" jacobian simulation.dga.sim_steps=500 $($HydraArgs -join ' ')"
 
 
 Write-Host "`n[4/10] Running Policy Evaluation Benchmark..." -ForegroundColor Yellow

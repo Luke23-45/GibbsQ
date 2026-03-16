@@ -174,19 +174,22 @@ def main(raw_cfg: DictConfig) -> None:
         if raw_cfg.get("debug", False):
             _sim_time_crit = 500.0
         else:
-            # SG#1 FIX: Scale sim_time with theoretical CTMC mixing time.
-            # Mixing time ~ O(1/(1-rho)^2) (Meyn & Tweedie 1993, §4).
-            # Use min(100/(1-rho)^2, 100_000) as a compute-budget cap.
-            #   rho=0.90 → 10,000s    rho=0.95 → 40,000s
+            # PATCH SG-B: linear mixing-time scaling O(1/(1-ρ)) for fixed-N
+            # birth-death chains (spectral gap γ = Θ(1-ρ) → τ_mix = O(1/(1-ρ))).
+            # The quadratic O(1/(1-ρ)²) is only valid in the Halfin-Whitt
+            # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
+            # Formula now matches critical_load.py exactly (SG-B consistency fix).
+            #   rho=0.90 → 10,000s    rho=0.95 → 20,000s
             #   rho=0.99 → 100,000s   rho=0.999 → 100,000s (capped)
-            _mixing_budget = 100.0 / max((1.0 - rho) ** 2, 1e-12)
-            _sim_time_crit = min(_mixing_budget, 100_000.0)
+            _base_rho_crit = 0.8
+            _rho_factor_crit = max(1.0, (1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6))
+            _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, 100_000.0)
             if _sim_time_crit >= 100_000.0:
                 log.warning(
                     f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
-                    f"(theoretical mixing time ~ {_mixing_budget:.0f}s). "
-                    f"E[Q] may still be underestimated. Report only rho<=0.999 "
-                    f"and add mixing-time caveat."
+                    f"(linear mixing time ~ {cfg.simulation.ssa.sim_time * _rho_factor_crit:.0f}s). "
+                    f"E[Q] near criticality may be underestimated. "
+                    f"Report only rho<=0.999 and add mixing-time caveat."
                 )
 
         max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1
