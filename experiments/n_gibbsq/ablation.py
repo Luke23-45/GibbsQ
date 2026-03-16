@@ -129,7 +129,17 @@ class AblationStudy:
                 for ep in range(ablation_epochs):
                     train_key, subkey = jax.random.split(train_key)
                     l, router, opt_state = train_step(router, opt_state, subkey)
+                    # SG#9 FIX (1): NaN guard — mirrors SG#10 guard in train.py.
+                    if not jnp.isfinite(l):
+                        log.warning(
+                            f"      Epoch {ep:2d} | Non-finite loss={float(l):.4f}. "
+                            f"Skipping gradient update."
+                        )
+                        continue
                     log.info(f"      Epoch {ep:2d} | Loss: {l:7.4f}")
+                    # SG#9 FIX (2): Force log flush to prevent subprocess output buffer drops.
+                    for _h in logging.getLogger().handlers:
+                        _h.flush()
                 
                 # Evaluate at the same T=_ABLATION_STEPS horizon used for training
                 # (apples-to-apples initialization-regime comparison)

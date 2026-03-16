@@ -191,8 +191,13 @@ class NeuralCurriculumTrainer:
 
         pointer_dir.mkdir(parents=True, exist_ok=True)
         pointer_path = pointer_dir / "latest_weights.txt"
-        pointer_path.write_text(str(model_path.resolve()), encoding='utf-8')
-        log.info(f"[SG#5] Model pointer written to: {pointer_path.resolve()}")
+        # PR#1 FIX: Write a path RELATIVE to the project root so the pointer is
+        # readable on any platform (Colab Linux, Windows, macOS). Absolute paths
+        # (e.g. C:\Users\...) are machine-specific and break cross-platform runs.
+        # Readers must prepend _PROJECT_ROOT to reconstruct the absolute path.
+        _relative_model_path = model_path.resolve().relative_to(_PROJECT_ROOT)
+        pointer_path.write_text(str(_relative_model_path), encoding='utf-8')
+        log.info(f"[PR#1/SG#5] Model pointer (relative) written to: {pointer_path.resolve()}")
         
         log.info("-" * 55)
         log.info(f"Training Complete! Final Loss: {history_loss[-1]:.4f}")

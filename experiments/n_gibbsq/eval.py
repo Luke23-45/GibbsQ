@@ -98,6 +98,18 @@ class NeuralTuringTest:
             _alpha_data = json.loads(_alpha_candidates[-1].read_text(encoding="utf-8"))
             optimal_alpha = float(_alpha_data["alpha"])
             log.info(f"[SG#8] Using persisted optimal alpha={optimal_alpha:.4f} from {_alpha_candidates[-1]}")
+            # SG#3 FIX: The persisted alpha was optimised on the DGA SURROGATE, not on the
+            # true SSA objective. DGA-optimal alpha (typically ~0.1) can differ substantially
+            # from SSA-optimal alpha (policy_comparison shows alpha~10.0 minimises SSA E[Q]).
+            # The parity result below is a comparison against DGA-trained GibbsQ, NOT
+            # against the best achievable GibbsQ. Interpret accordingly.
+            log.warning(
+                f"[SG#3] CAVEAT: alpha={optimal_alpha:.4f} was optimised on the DGA "
+                f"surrogate. SSA-optimal alpha is likely ~10.0 (from stability_sweep / "
+                f"policy_comparison). Parity against this baseline may be misleading. "
+                f"See smoking_guns.md SG#3 for full analysis."
+            )
+            self._alpha_source = f"DGA-optimised (from {_alpha_candidates[-1].name})"
         else:
             optimal_alpha = float(self.cfg.system.alpha)
             log.warning(
@@ -146,8 +158,11 @@ class NeuralTuringTest:
                 f"  (Training must complete without NaN losses.)"
             )
 
-        model_path_str = pointer_path.read_text(encoding='utf-8').strip()
-        model_path = Path(model_path_str)
+        _ptr_content = pointer_path.read_text(encoding='utf-8').strip()
+        _ptr_raw = Path(_ptr_content)
+        # PR#1 FIX: pointer may contain a relative path (written by patched train.py)
+        # or an absolute path (legacy pointer). Resolve relative paths against project root.
+        model_path = _ptr_raw if _ptr_raw.is_absolute() else (_PROJECT_ROOT / _ptr_raw)
 
         if not model_path.exists():
             raise FileNotFoundError(
@@ -226,6 +241,12 @@ class NeuralTuringTest:
             f.write(f"GibbsQ E[Q]: {mean_gibbsq_loss:.4f}\n")
             f.write(f"N-GibbsQ E[Q]: {mean_neural_loss:.4f}\n")
             f.write(f"Performance Gap: {perc:.2f}%\n")
+            f.write(f"GibbsQ alpha source: {getattr(self, '_alpha_source', 'unknown')}\n")
+            f.write(
+                f"NOTE: GibbsQ baseline uses DGA-optimised alpha, not SSA-optimal alpha.\n"
+                f"For a valid parity claim, compare against SSA-optimal GibbsQ "
+                f"(run stability_sweep, identify alpha that minimises E[Q], rerun parity).\n"
+            )
 
         append_metrics_jsonl({
             "gibbsq_loss": mean_gibbsq_loss,

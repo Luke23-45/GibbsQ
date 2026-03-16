@@ -284,7 +284,10 @@ def main(raw_cfg: DictConfig) -> None:
         _ptr = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
 
         if _ptr.exists():
-            _model_path = _Path(_ptr.read_text(encoding="utf-8").strip())
+            _ptr_content = _ptr.read_text(encoding="utf-8").strip()
+            _ptr_raw = _Path(_ptr_content)
+            # PR#1 FIX: pointer may be relative (new train.py) or absolute (legacy).
+            _model_path = _ptr_raw if _ptr_raw.is_absolute() else (_PROJECT_ROOT / _ptr_raw)
             if _model_path.exists():
                 _sk = NeuralRouter(
                     num_servers=N, config=cfg.neural,

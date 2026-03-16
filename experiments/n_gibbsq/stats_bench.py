@@ -84,7 +84,10 @@ class StatsBenchmark:
                 f"Model pointer not found at '{pointer_path.resolve()}'. "
                 f"Run training first: python -m experiments.n_gibbsq.train"
             )
-        model_path = Path(pointer_path.read_text(encoding='utf-8').strip())
+        _ptr_content = pointer_path.read_text(encoding='utf-8').strip()
+        _ptr_raw = Path(_ptr_content)
+        # PR#1 FIX: pointer may be relative (new train.py) or absolute (legacy).
+        model_path = _ptr_raw if _ptr_raw.is_absolute() else (_PROJECT_ROOT / _ptr_raw)
         if not model_path.exists():
             raise FileNotFoundError(
                 f"Weight file missing at '{model_path}'. Rerun training."
