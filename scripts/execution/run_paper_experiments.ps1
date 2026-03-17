@@ -23,14 +23,15 @@ param(
     [string[]]$HydraArgs = @()
 )
 
+# Import common utilities
+. "$PSScriptRoot\utils\common.ps1"
+
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RunScript = Join-Path $ScriptDir "run_experiment.ps1"
 
-Write-Host "==========================================================" -ForegroundColor Magenta
-Write-Host "  GibbsQ Research Paper: Final Execution Pipeline"
-Write-Host "==========================================================" -ForegroundColor Magenta
+Write-ExperimentHeader "GibbsQ Research Paper: Final Execution Pipeline"
 
 Write-Host "`n[Initiating Pipeline...]`n" -ForegroundColor Cyan
 
@@ -38,44 +39,35 @@ Write-Host "`n[Initiating Pipeline...]`n" -ForegroundColor Cyan
 # Phase 0: Gradient Estimator Validation (Track 5)
 # Must run BEFORE any training to ensure unbiased gradients.
 # ---------------------------------------------------------
-Write-Host "`n[0/10] Running REINFORCE Gradient validation (Track 5)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" reinforce_check $($HydraArgs -join ' ')"
+Invoke-Experiment "0/10" "REINFORCE Gradient validation (Track 5)" $RunScript "reinforce_check"
 
 # ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
 # ---------------------------------------------------------
-Write-Host "`n[1/11] Running Drift Verification (Phase 1a)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" drift $($HydraArgs -join ' ')"
+Invoke-Experiment "1/11" "Drift Verification (Phase 1a)" $RunScript "drift"
 
-Write-Host "`n[2/10] Running Model Fidelity Check (Phase 1b)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" fidelity $($HydraArgs -join ' ')"
+Invoke-Experiment "2/10" "Model Fidelity Check (Phase 1b)" $RunScript "fidelity"
 
-Write-Host "`n[4/10] Running Corrected Policy Evaluation Benchmark (Track 4)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" corrected_policy $($HydraArgs -join ' ')"
+Invoke-Experiment "4/10" "Corrected Policy Evaluation Benchmark (Track 4)" $RunScript "corrected_policy"
 
-Write-Host "`n[5/10] Running Stability Sweep..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" sweep +experiment=stability_sweep $($HydraArgs -join ' ')"
+Invoke-Experiment "5/10" "Stability Sweep" $RunScript "sweep +experiment=stability_sweep"
 
-Write-Host "`n[6/10] Running Scaling Stress Tests..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" stress ++jax.enabled=True $($HydraArgs -join ' ')"
+Invoke-Experiment "6/10" "Scaling Stress Tests" $RunScript "stress ++jax.enabled=True"
 
 # ---------------------------------------------------------
 # Phase 2: N-GibbsQ Neural Learning Pipeline
 # ---------------------------------------------------------
-Write-Host "`n[7/10] Running REINFORCE SSA Training (Track 1)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" reinforce_train $($HydraArgs -join ' ')"
+Invoke-Experiment "7/10" "REINFORCE SSA Training (Track 1)" $RunScript "reinforce_train"
 
-Write-Host "`n[8/10] Running Domain Randomization Training (Track 3)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" dr_train $($HydraArgs -join ' ')"
+Invoke-Experiment "8/10" "Domain Randomization Training (Track 3)" $RunScript "dr_train"
 
 # ---------------------------------------------------------
 # Phase 3: Generational Analysis & Ablation
 # ---------------------------------------------------------
-Write-Host "`n[10/10] Running Deep Component Ablation & Generational Generalization..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" stats $($HydraArgs -join ' ')"
-Invoke-Expression "& `"$RunScript`" generalize $($HydraArgs -join ' ')"
-Invoke-Expression "& `"$RunScript`" critical $($HydraArgs -join ' ')"
-Invoke-Expression "& `"$RunScript`" ablation $($HydraArgs -join ' ')"
+Invoke-Experiment "10/10" "Deep Component Ablation & Generational Generalization" $RunScript "stats"
+Invoke-Experiment "11/10" "Generalization Heatmap" $RunScript "generalize"
+Invoke-Experiment "12/10" "Critical Stability Boundary" $RunScript "critical"
+Invoke-Experiment "13/10" "SSA-based Component Ablation" $RunScript "ablation"
 
 Write-Host "`n==========================================================" -ForegroundColor Green
 Write-Host "  Pipeline fully complete."
