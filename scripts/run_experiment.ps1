@@ -43,7 +43,7 @@ if (-not $Experiment) {
     Write-Host "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
     Write-Host "  stats    - Run 30-seed statistical significance benchmark"
     Write-Host "  generalize - Run generalization stress heatmap"
-    Write-Host "  ablation - Run component ablation study"
+    Write-Host "  ablation - Run SSA-based component ablation study"
     Write-Host "  critical - Run critical stability boundary test"
     Write-Host "  reinforce_train - Run REINFORCE SSA training (Track 1)"
     Write-Host "  dr_train       - Run Domain Randomization training (Track 3)"
@@ -75,7 +75,7 @@ switch ($Experiment.ToLower()) {
     "jacobian" { $PythonScript = "experiments.n_gibbsq.jacobian_check" }
     "stats"    { $PythonScript = "experiments.n_gibbsq.stats_bench" }
     "generalize" { $PythonScript = "experiments.n_gibbsq.gen_sweep" }
-    "ablation" { $PythonScript = "experiments.n_gibbsq.ablation" }
+    "ablation" { $PythonScript = "experiments.n_gibbsq.ablation_ssa" }
     "critical" { $PythonScript = "experiments.n_gibbsq.critical_load" }
     "bias"     { $PythonScript = "experiments.testing.verify_bias" }
     "reinforce_train" { $PythonScript = "experiments.n_gibbsq.train_reinforce" }

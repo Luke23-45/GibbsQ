@@ -317,7 +317,9 @@ class DomainRandomizedTrainer:
         
         # Write pointer
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-        pointer_dir = _PROJECT_ROOT / "outputs" / "small"
+        # Align pointer location with configured output_dir layout used by other tracks
+        # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
+        pointer_dir = self.run_dir.parent.parent
         pointer_dir.mkdir(parents=True, exist_ok=True)
         # SG#11 FIX: Write both pointers so comparison scripts find the DR model
         _relative_model_path = policy_path.resolve().relative_to(_PROJECT_ROOT)

@@ -50,6 +50,30 @@ class _NeuralSSAPolicy:
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
+
+def _resolve_model_pointer(project_root: Path, output_root: Path) -> Path:
+    """Resolve model weights pointer with REINFORCE-first fallback order."""
+    candidates = [
+        output_root / "latest_domain_randomized_weights.txt",
+        output_root / "latest_reinforce_weights.txt",
+        output_root / "latest_weights.txt",  # legacy DGA pointer
+    ]
+    for ptr in candidates:
+        if not ptr.exists():
+            continue
+        raw = Path(ptr.read_text(encoding='utf-8').strip())
+        model_path = raw if raw.is_absolute() else (project_root / raw)
+        if model_path.exists():
+            if ptr.name == "latest_weights.txt":
+                log.warning("Using legacy pointer latest_weights.txt; prefer REINFORCE pointers.")
+            return model_path
+    tried = "\n".join(f"  - {c}" for c in candidates)
+    raise FileNotFoundError(
+        "No valid model pointer found. Tried:\n"
+        f"{tried}\n"
+        "Run Track 1/3 training (reinforce_train or dr_train), or legacy train for latest_weights.txt."
+    )
+
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
     """Pure functional bridge."""
     return model(Q)
@@ -75,23 +99,9 @@ class CriticalLoadTest:
         k_load, k_sweep = jax.random.split(key)
         
         # 1. Load trained model
-        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-        pointer_path = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
-
-        if not pointer_path.exists():
-            raise FileNotFoundError(
-                f"Model pointer not found at '{pointer_path.resolve()}'. "
-                f"Run training first: python -m experiments.n_gibbsq.train"
-            )
-        _ptr_content = pointer_path.read_text(encoding='utf-8').strip()
-        _ptr_raw = Path(_ptr_content)
-        # PR#1 FIX: pointer may be relative (new train.py) or absolute (legacy).
-        model_path = _ptr_raw if _ptr_raw.is_absolute() else (_PROJECT_ROOT / _ptr_raw)
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Weight file missing at '{model_path}'. Rerun training."
-            )
+        output_root = self.run_dir.parent.parent
+        model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         

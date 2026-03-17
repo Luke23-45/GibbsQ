@@ -31,6 +31,30 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
 
+def _resolve_model_pointer(project_root: Path, output_root: Path) -> Path:
+    """Resolve model weights pointer with REINFORCE-first fallback order."""
+    candidates = [
+        output_root / "latest_domain_randomized_weights.txt",
+        output_root / "latest_reinforce_weights.txt",
+        output_root / "latest_weights.txt",  # legacy DGA pointer
+    ]
+    for ptr in candidates:
+        if not ptr.exists():
+            continue
+        raw = Path(ptr.read_text(encoding='utf-8').strip())
+        model_path = raw if raw.is_absolute() else (project_root / raw)
+        if model_path.exists():
+            if ptr.name == "latest_weights.txt":
+                log.warning("Using legacy pointer latest_weights.txt; prefer REINFORCE pointers.")
+            return model_path
+    tried = "\n".join(f"  - {c}" for c in candidates)
+    raise FileNotFoundError(
+        "No valid model pointer found. Tried:\n"
+        f"{tried}\n"
+        "Run Track 1/3 training (reinforce_train or dr_train), or legacy train for latest_weights.txt."
+    )
+
+
 class _NeuralSSAPolicy:
     """
     Bridges NeuralRouter → NumPy SSA engine for true-CTMC evaluation.
@@ -170,31 +194,9 @@ class NeuralTuringTest:
         # --- 2. The Challenger: N-GibbsQ (Neural Network) ---
         log.info("\n[Loading Challenger: N-GibbsQ Neural Router]")
         
-        # Read the pointer from the centralized 'small' directory
-        # SG#5 FIX: Use fixed canonical pointer path (config-independent).
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-        pointer_path = _PROJECT_ROOT / "outputs" / "small" / "latest_weights.txt"
-
-
-        if not pointer_path.exists():
-            raise FileNotFoundError(
-                f"Model pointer not found at '{pointer_path.resolve()}'.\n"
-                f"  Run training first: python -m experiments.n_gibbsq.train\n"
-                f"  (Training must complete without NaN losses.)"
-            )
-
-        _ptr_content = pointer_path.read_text(encoding='utf-8').strip()
-        _ptr_raw = Path(_ptr_content)
-        # PR#1 FIX: pointer may contain a relative path (written by patched train.py)
-        # or an absolute path (legacy pointer). Resolve relative paths against project root.
-        model_path = _ptr_raw if _ptr_raw.is_absolute() else (_PROJECT_ROOT / _ptr_raw)
-
-        if not model_path.exists():
-            raise FileNotFoundError(
-                f"Weight file missing at '{model_path}'.\n"
-                f"  Pointer file '{pointer_path}' references a file that no longer exists.\n"
-                f"  Rerun training: python -m experiments.n_gibbsq.train"
-            )
+        output_root = self.run_dir.parent.parent
+        model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
 
         # Re-initialize skeleton and load weights securely using the validated NeuralConfig
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k2)
