@@ -9,8 +9,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Set PYTHONPATH so Python can find the `src` module
-export PYTHONPATH="$PROJECT_ROOT"
+# Set PYTHONPATH so Python can find both experiment modules and src package
+export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/src"
 
 print_usage() {
     echo "Usage: ./run_experiment.sh <experiment> [hydra_args...]"
@@ -18,16 +18,10 @@ print_usage() {
     echo "Available experiments:"
     echo "  drift    - Run drift verification (drift_vs_norm, heatmap)"
     echo "  sweep    - Run stability sweep across alpha and rho"
-    echo "  policy   - Run policy comparison (Softmax vs JSQ, etc.) [DEPRECATED -> corrected_policy]"
     echo "  stress   - Run stress test (massive-N, critical load)"
-    echo "  train    - [DEPRECATED] Run DGA routing agent training"
-    echo "  fidelity - Run gradient survival check across horizons"
-    echo "  n_train  - [DEPRECATED] Run neural curriculum training"
-    echo "  parity   - [DEPRECATED] Run neural vs GibbsQ parity evaluation"
-    echo "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
     echo "  stats    - Run 30-seed statistical significance benchmark"
     echo "  generalize - Run generalization stress heatmap"
-    echo "  ablation - Run component ablation study"
+    echo "  ablation - Run SSA-based component ablation study"
     echo "  critical - Run critical stability boundary test"
     echo "  reinforce_train - Run REINFORCE SSA training (Track 1)"
     echo "  dr_train       - Run Domain Randomization training (Track 3)"
@@ -37,7 +31,7 @@ print_usage() {
     echo "Examples:"
     echo "  ./run_experiment.sh drift"
     echo "  ./run_experiment.sh sweep system.num_servers=5 simulation.ssa.sim_time=5000"
-    echo "  ./run_experiment.sh policy +simulation.export_trajectories=True"
+    echo "  ./run_experiment.sh corrected_policy --config-name small"
     echo ""
 }
 
@@ -58,26 +52,8 @@ case "$EXPERIMENT" in
     "sweep")
         PYTHON_SCRIPT="experiments.sweeps.stability_sweep"
         ;;
-    "policy")
-        PYTHON_SCRIPT="experiments.evaluation.policy_comparison"
-        ;;
     "stress")
         PYTHON_SCRIPT="experiments.testing.stress_test"
-        ;;
-    "train")
-        PYTHON_SCRIPT="experiments.training.train_dga"
-        ;;
-    "fidelity")
-        PYTHON_SCRIPT="experiments.n_gibbsq.grad_check"
-        ;;
-    "n_train")
-        PYTHON_SCRIPT="experiments.n_gibbsq.train"
-        ;;
-    "parity")
-        PYTHON_SCRIPT="experiments.n_gibbsq.eval"
-        ;;
-    "jacobian")
-        PYTHON_SCRIPT="experiments.n_gibbsq.jacobian_check"
         ;;
     "stats")
         PYTHON_SCRIPT="experiments.n_gibbsq.stats_bench"
@@ -86,13 +62,10 @@ case "$EXPERIMENT" in
         PYTHON_SCRIPT="experiments.n_gibbsq.gen_sweep"
         ;;
     "ablation")
-        PYTHON_SCRIPT="experiments.n_gibbsq.ablation"
+        PYTHON_SCRIPT="experiments.n_gibbsq.ablation_ssa"
         ;;
     "critical")
         PYTHON_SCRIPT="experiments.n_gibbsq.critical_load"
-        ;;
-    "bias")
-        PYTHON_SCRIPT="experiments.testing.verify_bias"
         ;;
     "reinforce_train")
         PYTHON_SCRIPT="experiments.n_gibbsq.train_reinforce"

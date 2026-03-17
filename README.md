@@ -48,7 +48,7 @@ GibbsQ/
 │   ├── testing/
 │   │   └── reinforce_gradient_check.py # Track 5: Gradient validation
 │   └── evaluation/
-│       └── corrected_policy_comparison.py # Track 4: Tiered benchmarks
+│       └── corrected_policy_comparison.py # Track 4: Tiered benchmarks (active)
 ├── scripts/                  # Execution & utility scripts
 │   ├── run_experiment.ps1     # Unified entry point (Windows)
 │   └── run_paper_experiments.ps1 # Full paper reproduction pipeline
@@ -63,7 +63,7 @@ All experiments use [Hydra](https://hydra.cc/) for configuration management. Ove
 python -m experiments.verification.drift_verification system.alpha=5.0 simulation.ssa.sim_time=50000
 
 # Use a different base config
-python -m experiments.evaluation.policy_comparison --config-name small
+python -m experiments.evaluation.corrected_policy_comparison --config-name small
 ```
 
 ## Key Theoretical Result
