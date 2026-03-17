@@ -171,24 +171,54 @@ def run_corrected_comparison(
             **metrics,
         }, run_dir / "corrected_comparison_metrics.jsonl")
     
-    # Evaluate neural policy if weights exist
-    neural_weights_path = run_dir.parent.parent / "latest_reinforce_weights.txt"
-    if neural_weights_path.exists():
+    # SG#2 FIX: Correct path resolution relative to PROJECT_ROOT
+    _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    pointer_dir = _PROJECT_ROOT / "outputs" / "small"
+    
+    # Try DR pointer first, then standard reinforce pointer
+    dr_ptr = pointer_dir / "latest_domain_randomized_weights.txt"
+    std_ptr = pointer_dir / "latest_reinforce_weights.txt"
+    
+    ptr_to_use = None
+    if dr_ptr.exists():
+        ptr_to_use = dr_ptr
+        log.info(f"Using Domain Randomized weights from {dr_ptr}")
+    elif std_ptr.exists():
+        ptr_to_use = std_ptr
+        log.info(f"Using Standard REINFORCE weights from {std_ptr}")
+    
+    if ptr_to_use:
         log.info("\nEvaluating Tier 5: N-GibbsQ (REINFORCE trained)...")
         try:
             import equinox as eqx
             from gibbsq.core.neural_policies import NeuralRouter
-            from gibbsq.core.features import sojourn_time_features
             
             # Load weights
-            relative_path = neural_weights_path.read_text(encoding='utf-8').strip()
-            weights_path = run_dir.parent.parent / relative_path
+            relative_path = ptr_to_use.read_text(encoding='utf-8').strip()
+            weights_path = _PROJECT_ROOT / relative_path
             
             if weights_path.exists():
                 # Initialize and load
                 key = jax.random.PRNGKey(cfg.simulation.seed)
                 policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
+                
+                # SG-9 PATCH: Validate BOTH num_servers AND hidden_size.
+                if policy_net.layers[0].weight.shape[1] != N:
+                    log.warning(
+                        f"[SG-9] Neural model N-mismatch: model expects "
+                        f"N={policy_net.layers[0].weight.shape[1]}, system has N={N}. "
+                        f"Skipping neural evaluation."
+                    )
+                    return
+                elif policy_net.layers[0].weight.shape[0] != cfg.neural.hidden_size:
+                    log.warning(
+                        f"[SG-9] Neural model hidden_size mismatch: "
+                        f"model={policy_net.layers[0].weight.shape[0]}, "
+                        f"config expects={cfg.neural.hidden_size}. "
+                        f"Skipping neural evaluation to avoid corrupt weights."
+                    )
+                    return
                 
                 # Optimization: Extract NumPy parameters once
                 np_params = policy_net.get_numpy_params()

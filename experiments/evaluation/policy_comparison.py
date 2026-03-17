@@ -295,12 +295,19 @@ def main(raw_cfg: DictConfig) -> None:
                 )
                 _neural_model = eqx.tree_deserialise_leaves(_model_path, _sk)
 
-                # Validate architecture matches current system config
+                # SG-9 PATCH: Validate BOTH num_servers AND hidden_size.
                 if _neural_model.layers[0].weight.shape[1] != N:
                     log.warning(
-                        f"[SG#1] Neural model N-mismatch: model expects "
-                        f"N={_neural_model.layers[0].weight.shape[1]}, "
-                        f"system has N={N}. Skipping SSA neural evaluation."
+                        f"[SG-9] Neural model N-mismatch: model expects "
+                        f"N={_neural_model.layers[0].weight.shape[1]}, system has N={N}. "
+                        f"Skipping neural evaluation."
+                    )
+                elif _neural_model.layers[0].weight.shape[0] != cfg.neural.hidden_size:
+                    log.warning(
+                        f"[SG-9] Neural model hidden_size mismatch: "
+                        f"model={_neural_model.layers[0].weight.shape[0]}, "
+                        f"config expects={cfg.neural.hidden_size}. "
+                        f"Skipping neural evaluation to avoid corrupt weights."
                     )
                 else:
                     _neural_policy = _NeuralSSAPolicy(_neural_model)

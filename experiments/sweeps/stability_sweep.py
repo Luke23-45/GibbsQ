@@ -71,8 +71,10 @@ def main(raw_cfg: DictConfig) -> None:
 
         for j, alpha in enumerate(alpha_values):
             completed += 1
-            # SG#3 FIX: Assign a unique, non-overlapping seed block per grid cell.
-            # cell_seed = base + (i * n_alpha + j) * num_replications
+            # SG-7: PRNG Safety Warning.
+            # Using a linear seed increment (seed + index * replications) is safe only if
+            # num_replications is static across all cells. If replications vary, 
+            # seeds may overlap, violating independence across grid cells.
             _cell_seed = cfg.simulation.seed + (i * n_alpha + j) * cfg.simulation.num_replications
             
             rep_means = []
@@ -155,6 +157,7 @@ def main(raw_cfg: DictConfig) -> None:
                 "mean_q_total": float(mean_Q[i, j]),
                 "is_stationary": bool(stationary[i, j]),
                 "stationarity_rate": stationarity_rate,
+                "backend": "JAX" if cfg.jax.enabled else "NumPy",  # SG-7: Add backend tag for traceability
             }
             append_metrics_jsonl(metrics, out_dir / "metrics.jsonl")
             if run:

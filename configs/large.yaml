@@ -32,3 +32,6 @@ wandb:
   mode: online
   project: GibbsQ-Massive-Regime
   group: global_sweep
+
+neural_training:
+  min_temperature: 0.3

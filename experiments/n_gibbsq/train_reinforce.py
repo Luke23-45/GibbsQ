@@ -393,7 +393,7 @@ class ReinforceTrainer:
                 G = compute_causal_returns_to_go(
                     traj.all_states, traj.jump_times, traj.action_step_indices, 
                     sim_time=self.sim_time,
-                    gamma=0.99  # Engage stability to survive T=5000
+                    gamma=self.cfg.neural_training.gamma
                 )
                 all_returns_to_go.append(G)
             
@@ -419,22 +419,28 @@ class ReinforceTrainer:
                 A_tensor = jnp.asarray(batch_A, dtype=jnp.int32)
                 G_tensor = jnp.asarray(batch_G, dtype=jnp.float32)
                 
+                # SG#10 FIX: Normalize G before both advantage computation AND critic targets.
+                # v_preds should learn E[G_norm | s] ∈ [-3, +3] for rho-invariant stability.
+                G_mean = jnp.mean(G_tensor)
+                G_std = jnp.std(G_tensor) + 1e-8
+                G_norm = (G_tensor - G_mean) / G_std
+                
                 # Precompute Critic Baselines detachably
                 s_feat = (S_tensor + 1.0) / self.service_rates_jax
                 v_preds = jax.lax.stop_gradient(jax.vmap(value_net)(s_feat))
                 
                 # 2. ACTOR-CRITIC ADVANTAGE NORMALIZATION (CRITICAL FOR NaN STABILITY)
-                raw_advantages = G_tensor - v_preds
-                norm_adv = (raw_advantages - jnp.mean(raw_advantages)) / (jnp.std(raw_advantages) + 1e-8)
+                # After patch, norm_adv is still zero-mean relative to the normalized returns.
+                norm_adv = G_norm - v_preds
                 
                 # 3. PURE, FAST, VECTORIZED ACTOR GRAPH 
-                # FIX: Negate loss for cost minimization. Gradient descent on -log_prob * adv
+                # FIX: Use positive sum for cost minimization. Gradient descent on +log_prob * adv
                 # gives correct direction: decrease log_prob when adv > 0 (high cost action).
                 def policy_loss_fn(model, s_feat, actions, advs):
                     logits = jax.vmap(model)(s_feat)
                     log_probs = jax.nn.log_softmax(logits, axis=-1)
                     chosen_log_probs = log_probs[jnp.arange(len(actions)), actions]
-                    return -jnp.sum(chosen_log_probs * advs) / max(1.0, float(len(trajectories)))
+                    return jnp.sum(chosen_log_probs * advs) / max(1.0, float(len(trajectories)))
 
                 policy_loss, policy_grads = eqx.filter_value_and_grad(policy_loss_fn)(
                     policy_net, s_feat, A_tensor, norm_adv
@@ -450,7 +456,7 @@ class ReinforceTrainer:
                     return jnp.mean((preds - returns_to_go) ** 2)
 
                 value_loss, value_grads = eqx.filter_value_and_grad(value_loss_fn)(
-                    value_net, s_feat, G_tensor
+                    value_net, s_feat, G_norm
                 )
                 updates, value_state = value_opt.update(
                     value_grads, value_state, eqx.filter(value_net, eqx.is_array)

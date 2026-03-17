@@ -4,6 +4,16 @@ N-GibbsQ Phase 1: Gradient Fidelity Check
 Verifies that the gradient of the simulated expected queue length
 survives backpropagation through time across increasing simulation horizons.
 If gradients vanish, neural routing will fail to learn.
+
+SG-8 PATCH: Scope & Limitations Documentation
+-------------------------------------------
+This script validates gradient survival through the JAX-based forward-mode
+differentiable engine (DGA). It is a diagnostic for the "Tracing Death"
+bottleneck and vanishing gradients in deterministic surrogate models.
+
+IMPORTANT: This does NOT validate the REINFORCE stochastic gradient estimator.
+For likelihood-ratio gradient validation (unbiasedness check), use:
+experiments/testing/reinforce_gradient_check.py.
 """
 
 import jax

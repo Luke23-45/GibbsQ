@@ -264,6 +264,7 @@ class NeuralTrainingConfig:
     weight_decay: float = 1e-4
     dga_learning_rate: float = 0.5
     min_temperature: float = 0.1   # SG-1 FIX: was in YAML but missing from dataclass
+    gamma: float = 0.99            # HP-2 FIX: avoid hardcoded discount
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
 
 
@@ -562,7 +563,16 @@ def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
     dga_raw = sim_dict.pop("dga", {})
     # SG-1 FIX: max_events was removed from SSAConfig; pop it from any YAML that
     # still carries it so SSAConfig(**ssa_raw) does not raise TypeError on upgrade.
-    ssa_raw.pop("max_events", None)
+    # SG-6 PATCH: Emit deprecation warning instead of silently dropping.
+    if "max_events" in ssa_raw:
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            "DEPRECATED: simulation.ssa.max_events in YAML is ignored. "
+            "The JAX and NumPy engines compute max_events dynamically from "
+            "(arrival_rate + sum(mu)) * sim_time * 1.5 + 1000. "
+            "Remove max_events from your config to suppress this warning."
+        )
+        ssa_raw.pop("max_events")
     return SimulationConfig(
         ssa=SSAConfig(**ssa_raw),
         dga=DGAConfig(**dga_raw),

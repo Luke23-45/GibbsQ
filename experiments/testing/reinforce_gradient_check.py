@@ -207,13 +207,13 @@ def compute_reinforce_gradient(
 
     # 4. ONE SINGLE PASS AUTOGRAD GRAPH
     # FIX: Negate loss for cost minimization. The previous comment "DO NOT NEGATE THIS!" was
-    # incorrect - empirical evidence (cosine similarity -0.2683) shows the gradient had wrong sign.
+    # SG-1c FIX: Use positive sum for cost minimization to match training scripts.
     def batch_reinforce_loss(model):
         s_feat = (S_batch + 1.0) / mu_jax
         logits = jax.vmap(model)(s_feat)
         log_probs = jax.nn.log_softmax(logits, axis=-1)
         chosen_log_probs = log_probs[jnp.arange(len(A_batch)), A_batch]
-        return -jnp.sum(Adv_batch * chosen_log_probs)
+        return jnp.sum(Adv_batch * chosen_log_probs)
 
     # Trigger one single optimized compile
     grad_val = eqx.filter_grad(batch_reinforce_loss)(policy_net)

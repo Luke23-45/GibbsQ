@@ -89,25 +89,50 @@ class NeuralTuringTest:
         _max_samples = int(_ssa.sim_time / _ssa.sample_interval) + 1
         _mu_np = np.array(self.service_rates, dtype=np.float64)
 
-        # SG#8 FIX: Read the gradient-optimal alpha from train_dga.py output.
-        # The arbitrary cfg.system.alpha (1.0) is NOT the optimized value.
+        # SG#3 FIX: Search for the SSA-optimal alpha (stability_sweep result).
+        # This takes precedence over DGA-optimal alpha as it results in a stronger baseline.
         import json
-        _alpha_search_root = Path(__file__).resolve().parents[2] / "outputs"
-        _alpha_candidates = sorted(_alpha_search_root.glob("**/dga_training/*/optimal_alpha.json"))
-        if _alpha_candidates:
+        ssa_alpha = None
+        _project_root = Path(__file__).resolve().parents[2]
+        _sweep_root = _project_root / "outputs"
+        _sweep_candidates = sorted(_sweep_root.glob("**/stability_sweep/*/metrics.jsonl"))
+        
+        target_rho = self.arrival_rate / float(np.sum(_mu_np))
+        
+        if _sweep_candidates:
+            try:
+                best_q = float('inf')
+                best_alpha = None
+                
+                with open(_sweep_candidates[-1], "r") as f:
+                    for line in f:
+                        data = json.loads(line)
+                        # Find alpha that minimizes mean_q_total for rho closest to current
+                        if abs(data["rho"] - target_rho) < 0.05:
+                            if data["mean_q_total"] < best_q:
+                                best_q = data["mean_q_total"]
+                                best_alpha = data["alpha"]
+                
+                if best_alpha is not None:
+                    ssa_alpha = best_alpha
+                    log.info(f"[SG#3] Found SSA-optimal alpha={ssa_alpha:.4f} for rho={target_rho:.2f} in {_sweep_candidates[-1]}")
+            except Exception as e:
+                log.warning(f"[SG#3] Failed to parse stability sweep results: {e}")
+
+        # Fallback to SG#8 FIX: gradient-optimal alpha from train_dga.py
+        _alpha_candidates = sorted(_sweep_root.glob("**/dga_training/*/optimal_alpha.json"))
+        
+        if ssa_alpha is not None:
+            optimal_alpha = ssa_alpha
+            self._alpha_source = "SSA-optimised (from stability_sweep)"
+        elif _alpha_candidates:
             _alpha_data = json.loads(_alpha_candidates[-1].read_text(encoding="utf-8"))
             optimal_alpha = float(_alpha_data["alpha"])
-            log.info(f"[SG#8] Using persisted optimal alpha={optimal_alpha:.4f} from {_alpha_candidates[-1]}")
-            # SG#3 FIX: The persisted alpha was optimised on the DGA SURROGATE, not on the
-            # true SSA objective. DGA-optimal alpha (typically ~0.1) can differ substantially
-            # from SSA-optimal alpha (policy_comparison shows alpha~10.0 minimises SSA E[Q]).
-            # The parity result below is a comparison against DGA-trained GibbsQ, NOT
-            # against the best achievable GibbsQ. Interpret accordingly.
+            log.info(f"[SG#8] Using persisted DGA-optimal alpha={optimal_alpha:.4f} from {_alpha_candidates[-1]}")
             log.warning(
                 f"[SG#3] CAVEAT: alpha={optimal_alpha:.4f} was optimised on the DGA "
-                f"surrogate. SSA-optimal alpha is likely ~10.0 (from stability_sweep / "
-                f"policy_comparison). Parity against this baseline may be misleading. "
-                f"See smoking_guns.md SG#3 for full analysis."
+                f"surrogate. SSA-optimal alpha is likely ~10.0 (from stability_sweep). "
+                f"Parity against this baseline may be misleading."
             )
             self._alpha_source = f"DGA-optimised (from {_alpha_candidates[-1].name})"
         else:
