@@ -35,12 +35,11 @@ Write-Host "==========================================================" -Foregro
 Write-Host "`n[Initiating Pipeline...]`n" -ForegroundColor Cyan
 
 # ---------------------------------------------------------
-# Phase 0: DGA Bias Quantification (SG#2 FIX)
-# Must run BEFORE any training or evaluation step.
-# Empirically measures DGA surrogate bias vs true Gillespie SSA.
+# Phase 0: Gradient Estimator Validation (Track 5)
+# Must run BEFORE any training to ensure unbiased gradients.
 # ---------------------------------------------------------
-Write-Host "`n[0/11] Running DGA Bias Verification (SG#2)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" bias $($HydraArgs -join ' ')"
+Write-Host "`n[0/10] Running REINFORCE Gradient validation (Track 5)..." -ForegroundColor Yellow
+Invoke-Expression "& `"$RunScript`" reinforce_check $($HydraArgs -join ' ')"
 
 # ---------------------------------------------------------
 # Phase 1: Foundational Analytical Metrics & Verification
@@ -51,12 +50,8 @@ Invoke-Expression "& `"$RunScript`" drift $($HydraArgs -join ' ')"
 Write-Host "`n[2/10] Running Model Fidelity Check (Phase 1b)..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" fidelity $($HydraArgs -join ' ')"
 
-Write-Host "`n[3/10] Running Jacobian Rigor (AD Check)..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" jacobian simulation.dga.sim_steps=500 $($HydraArgs -join ' ')"
-
-
-Write-Host "`n[4/10] Running Policy Evaluation Benchmark..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" policy +experiment=policy_comparison $($HydraArgs -join ' ')"
+Write-Host "`n[4/10] Running Corrected Policy Evaluation Benchmark (Track 4)..." -ForegroundColor Yellow
+Invoke-Expression "& `"$RunScript`" corrected_policy $($HydraArgs -join ' ')"
 
 Write-Host "`n[5/10] Running Stability Sweep..." -ForegroundColor Yellow
 Invoke-Expression "& `"$RunScript`" sweep +experiment=stability_sweep $($HydraArgs -join ' ')"
@@ -67,14 +62,11 @@ Invoke-Expression "& `"$RunScript`" stress ++jax.enabled=True $($HydraArgs -join
 # ---------------------------------------------------------
 # Phase 2: N-GibbsQ Neural Learning Pipeline
 # ---------------------------------------------------------
-Write-Host "`n[7/10] Running DGA Routing Agent Core Training..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" train $($HydraArgs -join ' ')"
+Write-Host "`n[7/10] Running REINFORCE SSA Training (Track 1)..." -ForegroundColor Yellow
+Invoke-Expression "& `"$RunScript`" reinforce_train $($HydraArgs -join ' ')"
 
-Write-Host "`n[8/10] Running Neural Curriculum Training..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" n_train $($HydraArgs -join ' ')"
-
-Write-Host "`n[9/10] Verifying Neural Parity against GibbsQ Ground Truth..." -ForegroundColor Yellow
-Invoke-Expression "& `"$RunScript`" parity $($HydraArgs -join ' ')"
+Write-Host "`n[8/10] Running Domain Randomization Training (Track 3)..." -ForegroundColor Yellow
+Invoke-Expression "& `"$RunScript`" dr_train $($HydraArgs -join ' ')"
 
 # ---------------------------------------------------------
 # Phase 3: Generational Analysis & Ablation

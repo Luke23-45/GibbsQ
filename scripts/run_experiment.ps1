@@ -34,17 +34,21 @@ if (-not $Experiment) {
     Write-Host "Available experiments:" -ForegroundColor Cyan
     Write-Host "  drift    - Run drift verification (drift_vs_norm, heatmap)"
     Write-Host "  sweep    - Run stability sweep across alpha and rho"
-    Write-Host "  policy   - Run policy comparison (Softmax vs JSQ, etc.)"
+    Write-Host "  policy   - Run policy comparison (Softmax vs JSQ, etc.) [DEPRECATED -> corrected_policy]"
     Write-Host "  stress   - Run stress test (massive-N, critical load)"
-    Write-Host "  train    - Run DGA routing agent training (gradient descent)"
+    Write-Host "  train    - [DEPRECATED] Run DGA routing agent training"
     Write-Host "  fidelity - Run gradient survival check across horizons"
-    Write-Host "  n_train  - Run neural curriculum training"
-    Write-Host "  parity   - Run neural vs GibbsQ parity evaluation"
-    Write-Host "  jacobian - Run Jacobian AD vs finite-difference check"
+    Write-Host "  n_train  - [DEPRECATED] Run neural curriculum training"
+    Write-Host "  parity   - [DEPRECATED] Run neural vs GibbsQ parity evaluation"
+    Write-Host "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
     Write-Host "  stats    - Run 30-seed statistical significance benchmark"
     Write-Host "  generalize - Run generalization stress heatmap"
     Write-Host "  ablation - Run component ablation study"
     Write-Host "  critical - Run critical stability boundary test"
+    Write-Host "  reinforce_train - Run REINFORCE SSA training (Track 1)"
+    Write-Host "  dr_train       - Run Domain Randomization training (Track 3)"
+    Write-Host "  corrected_policy - Run corrected Tiered benchmark (Track 4)"
+    Write-Host "  reinforce_check  - Run gradient validation (Track 5)"
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Green
     Write-Host "  .\run_experiment.ps1 drift"
@@ -74,6 +78,10 @@ switch ($Experiment.ToLower()) {
     "ablation" { $PythonScript = "experiments.n_gibbsq.ablation" }
     "critical" { $PythonScript = "experiments.n_gibbsq.critical_load" }
     "bias"     { $PythonScript = "experiments.testing.verify_bias" }
+    "reinforce_train" { $PythonScript = "experiments.n_gibbsq.train_reinforce" }
+    "dr_train"       { $PythonScript = "experiments.n_gibbsq.train_domain_randomized" }
+    "corrected_policy" { $PythonScript = "experiments.evaluation.corrected_policy_comparison" }
+    "reinforce_check" { $PythonScript = "experiments.testing.reinforce_gradient_check" }
     "-h"       { Get-Help $MyInvocation.MyCommand.Definition; exit 0 }
     "help"     { Get-Help $MyInvocation.MyCommand.Definition; exit 0 }
     default    {

@@ -75,8 +75,44 @@ class NeuralRouter(eqx.Module):
 
         for layer in self.layers[:-1]:
             x = jax.nn.relu(layer(x))
-            
 
         logits = self.layers[-1](x)
         
         return logits
+
+    def get_numpy_params(self):
+        """Extract weights and biases as NumPy arrays for fast forward pass."""
+        import numpy as np
+        params = []
+        for layer in self.layers:
+            w = np.array(layer.weight)
+            b = np.array(layer.bias) if layer.bias is not None else None
+            params.append((w, b))
+        return params
+
+    @staticmethod
+    def numpy_forward(Q, params, config):
+        """Pure NumPy implementation of the forward pass for extreme speed in SSA loops."""
+        import numpy as np
+        
+        # Preprocessing
+        if config.preprocessing == "log1p":
+            x = np.log1p(Q)
+        elif config.preprocessing == "linear_min_max":
+            x = Q / config.capacity_bound
+        elif config.preprocessing == "standardize":
+            mean_q = np.mean(Q)
+            std_q = np.std(Q)
+            x = (Q - mean_q) / (std_q + 1e-8)
+        else:
+            x = np.asarray(Q, dtype=np.float64)
+
+        # MLP layers
+        for i, (w, b) in enumerate(params):
+            x = x @ w.T
+            if b is not None:
+                x = x + b
+            if i < len(params) - 1:
+                x = np.maximum(0, x)  # ReLU
+        
+        return x

@@ -1,0 +1,247 @@
+"""
+State representation functions for queueing systems.
+
+This module provides feature transformations for routing policies,
+with a focus on heterogeneity-aware representations that correctly
+handle systems with non-identical service rates.
+
+The primary export is `sojourn_time_features`, which computes the
+expected sojourn time representation that is mathematically correct
+for heterogeneous M/M/N queues.
+"""
+
+import numpy as np
+import jax.numpy as jnp
+from jaxtyping import Array, Float
+
+
+def sojourn_time_features(
+    Q: Float[Array, "..."],
+    mu: Float[Array, "..."],
+) -> Float[Array, "..."]:
+    """
+    Compute expected sojourn time representation for routing decisions.
+    
+    For a heterogeneous M/M/N queue, the correct state representation
+    is the expected sojourn time a newly arriving job would experience
+    at each server:
+    
+        s_i = (Q_i + 1) / μ_i
+    
+    This represents the expected time spent waiting (Q_i jobs ahead)
+    plus service time (1/μ_i), under FCFS discipline.
+    
+    **Why this representation is correct:**
+    
+    1. **Scale-invariant**: A server with μ=10 and Q=9 has the same
+       sojourn time as a server with μ=1 and Q=0. Raw queue lengths
+       cannot distinguish these states; sojourn time correctly equates them.
+    
+    2. **Heterogeneity-aware**: Natively encodes capacity mismatch
+       between servers, eliminating the "Heterogeneity Trap" where
+       JSQ routes equally to fast and slow servers.
+    
+    3. **Mathematically grounded**: The optimal routing policy for
+       M/M/N heterogeneous queues in heavy traffic minimizes expected
+       sojourn time (Halfin-Whitt, 1981; Atar, Mandelbaum & Reiman, 2004).
+    
+    4. **Little's Law consistency**: By Little's Law, E[W_i] = E[Q_i]/λ_i.
+       The sojourn time representation uses the quantity that Little's
+       Law connects to system performance.
+    
+    Parameters
+    ----------
+    Q : Float[Array, "..."]
+        Queue length vector. Shape (N,) for single state, or (batch, N)
+        for batched states. Can be numpy or JAX array.
+    mu : Float[Array, "..."]
+        Service rate vector. Shape (N,) or broadcastable to Q.
+        Must be > 0 for all servers.
+    
+    Returns
+    -------
+    Float[Array, "..."]
+        Sojourn time features s_i = (Q_i + 1) / μ_i.
+        Same shape as input Q.
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> Q = np.array([5, 3, 0])  # Queue lengths
+    >>> mu = np.array([1.0, 2.0, 3.0])  # Service rates
+    >>> sojourn_time_features(Q, mu)
+    array([6.        , 2.        , 0.33333333])
+    
+    The first server has Q=5 and μ=1, so expected sojourn is (5+1)/1 = 6.
+    The third server has Q=0 and μ=3, so expected sojourn is (0+1)/3 ≈ 0.33.
+    A job should route to server 3 (lowest sojourn time), not server 2
+    (lowest queue length), demonstrating why raw Q is wrong for heterogeneous systems.
+    
+    Notes
+    -----
+    This function is designed to work with both NumPy and JAX arrays.
+    It uses jax.numpy operations which are compatible with both.
+    
+    References
+    ----------
+    .. [1] Halfin, S., & Whitt, W. (1981). Heavy-traffic limits for
+           queues with many exponential servers. Operations Research.
+    .. [2] Atar, R., Mandelbaum, A., & Reiman, M. I. (2004).
+           Scheduling a multi-class queue with many exponential servers.
+           Annals of Applied Probability.
+    """
+    # Convert to JAX array if needed (works with numpy too via jnp)
+    Q_arr = jnp.asarray(Q)
+    mu_arr = jnp.asarray(mu)
+    
+    # Compute sojourn time: (Q_i + 1) / μ_i
+    # The +1 accounts for the arriving job's own service time
+    return (Q_arr + 1.0) / mu_arr
+
+
+def sojourn_time_features_numpy(
+    Q: np.ndarray,
+    mu: np.ndarray,
+) -> np.ndarray:
+    """
+    NumPy-only version of sojourn_time_features.
+    
+    Provided for compatibility with pure NumPy code paths.
+    See `sojourn_time_features` for full documentation.
+    
+    Parameters
+    ----------
+    Q : np.ndarray
+        Queue length vector, shape (N,) or (batch, N).
+    mu : np.ndarray
+        Service rate vector, shape (N,) or broadcastable.
+    
+    Returns
+    -------
+    np.ndarray
+        Sojourn time features, same shape as Q.
+    """
+    return (Q.astype(np.float64) + 1.0) / mu.astype(np.float64)
+
+
+def softmax_on_sojourn(
+    Q: Float[Array, "..."],
+    mu: Float[Array, "..."],
+    alpha: float,
+) -> Float[Array, "..."]:
+    """
+    Compute GibbsQ routing probabilities using sojourn-time representation.
+    
+    This is the corrected GibbsQ policy for heterogeneous servers:
+    
+        p_i(Q) ∝ exp(-α · s_i) = exp(-α · (Q_i + 1) / μ_i)
+    
+    This replaces the incorrect raw-queue formulation:
+    
+        p_i(Q) ∝ exp(-α · Q_i)  # WRONG for heterogeneous systems
+    
+    Parameters
+    ----------
+    Q : Float[Array, "..."]
+        Queue length vector, shape (N,).
+    mu : Float[Array, "..."]
+        Service rate vector, shape (N,).
+    alpha : float
+        Inverse temperature parameter. Higher α means more aggressive
+        routing to the shortest-sojourn server.
+    
+    Returns
+    -------
+    Float[Array, "N"]
+        Routing probabilities that sum to 1.0.
+    
+    Examples
+    --------
+    >>> Q = np.array([5, 3, 0])
+    >>> mu = np.array([1.0, 2.0, 3.0])
+    >>> softmax_on_sojourn(Q, mu, alpha=1.0)
+    array([0.0024...])  # Probability heavily weighted to server 3
+    """
+    s = sojourn_time_features(Q, mu)
+    
+    # Log-sum-exp trick for numerical stability
+    logits = -alpha * s
+    logits = logits - jnp.max(logits)  # shift for stability
+    weights = jnp.exp(logits)
+    
+    return weights / jnp.sum(weights)
+
+
+def softmax_on_sojourn_numpy(
+    Q: np.ndarray,
+    mu: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    """
+    NumPy-only version of softmax_on_sojourn.
+    
+    See `softmax_on_sojourn` for full documentation.
+    """
+    s = sojourn_time_features_numpy(Q, mu)
+    
+    # Log-sum-exp trick for numerical stability
+    logits = -alpha * s
+    logits = logits - np.max(logits)
+    weights = np.exp(logits)
+    
+    return weights / np.sum(weights)
+
+
+def compute_advantage(
+    Q: Float[Array, "N"],
+    server_idx: int,
+    mu: Float[Array, "N"],
+    value_estimate: float,
+) -> float:
+    """
+    Compute the advantage for a routing decision in REINFORCE training.
+    
+    For continuous-time queueing systems, the advantage for routing
+    an arrival to server i in state Q is:
+    
+        A(Q, i) = -s_i + V(Q)
+    
+    where s_i = (Q_i + 1) / μ_i is the expected sojourn time at server i,
+    and V(Q) is the value function estimate of expected future queue length.
+    
+    The negative sign on s_i reflects that lower sojourn time is better
+    (we want to minimize expected queue length).
+    
+    Parameters
+    ----------
+    Q : Float[Array, "N"]
+        Current queue length vector.
+    server_idx : int
+        Index of the server the job was routed to.
+    mu : Float[Array, "N"]
+        Service rate vector.
+    value_estimate : float
+        Value function estimate V(Q) from the critic network.
+    
+    Returns
+    -------
+    float
+        Advantage estimate for this routing decision.
+    """
+    s = sojourn_time_features(Q, mu)
+    # Negative because we want to minimize sojourn time
+    immediate_cost = -s[server_idx]
+    return immediate_cost + value_estimate
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Module exports
+# ─────────────────────────────────────────────────────────────────────────────
+
+__all__ = [
+    "sojourn_time_features",
+    "sojourn_time_features_numpy",
+    "softmax_on_sojourn",
+    "softmax_on_sojourn_numpy",
+    "compute_advantage",
+]

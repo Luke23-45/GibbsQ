@@ -329,7 +329,7 @@ def run_replications(
             max_events=max_events,
         )
         log.info(
-            f"  → {result.arrival_count:,} arrivals, "
+            f"  -> {result.arrival_count:,} arrivals, "
             f"{result.departure_count:,} departures, "
             f"final Q_total = {result.states[-1].sum()}"
         )

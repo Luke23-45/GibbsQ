@@ -19,14 +19,14 @@ pip install -e ".[dev]"
 # Run unit tests
 pytest tests/ -v
 
-# Run drift verification (N=2 grid)
-python -m experiments.verification.drift_verification
+# Run gradient validation (Track 5)
+./scripts/run_experiment.ps1 reinforce_check
 
-# Run policy comparison
-python -m experiments.evaluation.policy_comparison
+# Run REINFORCE SSA training (Track 1)
+./scripts/run_experiment.ps1 reinforce_train
 
-# Run α/ρ stability sweep
-python -m experiments.sweeps.stability_sweep
+# Run corrected policy benchmark (Track 4)
+./scripts/run_experiment.ps1 corrected_policy
 ```
 
 ## Project Structure
@@ -37,35 +37,21 @@ GibbsQ/
 │   ├── default.yaml          # N=10 heterogeneous servers, ρ=0.8
 │   └── small.yaml            # N=2 for quick validation
 ├── src/gibbsq/                 # Core library package
-│   ├── core/                 # Config, policies, drift verification
-│   ├── engines/              # NumPy, JAX, distributed, differentiable engines
-│   ├── analysis/             # Metrics and plotting
+│   ├── core/                 # Config, policies, features (Track 2)
+│   ├── engines/              # NumPy and JAX engines (SSA-based)
+│   ├── analysis/             # Metrics and plotting (Gini, Sojourn)
 │   └── utils/                # Exporting, logging, runtime setup
 ├── experiments/              # Hydra-driven experiment scripts
-│   ├── verification/
-│   │   └── drift_verification.py # Experiment 2: drift bound verification
-│   ├── sweeps/
-│   │   └── stability_sweep.py    # Experiment 1+3: α/ρ parameter sweep
+│   ├── n_gibbsq/
+│   │   ├── train_reinforce.py # Track 1: REINFORCE SSA training
+│   │   └── train_domain_randomized.py # Track 3: DR training
 │   ├── testing/
-│   │   └── stress_test.py
-│   ├── training/
-│   │   └── train_dga.py
+│   │   └── reinforce_gradient_check.py # Track 5: Gradient validation
 │   └── evaluation/
-│       └── policy_comparison.py  # Experiment 4: baseline comparison
-├── tests/                    # Unit tests
-│   ├── conftest.py           # Shared fixtures
-│   ├── test_config.py
-│   ├── test_policies.py
-│   ├── test_simulator.py
-│   ├── test_drift.py
-│   └── test_metrics.py
-└── plan/                     # Research plan documents
-    ├── idea/main_idea.md     # Proof specification (LaTeX)
-    └── main/                 # Generated plan
-        ├── 01_architecture.md
-        ├── 02_implementation_plan.md
-        ├── 03_experiment_design.md
-        └── 04_open_questions.md
+│       └── corrected_policy_comparison.py # Track 4: Tiered benchmarks
+├── scripts/                  # Execution & utility scripts
+│   ├── run_experiment.ps1     # Unified entry point (Windows)
+│   └── run_paper_experiments.ps1 # Full paper reproduction pipeline
 ```
 
 ## Configuration

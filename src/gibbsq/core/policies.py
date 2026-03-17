@@ -220,6 +220,119 @@ class PowerOfDRouting:
         return f"PowerOfDRouting(d={self._d})"
 
 
+class JSSQRouting:
+    """
+    Join-Shortest-Sojourn-Queue: route to server with minimum expected sojourn time.
+    
+    For heterogeneous servers, the correct routing metric is **expected sojourn time**:
+    
+        s_i = (Q_i + 1) / μ_i
+    
+    This represents the expected time a newly arriving job would spend at server i
+    (waiting + service), assuming FCFS discipline.
+    
+    This policy is **asymptotically optimal** for M/M/N heterogeneous queues in
+    heavy traffic (Halfin-Whitt regime), unlike JSQ which fails catastrophically
+    in heterogeneous systems.
+    
+    Parameters
+    ----------
+    mu : array_like
+        Service rates μ_i for each server.
+    
+    References
+    ----------
+    .. [1] Halfin, S., & Whitt, W. (1981). Heavy-traffic limits for queues
+           with many exponential servers.
+    """
+    
+    __slots__ = ("_mu",)
+    
+    def __init__(self, mu: np.ndarray) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        self._mu = mu
+    
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+    
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        # Compute sojourn time: (Q + 1) / μ
+        sojourn = (Q.astype(np.float64) + 1.0) / self._mu
+        
+        # Route to minimum sojourn time
+        mask = (sojourn == sojourn.min()).astype(np.float64)
+        return mask / mask.sum()
+    
+    def __repr__(self) -> str:
+        return f"JSSQRouting(N={len(self._mu)})"
+
+
+class SojournTimeSoftmaxRouting:
+    """
+    GibbsQ routing using sojourn-time representation.
+    
+    This is the **corrected GibbsQ policy** for heterogeneous servers:
+    
+        p_i(Q) ∝ exp(-α · s_i) = exp(-α · (Q_i + 1) / μ_i)
+    
+    Unlike the raw-queue formulation `exp(-α · Q_i)`, this representation:
+    
+    1. Is **scale-invariant**: Servers with equal workload have equal probability.
+    2. Is **heterogeneity-aware**: Natively encodes capacity mismatch.
+    3. Is **mathematically grounded**: Aligns with the optimal heavy-traffic policy.
+    
+    Parameters
+    ----------
+    mu : array_like
+        Service rates μ_i for each server.
+    alpha : float
+        Inverse temperature. Higher α = more aggressive routing to shortest-sojourn server.
+    """
+    
+    __slots__ = ("_mu", "_alpha")
+    
+    def __init__(self, mu: np.ndarray, alpha: float = 1.0) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        self._mu = mu
+        self._alpha = float(alpha)
+    
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+    
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+    
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        # Compute sojourn time: (Q + 1) / μ
+        sojourn = (Q.astype(np.float64) + 1.0) / self._mu
+        
+        # Softmax on negative sojourn time
+        logits = -self._alpha * sojourn
+        logits = logits - logits.max()  # log-sum-exp trick for stability
+        weights = np.exp(logits)
+        return weights / weights.sum()
+    
+    def __repr__(self) -> str:
+        return f"SojournTimeSoftmaxRouting(α={self._alpha}, N={len(self._mu)})"
+
+
 # ──────────────────────────────────────────────────────────────
 #  Factory
 # ──────────────────────────────────────────────────────────────
@@ -238,11 +351,11 @@ def make_policy(
     ----------
     name : str
         One of  ``"softmax"``, ``"uniform"``, ``"proportional"``,
-        ``"jsq"``, ``"power_of_d"``.
+        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"sojourn_softmax"``.
     alpha : float
-        Inverse temperature (softmax only).
+        Inverse temperature (softmax and sojourn_softmax only).
     mu : ndarray
-        Service rates (proportional only).
+        Service rates (proportional, jssq, sojourn_softmax only).
     d : int
         Number of choices (power_of_d only).
 
@@ -264,8 +377,16 @@ def make_policy(
             return JSQRouting()
         case "power_of_d":
             return PowerOfDRouting(d)
+        case "jssq":
+            if mu is None:
+                raise ValueError("JSSQ routing requires 'mu' (service rates)")
+            return JSSQRouting(np.asarray(mu, dtype=np.float64))
+        case "sojourn_softmax":
+            if mu is None:
+                raise ValueError("SojournTimeSoftmax routing requires 'mu' (service rates)")
+            return SojournTimeSoftmaxRouting(np.asarray(mu, dtype=np.float64), alpha)
         case _:
             raise ValueError(
                 f"Unknown policy '{name}'.  "
-                f"Valid: softmax, uniform, proportional, jsq, power_of_d"
+                f"Valid: softmax, uniform, proportional, jsq, power_of_d, jssq, sojourn_softmax"
             )

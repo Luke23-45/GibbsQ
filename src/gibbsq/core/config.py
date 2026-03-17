@@ -267,6 +267,73 @@ class NeuralTrainingConfig:
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
 
 
+@dataclass
+class ReinforceConfig:
+    """
+    Configuration for REINFORCE policy gradient training.
+    
+    This is the corrected training pipeline that uses true Gillespie SSA
+    instead of the broken DGA surrogate.
+    
+    Fields
+    ------
+    learning_rate : float
+        AdamW learning rate for policy network.
+    weight_decay : float
+        L2 regularization coefficient.
+    entropy_bonus : float
+        Coefficient for entropy regularization (encourages exploration).
+    batch_size : int
+        Number of parallel trajectories per gradient step.
+    n_epochs : int
+        Total training epochs.
+    sim_time : float
+        SSA simulation horizon per trajectory.
+    """
+    learning_rate: float = 3e-4
+    weight_decay: float = 1e-4
+    entropy_bonus: float = 0.01
+    batch_size: int = 8
+    n_epochs: int = 100
+    sim_time: float = 5000.0
+
+
+@dataclass
+class DomainRandomizationPhase:
+    """Single phase of domain randomization curriculum."""
+    rho_min: float = 0.45
+    rho_max: float = 0.70
+    epochs: int = 20
+    horizon: int = 500
+
+
+@dataclass
+class DomainRandomizationConfig:
+    """
+    Configuration for domain randomization training.
+    
+    Domain randomization exposes the neural network to diverse load
+    conditions, preventing the curriculum failure where training on
+    low-load regimes (ρ < 0.4) produces policies that cannot handle
+    critical load conditions.
+    
+    Fields
+    ------
+    enabled : bool
+        Whether to use domain randomization.
+    phases : list of DomainRandomizationPhase
+        Curriculum phases with increasing load ranges.
+    """
+    enabled: bool = True
+    phases: List[DomainRandomizationPhase] = field(
+        default_factory=lambda: [
+            DomainRandomizationPhase(rho_min=0.45, rho_max=0.70, epochs=20, horizon=500),
+            DomainRandomizationPhase(rho_min=0.50, rho_max=0.85, epochs=30, horizon=2000),
+            DomainRandomizationPhase(rho_min=0.60, rho_max=0.95, epochs=50, horizon=5000),
+        ]
+    )
+
+
 
 # ──────────────────────────────────────────────────────────────
 #  Top-level experiment config
