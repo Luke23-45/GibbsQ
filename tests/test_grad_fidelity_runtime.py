@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 
-from gibbsq.engines.differentiable_engine import (
+from gibbsq.engines.deprecated.differentiable_engine import (
     expected_queue_loss,
     simulate_dga_jax_dynamic_steps,
 )

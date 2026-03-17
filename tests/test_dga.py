@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
-from gibbsq.engines.differentiable_engine import expected_queue_loss
+from gibbsq.engines.deprecated.differentiable_engine import expected_queue_loss
 
 def test_dga_gradient():
     """Prove that JAX can compute gradients through the Gillespie simulator."""

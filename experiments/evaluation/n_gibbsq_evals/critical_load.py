@@ -99,7 +99,7 @@ class CriticalLoadTest:
         k_load, k_sweep = jax.random.split(key)
         
         # 1. Load trained model
-        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
@@ -225,7 +225,7 @@ class CriticalLoadTest:
             except Exception:
                 pass
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)

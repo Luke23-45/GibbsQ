@@ -20,19 +20,19 @@ This classification is based on repository sources only:
 
 | Alias / Script | Module | Category | Why |
 |---|---|---|---|
-| `reinforce_train` | `experiments/n_gibbsq/train_reinforce.py` | **FINAL TRAINING** | Explicit Phase IV Track 1 corrected REINFORCE training. |
-| `dr_train` | `experiments/n_gibbsq/train_domain_randomized.py` | **FINAL TRAINING** | Explicit Phase IV Track 3 corrected domain-randomized REINFORCE training. |
+| `reinforce_train` | `experiments/training/train_reinforce.py` | **FINAL TRAINING** | Explicit Phase IV Track 1 corrected REINFORCE training. |
+| `dr_train` | `experiments/training/train_domain_randomized.py` | **FINAL TRAINING** | Explicit Phase IV Track 3 corrected domain-randomized REINFORCE training. |
 | `reinforce_check` | `experiments/testing/reinforce_gradient_check.py` | **FINAL VALIDATION** | Explicit Phase IV Track 5 gradient estimator validation. |
-| `corrected_policy` | `experiments/evaluation/corrected_policy_comparison.py` | **FINAL EVALUATION** | Explicit Phase IV Track 4 corrected policy benchmark. |
+| `corrected_policy` | `experiments/evaluation/baselines_comparison.py` | **FINAL EVALUATION** | Explicit Phase IV Track 4 corrected policy benchmark. |
 
 ### B) Auxiliary SSA analyses (KEEP as secondary / optional)
 
 | Alias / Script | Module | Category | Why |
 |---|---|---|---|
-| `ablation` | `experiments/n_gibbsq/ablation_ssa.py` | **KEEP (SSA AUX)** | New SSA-native ablation path; launcher alias now points here. |
-| `critical` | `experiments/n_gibbsq/critical_load.py` | **KEEP (SSA AUX)** | Critical-load stress analysis on SSA evaluation path. |
-| `generalize` | `experiments/n_gibbsq/gen_sweep.py` | **KEEP (SSA AUX)** | Generalization sweep with SSA evaluation path. |
-| `stats` | `experiments/n_gibbsq/stats_bench.py` | **KEEP (SSA AUX)** | Statistical benchmark on SSA evaluation path. |
+| `ablation` | `experiments/evaluation/n_gibbsq_evals/ablation_ssa.py` | **KEEP (SSA AUX)** | New SSA-native ablation path. |
+| `critical` | `experiments/evaluation/n_gibbsq_evals/critical_load.py` | **KEEP (SSA AUX)** | Critical-load stress analysis on SSA evaluation path. |
+| `generalize` | `experiments/evaluation/n_gibbsq_evals/gen_sweep.py` | **KEEP (SSA AUX)** | Generalization sweep with SSA evaluation path. |
+| `stats` | `experiments/evaluation/n_gibbsq_evals/stats_bench.py` | **KEEP (SSA AUX)** | Statistical benchmark on SSA evaluation path. |
 | `drift` | `experiments/verification/drift_verification.py` | **KEEP (THEORY-CHECK AUX)** | Drift verification experiment supporting theory checks. |
 | `sweep` | `experiments/sweeps/stability_sweep.py` | **KEEP (THEORY-CHECK AUX)** | Stability sweep for alpha/rho behavior. |
 | `stress` | `experiments/testing/stress_test.py` | **KEEP (ROBUSTNESS AUX)** | Stress diagnostics (scale/critical-load). |
@@ -41,17 +41,14 @@ This classification is based on repository sources only:
 
 | Alias / Script | Module | Category | Why |
 |---|---|---|---|
-| `train` | `experiments/training/train_dga.py` | **DROP (DEPRECATED)** | Launcher marks deprecated DGA routing-agent training. |
-| `n_train` | `experiments/n_gibbsq/train.py` | **DROP (DEPRECATED)** | Launcher marks deprecated neural curriculum training. |
-| `policy` | `experiments/evaluation/policy_comparison.py` | **DROP (DEPRECATED)** | Launcher marks deprecated; replaced by corrected policy benchmark. |
-| `parity` | `experiments/n_gibbsq/eval.py` | **DROP (DEPRECATED)** | Launcher marks deprecated legacy parity flow. |
-| `jacobian` | `experiments/n_gibbsq/jacobian_check.py` | **DROP (DEPRECATED)** | Launcher marks deprecated Jacobian diagnostic flow. |
-| `fidelity` | `experiments/n_gibbsq/grad_check.py` | **DROP (LEGACY DGA CHECK)** | Gradient fidelity check on DGA path, not Phase IV corrected stack. |
-| (no alias) | `experiments/n_gibbsq/ablation.py` | **DROP (DEPRECATED)** | Script header marks legacy DGA-based ablation. |
-| (no alias) | `experiments/testing/debug_scaling_test.py` | **DROP (DEPRECATED)** | Script header marks deprecated diagnostic. |
-| (no alias) | `experiments/testing/debug_stress_runner.py` | **DROP (DEPRECATED)** | Script header marks deprecated diagnostic runner. |
+| `train` | **REMOVED** | **DROP (DEPRECATED)** | DGA routing-agent training - directory removed. |
+| `n_train` | **REMOVED** | **DROP (DEPRECATED)** | Launcher marks deprecated neural curriculum training. |
+| `policy` | `experiments/evaluation/baselines_comparison.py` | **FINAL EVALUATION** | Replaced legacy comparison with the corrected SSA-native benchmark. |
+| `parity` | **REMOVED** | **DROP (DEPRECATED)** | Launcher marks deprecated legacy parity flow. |
+| `jacobian` | **REMOVED** | **DROP (DEPRECATED)** | Launcher marks deprecated Jacobian diagnostic flow. |
+| `fidelity` | **REMOVED** | **DROP (LEGACY DGA CHECK)** | Gradient fidelity check on DGA path. |
 | `bias` | `experiments/testing/verify_bias.py` | **DROP (LEGACY DGA-vs-SSA DIAGNOSTIC)** | DGA/SSA bias diagnostic, not in final Phase IV run chain. |
-| (no alias) | `experiments/testing/check_configs.py` | **UTILITY ONLY** | Config-validation helper, not an experiment result script. |
+| (no alias) | `experiments/testing/check_configs.py` | **UTILITY ONLY** | Config-validation helper. |
 
 ## 3) Final run-set recommendation
 

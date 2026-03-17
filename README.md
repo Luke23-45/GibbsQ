@@ -20,13 +20,13 @@ pip install -e ".[dev]"
 pytest tests/ -v
 
 # Run gradient validation (Track 5)
-./scripts/run_experiment.ps1 reinforce_check
+python scripts/execution/experiment_runner.py reinforce_check
 
 # Run REINFORCE SSA training (Track 1)
-./scripts/run_experiment.ps1 reinforce_train
+python scripts/execution/experiment_runner.py reinforce_train
 
 # Run corrected policy benchmark (Track 4)
-./scripts/run_experiment.ps1 corrected_policy
+python scripts/execution/experiment_runner.py policy
 ```
 
 ## Project Structure
@@ -34,24 +34,26 @@ pytest tests/ -v
 ```
 GibbsQ/
 ├── configs/                  # Hydra YAML configurations
-│   ├── default.yaml          # N=10 heterogeneous servers, ρ=0.8
-│   └── small.yaml            # N=2 for quick validation
 ├── src/gibbsq/                 # Core library package
-│   ├── core/                 # Config, policies, features (Track 2)
-│   ├── engines/              # NumPy and JAX engines (SSA-based)
-│   ├── analysis/             # Metrics and plotting (Gini, Sojourn)
-│   └── utils/                # Exporting, logging, runtime setup
-├── experiments/              # Hydra-driven experiment scripts
-│   ├── n_gibbsq/
-│   │   ├── train_reinforce.py # Track 1: REINFORCE SSA training
-│   │   └── train_domain_randomized.py # Track 3: DR training
-│   ├── testing/
-│   │   └── reinforce_gradient_check.py # Track 5: Gradient validation
-│   └── evaluation/
-│       └── corrected_policy_comparison.py # Track 4: Tiered benchmarks
-├── scripts/                  # Execution & utility scripts
-│   ├── run_experiment.ps1     # Unified entry point (Windows)
-│   └── run_paper_experiments.ps1 # Full paper reproduction pipeline
+│   ├── core/
+│   ├── engines/
+│   │   └── deprecated/       # Quarantine for differentiable_engine.py
+│   ├── analysis/
+│   └── utils/
+├── experiments/              # Hydra-driven research drivers
+│   ├── training/             # Learning routines (REINFORCE, DR)
+│   ├── evaluation/           # Master benchmarks
+│   │   ├── baselines_comparison.py
+│   │   └── n_gibbsq_evals/   # Track-specific deep dives (ablation, etc.)
+│   ├── sweeps/               # Parameter explorations
+│   ├── testing/              # Code & Gradient validations
+│   └── verification/         # Theoretical drift checks
+└── scripts/                  # Professional execution suite
+    ├── execution/
+    │   ├── experiment_runner.py     # Unified task engine
+    │   └── reproduction_pipeline.py # Full paper reproduction
+    └── verification/
+        └── validation_suite.py     # Implementation verification
 ```
 
 ## Configuration
@@ -60,10 +62,10 @@ All experiments use [Hydra](https://hydra.cc/) for configuration management. Ove
 
 ```bash
 # Override α and simulation time
-python -m experiments.verification.drift_verification system.alpha=5.0 simulation.ssa.sim_time=50000
+python scripts/execution/experiment_runner.py drift system.alpha=5.0 simulation.ssa.sim_time=50000
 
 # Use a different base config
-python -m experiments.evaluation.corrected_policy_comparison --config-name small
+python scripts/execution/experiment_runner.py policy --config-name small
 ```
 
 ## Key Theoretical Result

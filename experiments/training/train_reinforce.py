@@ -526,7 +526,7 @@ class ReinforceTrainer:
         
         # Write pointer
         # SG#4 FIX: Write to output_dir from config instead of hardcoded "outputs/small"
-        # This ensures corrected_policy_comparison.py can find the weights pointer.
+        # This ensures policy_comparison.py can find the weights pointer.
         # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
         pointer_dir = self.run_dir.parent.parent
         pointer_dir.mkdir(parents=True, exist_ok=True)

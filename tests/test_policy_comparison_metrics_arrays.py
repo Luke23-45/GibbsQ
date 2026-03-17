@@ -1,6 +1,6 @@
 import numpy as np
 
-from experiments.evaluation.policy_comparison import _compute_metrics_from_arrays
+from experiments.evaluation.baselines_comparison import _compute_metrics_from_arrays
 from gibbsq.analysis.metrics import gini_coefficient, sojourn_time_estimate, time_averaged_queue_lengths
 from gibbsq.engines.numpy_engine import SimResult
 

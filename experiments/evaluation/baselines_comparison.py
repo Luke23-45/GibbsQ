@@ -380,8 +380,8 @@ def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
     
-    run_dir, run_id = get_run_config(cfg, "corrected_policy_comparison", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="corrected_policy_comparison",
+    run_dir, run_id = get_run_config(cfg, "policy_comparison", raw_cfg)
+    run_logger = setup_wandb(cfg, raw_cfg, default_group="policy_comparison",
                             run_id=run_id, run_dir=run_dir)
     
     import jax

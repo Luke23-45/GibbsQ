@@ -30,7 +30,7 @@ from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.numpy_engine import run_replications
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
-from experiments.n_gibbsq.train_reinforce import ReinforceTrainer
+from experiments.training.train_reinforce import ReinforceTrainer
 
 log = logging.getLogger(__name__)
 
@@ -226,11 +226,11 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1:
-        hydra.main(version_base=None, config_path="../../configs", config_name="default")(main)()
+        hydra.main(version_base=None, config_path="../../../configs", config_name="default")(main)()
     else:
         from hydra import compose, initialize_config_dir
 
-        config_dir = str(Path(__file__).resolve().parents[2] / "configs")
+        config_dir = str(Path(__file__).resolve().parents[3] / "configs")
         with initialize_config_dir(config_dir=config_dir, version_base=None):
             raw_cfg = compose(config_name="default")
             main(raw_cfg)

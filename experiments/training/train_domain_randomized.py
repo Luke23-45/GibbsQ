@@ -84,7 +84,7 @@ class DomainRandomizedTrainer:
     
     def execute(self, key: PRNGKeyArray):
         """Execute domain-randomized training."""
-        from experiments.n_gibbsq.train_reinforce import (
+        from experiments.training.train_reinforce import (
             collect_trajectory_ssa, ValueNetwork, compute_causal_returns_to_go
         )
         

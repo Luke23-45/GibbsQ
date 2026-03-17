@@ -112,7 +112,7 @@ class GeneralizationSweeper:
         k_load, k_grid = jax.random.split(key)
         
         # 1. Load trained model
-        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+        _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
         
@@ -252,7 +252,7 @@ class GeneralizationSweeper:
             "rho_vals": rho_vals
         }, self.run_dir / "metrics.jsonl")
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)

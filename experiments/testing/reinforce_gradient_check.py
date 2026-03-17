@@ -27,7 +27,7 @@ from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import sojourn_time_features
 from gibbsq.utils.logging import setup_wandb, get_run_config
-from experiments.n_gibbsq.train_reinforce import collect_trajectory_ssa, compute_causal_returns_to_go
+from experiments.training.train_reinforce import collect_trajectory_ssa, compute_causal_returns_to_go
 
 log = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def compute_reinforce_gradient(
     base_seed: int,
 ) -> tuple[np.ndarray, float, float]:
     """Optimized REINFORCE gradient using Batched Vectorized Pseudo-Loss."""
-    from experiments.n_gibbsq.train_reinforce import collect_trajectory_ssa, compute_causal_returns_to_go
+    from experiments.training.train_reinforce import collect_trajectory_ssa, compute_causal_returns_to_go
     from jax.flatten_util import ravel_pytree
     import jax
     import jax.numpy as jnp
