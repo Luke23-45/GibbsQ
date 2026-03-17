@@ -1,4 +1,6 @@
 """
+DEPRECATED: Legacy DGA-based ablation study.
+
 N-GibbsQ ablation study.
 
 Evaluates contributions of log-state normalization and zero-initialized

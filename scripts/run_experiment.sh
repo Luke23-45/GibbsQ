@@ -9,8 +9,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Set PYTHONPATH so Python can find the `src` module
-export PYTHONPATH="$PROJECT_ROOT"
+# Set PYTHONPATH so Python can find both experiment modules and src package
+export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/src"
 
 print_usage() {
     echo "Usage: ./run_experiment.sh <experiment> [hydra_args...]"
@@ -27,7 +27,7 @@ print_usage() {
     echo "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
     echo "  stats    - Run 30-seed statistical significance benchmark"
     echo "  generalize - Run generalization stress heatmap"
-    echo "  ablation - Run component ablation study"
+    echo "  ablation - Run SSA-based component ablation study"
     echo "  critical - Run critical stability boundary test"
     echo "  reinforce_train - Run REINFORCE SSA training (Track 1)"
     echo "  dr_train       - Run Domain Randomization training (Track 3)"
@@ -86,7 +86,7 @@ case "$EXPERIMENT" in
         PYTHON_SCRIPT="experiments.n_gibbsq.gen_sweep"
         ;;
     "ablation")
-        PYTHON_SCRIPT="experiments.n_gibbsq.ablation"
+        PYTHON_SCRIPT="experiments.n_gibbsq.ablation_ssa"
         ;;
     "critical")
         PYTHON_SCRIPT="experiments.n_gibbsq.critical_load"

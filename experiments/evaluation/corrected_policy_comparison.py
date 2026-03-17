@@ -171,9 +171,10 @@ def run_corrected_comparison(
             **metrics,
         }, run_dir / "corrected_comparison_metrics.jsonl")
     
-    # SG#2 FIX: Correct path resolution relative to PROJECT_ROOT
+    # Resolve pointer directory from active run output layout
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-    pointer_dir = _PROJECT_ROOT / "outputs" / "small"
+    # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
+    pointer_dir = run_dir.parent.parent
     
     # Try DR pointer first, then standard reinforce pointer
     dr_ptr = pointer_dir / "latest_domain_randomized_weights.txt"
