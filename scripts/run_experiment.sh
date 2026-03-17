@@ -18,13 +18,13 @@ print_usage() {
     echo "Available experiments:"
     echo "  drift    - Run drift verification (drift_vs_norm, heatmap)"
     echo "  sweep    - Run stability sweep across alpha and rho"
-    echo "  policy   - Run policy comparison (Softmax vs JSQ, etc.) [DEPRECATED -> corrected_policy]"
+    echo "  policy   - Run corrected policy comparison (Tiered benchmark)"
     echo "  stress   - Run stress test (massive-N, critical load)"
-    echo "  train    - [DEPRECATED] Run DGA routing agent training"
-    echo "  fidelity - Run gradient survival check across horizons"
-    echo "  n_train  - [DEPRECATED] Run neural curriculum training"
-    echo "  parity   - [DEPRECATED] Run neural vs GibbsQ parity evaluation"
-    echo "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
+    # echo "  train    - [DEPRECATED] Run DGA routing agent training"
+    # echo "  fidelity - Run gradient survival check across horizons"
+    # echo "  n_train  - [DEPRECATED] Run neural curriculum training"
+    # echo "  parity   - [DEPRECATED] Run neural vs GibbsQ parity evaluation"
+    # echo "  jacobian - [DEPRECATED] Run Jacobian AD vs finite-difference check"
     echo "  stats    - Run 30-seed statistical significance benchmark"
     echo "  generalize - Run generalization stress heatmap"
     echo "  ablation - Run SSA-based component ablation study"
@@ -59,25 +59,25 @@ case "$EXPERIMENT" in
         PYTHON_SCRIPT="experiments.sweeps.stability_sweep"
         ;;
     "policy")
-        PYTHON_SCRIPT="experiments.evaluation.policy_comparison"
+        PYTHON_SCRIPT="experiments.evaluation.corrected_policy_comparison"
         ;;
     "stress")
         PYTHON_SCRIPT="experiments.testing.stress_test"
         ;;
-    "train")
-        PYTHON_SCRIPT="experiments.training.train_dga"
+    # "train")
+    #     PYTHON_SCRIPT="experiments.training.train_dga" # DEPRECATED
         ;;
-    "fidelity")
-        PYTHON_SCRIPT="experiments.n_gibbsq.grad_check"
+    # "fidelity")
+    #     PYTHON_SCRIPT="experiments.n_gibbsq.grad_check" # DEPRECATED
         ;;
-    "n_train")
-        PYTHON_SCRIPT="experiments.n_gibbsq.train"
+    # "n_train")
+    #     PYTHON_SCRIPT="experiments.n_gibbsq.train" # DEPRECATED
         ;;
-    "parity")
-        PYTHON_SCRIPT="experiments.n_gibbsq.eval"
+    # "parity")
+    #     PYTHON_SCRIPT="experiments.n_gibbsq.eval" # DEPRECATED
         ;;
-    "jacobian")
-        PYTHON_SCRIPT="experiments.n_gibbsq.jacobian_check"
+    # "jacobian")
+    #     PYTHON_SCRIPT="experiments.n_gibbsq.jacobian_check" # DEPRECATED
         ;;
     "stats")
         PYTHON_SCRIPT="experiments.n_gibbsq.stats_bench"
@@ -112,7 +112,7 @@ case "$EXPERIMENT" in
         ;;
     *)
         echo "Error: Unknown experiment '$EXPERIMENT'"
-        print_usage
+        echo "Valid options are: drift, sweep, policy, stress, stats, generalize, ablation, critical, reinforce_train, dr_train, corrected_policy, reinforce_check"
         exit 1
         ;;
 esac

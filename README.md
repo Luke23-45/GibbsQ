@@ -63,7 +63,7 @@ All experiments use [Hydra](https://hydra.cc/) for configuration management. Ove
 python -m experiments.verification.drift_verification system.alpha=5.0 simulation.ssa.sim_time=50000
 
 # Use a different base config
-python -m experiments.evaluation.policy_comparison --config-name small
+python -m experiments.evaluation.corrected_policy_comparison --config-name small
 ```
 
 ## Key Theoretical Result
