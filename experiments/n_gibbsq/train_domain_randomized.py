@@ -186,7 +186,12 @@ class DomainRandomizedTrainer:
                         batch_S.extend(traj.states)
                         batch_A.extend(traj.actions)
                         batch_G.extend(G)
-                        
+                
+                # SG#1 FIX: Initialize losses before conditional to prevent UnboundLocalError
+                # when batch_G is empty (all trajectories have no actions)
+                policy_loss = 0.0
+                value_loss = 0.0
+                
                 if len(batch_G) > 0:
                     S_tensor = jnp.asarray(np.stack(batch_S), dtype=jnp.float32)
                     A_tensor = jnp.asarray(batch_A, dtype=jnp.int32)

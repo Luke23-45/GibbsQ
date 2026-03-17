@@ -220,6 +220,11 @@ def compute_reinforce_gradient(
     flat_grad, _ = ravel_pytree(eqx.filter(grad_val, eqx.is_array))
     
     # Division by n_samples maps the sum-of-advantages to an expected value over the batch.
+    # SG#3 NOTE: This normalization differs from finite difference gradient which uses
+    # mean return per trajectory. The REINFORCE gradient is: ∇J = E_τ[∑_t A_t ∇log π(a_t|s_t)]
+    # summed over all timesteps then divided by n_trajectories. Finite difference computes
+    # ∇E[R(τ)] directly. These have different magnitudes but same direction for unbiased estimator.
+    # The cosine_sim metric (line ~318) validates direction independently of magnitude.
     mean_grad = np.array(flat_grad) / float(n_samples)
     
     return mean_grad, 0.0, 0.0  
@@ -347,7 +352,9 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     seed_key = jax.random.PRNGKey(cfg.simulation.seed)
-    result = run_gradient_check(cfg, seed_key, n_samples=2500)
+    # SG#2 FIX: Use default n_samples=15000 for proper Law of Large Numbers convergence
+    # Previously hardcoded n_samples=2500 which was 6x lower than designed
+    result = run_gradient_check(cfg, seed_key)
     
     # Save results
     import json

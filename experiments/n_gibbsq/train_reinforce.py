@@ -408,7 +408,12 @@ class ReinforceTrainer:
                     batch_S.extend(traj.states)
                     batch_A.extend(traj.actions)
                     batch_G.extend(G)
-                    
+            
+            # SG#1 FIX: Initialize losses before conditional to prevent UnboundLocalError
+            # when batch_G is empty (all trajectories have no actions)
+            policy_loss = 0.0
+            value_loss = 0.0
+            
             if len(batch_G) > 0:
                 S_tensor = jnp.asarray(np.stack(batch_S), dtype=jnp.float32)
                 A_tensor = jnp.asarray(batch_A, dtype=jnp.int32)
@@ -514,10 +519,13 @@ class ReinforceTrainer:
         plt.close()
         
         # Write pointer
-        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-        pointer_dir = _PROJECT_ROOT / "outputs" / "small"
+        # SG#4 FIX: Write to output_dir from config instead of hardcoded "outputs/small"
+        # This ensures corrected_policy_comparison.py can find the weights pointer.
+        # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
+        pointer_dir = self.run_dir.parent.parent
         pointer_dir.mkdir(parents=True, exist_ok=True)
         pointer_path = pointer_dir / "latest_reinforce_weights.txt"
+        _PROJECT_ROOT = Path(__file__).resolve().parents[2]
         _relative_model_path = policy_path.resolve().relative_to(_PROJECT_ROOT)
         pointer_path.write_text(str(_relative_model_path), encoding='utf-8')
         
