@@ -61,5 +61,21 @@ jax:
 wandb:
   enabled: false
   project: GibbsQ-Small
+  
+batch_size: 32  # PI-V4.3: Increased from 16 to 32 for refined variance reduction
+
+neural:
+  hidden_size: 64
+  preprocessing: log1p
+  init_type: zero_final
+  use_rho: true
+  rho_input_scale: 10.0
+  entropy_bonus: 0.01  # STABILITY FIX: Increased from 0.001 to prevent premature policy collapse
+  grad_clip: 1.0
+  actor_lr: 0.001  # actor learning rate
+  critic_lr: 0.001 # STABILITY FIX: Increased from 0.0001/3e-4 to ensure baseline adapts at same speed as actor
+  weight_decay: 0.0001
+
+train_epochs: 100  # FIX: Increased from 30 for more learning
 
 output_dir: outputs/small

@@ -151,6 +151,7 @@ def collect_trajectory_jax(
         
         is_arrival = event < num_servers
         action = jnp.where(is_arrival, event, -1)
+        # FIXED: Only access log_probs for arrival events, not departure events
         chosen_log_prob = jnp.where(is_arrival, log_probs[event], 0.0)
         
         # FIX: Prevent array wrap-around negative indexing during tracing phase

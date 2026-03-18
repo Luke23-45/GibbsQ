@@ -108,12 +108,12 @@ def verify_phase_iv(args):
     print("\n[2/4] Track 1: Training REINFORCE Agent (True SSA)...")
     run_cmd(["reinforce_train"] + common, dry_run)
     
-    # Track 3: Domain Randomization
-    print("\n[3/4] Track 3: Training with Domain Randomization...")
-    run_cmd(["dr_train"] + common, dry_run)
+    # Track 3: Platinum BC Pretraining
+    print("\n[3/4] Track 2/3: Platinum Behavior Cloning Pretraining (Robust)...")
+    run_cmd(["bc_train"] + common, dry_run)
     
-    # Track 4: Corrected Policy Benchmark
-    print("\n[4/4] Track 4: Running Corrected Tiered Benchmark...")
+    # Track 4: Platinum Benchmark
+    print("\n[4/4] Track 4: Running Platinum Parity Benchmark (Corrected Grid)...")
     run_cmd(["corrected_policy"] + common, dry_run)
 
 def main():
