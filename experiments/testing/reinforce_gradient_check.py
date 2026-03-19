@@ -42,6 +42,7 @@ class GradientCheckResult(NamedTuple):
     cosine_similarity: float
     bias_estimate: float
     variance_estimate: float
+    reinforce_var_vector: np.ndarray # NEW: Per-parameter variance
     passed: bool
 
 def compute_reinforce_gradient(
@@ -118,9 +119,13 @@ def compute_reinforce_gradient(
             step_idx = jnp.arange(max_steps)[None, :]
             chosen_log_probs = log_probs[batch_idx, step_idx, safe_a]
             
-            # Loss = - E[ Advantage * log_prob ] for maximization
+            # Temporal Credit Assignment correction (SG #1)
+            action_idx = jnp.cumsum(fixed_mask.astype(jnp.float32), axis=1) - 1.0
+            gamma_factors = cfg.neural_training.gamma ** action_idx
+            
+            # Loss = - E[ gamma^t * Advantage * log_prob ] for maximization
             # We return negative sum because jax.grad minimizes by default
-            return -jnp.sum(fixed_mask * adv * chosen_log_probs)
+            return -jnp.sum(gamma_factors * fixed_mask * adv * chosen_log_probs)
 
         # Differentiate with respect to the flat parameters
         return jax.grad(loss_fn)(flat_theta)
@@ -170,12 +175,13 @@ def compute_reinforce_gradient(
         variance = float(jnp.mean(grad_variance))
     else:
         variance = 0.0  # Single chunk - variance undefined
+        grad_variance = jnp.zeros_like(mean_grad)
     
     # Bias estimate: computed in run_gradient_check using finite difference as reference
     # Placeholder here; actual bias computed when comparing to finite_diff_grad
     bias = 0.0  # Will be overwritten in run_gradient_check
     
-    return mean_grad, bias, variance
+    return mean_grad, bias, variance, np.array(grad_variance)
 
 
 def compute_finite_difference_gradient(
@@ -188,6 +194,8 @@ def compute_finite_difference_gradient(
     n_samples: int,
     base_seed: int,
     cfg: Any, # Passed down for thresholds
+    reinforce_grad: np.ndarray = None, # for real-time comparison
+    reinforce_var: np.ndarray = None,  # NEW: for Z-score calculation
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute gradient via finite differences using Chunked JAX Execution."""
     from jax.flatten_util import ravel_pytree
@@ -249,10 +257,8 @@ def compute_finite_difference_gradient(
         return total_sum / float(n_samples)
 
     # 2. Evaluation
+    computed_mask = np.zeros(n_params, dtype=bool)
     for i, param_idx in enumerate(selected_indices):
-        if i % 5 == 0:
-            log.info(f"  Testing parameter {i+1}/{len(selected_indices)} (index: {param_idx})...")
-            
         # ---- PLUS PERTURBATION ----
         params_plus = flat_params.at[param_idx].add(epsilon)
         return_plus = get_expected_return(params_plus, keys_shared)
@@ -263,9 +269,52 @@ def compute_finite_difference_gradient(
         
         # Central Difference Formula
         grad[param_idx] = (return_plus - return_minus) / (2 * epsilon)
+        computed_mask[param_idx] = True
+        
+        # ---- PERIODIC RUNNING STATS LOGGING ----
+        last_step = (i + 1) == len(selected_indices)
+        if (i + 1) % 10 == 0 or last_step:
+            # Current parameter stats
+            rf_val = float(reinforce_grad[param_idx])
+            fd_val = float(grad[param_idx])
+            abs_diff = abs(rf_val - fd_val)
+            rel_err_p = abs_diff / max(1e-12, abs(fd_val))
+            
+            # Running Aggregate Stats
+            mask = computed_mask
+            rf_sub = reinforce_grad[mask]
+            fd_sub = grad[mask]
+            
+            # Running L2 Relative Error
+            diff_norm = np.linalg.norm(rf_sub - fd_sub)
+            fd_norm_sub = np.linalg.norm(fd_sub)
+            running_rel_err = diff_norm / fd_norm_sub if fd_norm_sub > 1e-9 else 0.0
+            
+            # Running Cosine Similarity
+            rf_norm_sub = np.linalg.norm(rf_sub)
+            if rf_norm_sub > 1e-9 and fd_norm_sub > 1e-9:
+                running_cos_sim = np.dot(rf_sub, fd_sub) / (rf_norm_sub * fd_norm_sub)
+            else:
+                running_cos_sim = 0.0
+
+            # Statistical Significance (Z-score)
+            if reinforce_var is not None and reinforce_var[param_idx] > 1e-11:
+                std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
+                z_score = abs_diff / max(1e-12, std_err)
+                z_str = f" | z={z_score:5.2f}"
+                is_bias = z_score > 3.0
+            else:
+                z_str = " | z=N/A "
+                is_bias = rel_err_p > cfg.verification.gradient_check_error_threshold
+
+            # Status based on configurable threshold or Z-score
+            status = "[!!]" if is_bias else "[OK]"
+            
+            log.info(
+                f"  {status} Param {i+1:3}/{len(selected_indices):<3} (idx {param_idx:5}): "
+                f"RF={rf_val:10.6f} | FD={fd_val:10.6f} | diff={abs_diff:10.6f}{z_str} | RelErr={running_rel_err:7.4f} | CosSim={running_cos_sim:7.4f}"
+            )
     
-    computed_mask = np.zeros(n_params, dtype=bool)
-    computed_mask[selected_indices] = True
     
     return grad, computed_mask
 
@@ -324,7 +373,7 @@ def run_gradient_check(
     sim_time = cfg.verification.gradient_check_sim_time
     
     log.info("Computing REINFORCE gradient estimate...")
-    reinforce_grad, bias, variance = compute_reinforce_gradient(
+    reinforce_grad, bias, variance, grad_variance = compute_reinforce_gradient(
         policy_net,
         cfg.system.num_servers,
         cfg.system.arrival_rate,
@@ -346,6 +395,8 @@ def run_gradient_check(
         n_samples=n_samples,
         base_seed=cfg.simulation.seed + 10000,
         cfg=cfg,
+        reinforce_grad=reinforce_grad,
+        reinforce_var=grad_variance,
     )
     
     # Compute relative error using L2 norm as per professor's spec
@@ -402,6 +453,7 @@ def run_gradient_check(
         cosine_similarity=cosine_sim,
         bias_estimate=bias,
         variance_estimate=variance,
+        reinforce_var_vector=grad_variance,
         passed=passed,
     )
 

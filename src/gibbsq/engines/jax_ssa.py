@@ -72,11 +72,13 @@ def compute_causal_returns_jax(
         R = carry
         c_k, is_act, _ = inputs
         
-        # Immediate interval cost added to accumulator
+        # Correct SMDP discounting:
+        # At step i_k, the return for this action is R + c_k
         action_return = R + c_k
         
-        # If this step is an action boundary, we discount the future accumulated 
-        # returns for the *next* step backwards in time. Otherwise, just accumulate.
+        # If this step is an action, the return passed to earlier steps 
+        # (which operate from action k-1 to k) must be discounted by gamma.
+        # If not, we just accumulate the interval costs without discounting.
         next_R = jnp.where(is_act, action_return * gamma, action_return)
         
         return next_R, action_return
