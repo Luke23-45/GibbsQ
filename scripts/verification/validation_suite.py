@@ -51,12 +51,16 @@ def verify_standard(args):
     
     print(f"\n>>> INITIATING STANDARD VERIFICATION (Level: {level.upper()}) <<<\n")
     
+    # Step 0: Pre-flight Configuration Check
+    print("[0/6] Running Step 0: Pre-flight configuration check...")
+    run_cmd(["check_configs"], dry_run)
+    
     # Step 1: Theoretical Drift
-    print("[1/5] Running Step 1: Theoretical Drift Verification...")
+    print("\n[1/6] Running Step 1: Theoretical Drift Verification...")
     run_cmd(["drift", "system.num_servers=2", "system.arrival_rate=2.0"], dry_run)
     
     # Step 2: Stability Sweep
-    print("\n[2/5] Running Step 2: Stability Sweep...")
+    print("\n[2/6] Running Step 2: Stability Sweep...")
     run_cmd([
         "sweep", 
         f"simulation.ssa.sim_time={sim_time}", 
@@ -65,7 +69,7 @@ def verify_standard(args):
     ], dry_run)
     
     # Step 3: Policy Comparison
-    print("\n[3/5] Running Step 3: Policy Comparison (Heterogeneous)...")
+    print("\n[3/6] Running Step 3: Policy Comparison (Heterogeneous)...")
     run_cmd([
         "policy", 
         "system.num_servers=4", 
@@ -75,7 +79,7 @@ def verify_standard(args):
     ], dry_run)
     
     # Step 4: Stress Test
-    print("\n[4/5] Running Step 4: Stress Test...")
+    print("\n[4/6] Running Step 4: Stress Test...")
     debug_flag = "True" if level != "full" else "False"
     run_cmd([
         "stress", 
@@ -84,9 +88,8 @@ def verify_standard(args):
         "jax.enabled=true"
     ], dry_run)
     
-    # Step 5: Training (Updating to current REINFORCE instead of deprecated DGA)
-    print("\n[5/5] Running Step 5: REINFORCE Training...")
-    print("NOTE: Automatically substituted deprecated DGA 'train' with 'reinforce_train'.")
+    # Step 5: Training (Phase 2: Neural Learning Pipeline)
+    print("\n[5/6] Running Step 5: REINFORCE Training...")
     run_cmd(["reinforce_train", f"train_epochs={train_epochs}"], dry_run)
 
 def verify_phase_iv(args):
@@ -100,8 +103,12 @@ def verify_phase_iv(args):
     
     common = [f"--config-name={config}"] + hydra_args
     
+    # Pre-flight: Configuration Check
+    print("[0/4] Pre-flight Check: Validating configuration...")
+    run_cmd(["check_configs"] + common, dry_run)
+    
     # Track 5: Gradient Estimator Validation
-    print("[1/4] Track 5: Validating Gradient Estimator...")
+    print("\n[1/4] Track 5: Validating Gradient Estimator...")
     run_cmd(["reinforce_check"] + common, dry_run)
     
     # Track 1: REINFORCE SSA Training
@@ -115,6 +122,40 @@ def verify_phase_iv(args):
     # Track 4: Platinum Benchmark
     print("\n[4/4] Track 4: Running Platinum Parity Benchmark (Corrected Grid)...")
     run_cmd(["corrected_policy"] + common, dry_run)
+
+def verify_full_paper(args):
+    """Executes the entire research pipeline from Phases 0-3."""
+    config = args.config_name
+    dry_run = args.dry_run
+    hydra_args = args.hydra_args
+    
+    print(f"\n>>> INITIATING FULL PAPER PIPELINE (Config: {config}) <<<\n")
+    
+    common = [f"--config-name={config}"] + hydra_args
+    
+    # PHASE 0: Pre-flight & Validation
+    print("--- [PHASE 0] Pre-flight & Validation ---")
+    run_cmd(["check_configs"] + common, dry_run)
+    run_cmd(["reinforce_check"] + common, dry_run)
+    
+    # PHASE 1: Baselines & Metrics
+    print("\n--- [PHASE 1] Baselines & Foundational Metrics ---")
+    run_cmd(["drift"] + common, dry_run)
+    run_cmd(["sweep"] + common, dry_run)
+    run_cmd(["stress"] + common, dry_run)
+    run_cmd(["policy"] + common, dry_run)
+    
+    # PHASE 2: Training
+    print("\n--- [PHASE 2] Neural Learning Pipeline ---")
+    run_cmd(["bc_train"] + common, dry_run)
+    run_cmd(["reinforce_train"] + common, dry_run)
+    
+    # PHASE 3: Analysis
+    print("\n--- [PHASE 3] Deep Generational Analysis & Ablation ---")
+    run_cmd(["stats"] + common, dry_run)
+    run_cmd(["generalize"] + common, dry_run)
+    run_cmd(["ablation"] + common, dry_run)
+    run_cmd(["critical"] + common, dry_run)
 
 def main():
     # Common parser for shared arguments
@@ -144,7 +185,16 @@ def main():
         help="Phase IV Corrective Track verification (REINFORCE + SSA)"
     )
     parser_iv.add_argument("--config-name", default="small", help="Hydra configuration profile to use")
-    parser_iv.add_argument("hydra_args", nargs="*", help="Arbitrary Hydra configuration overrides (e.g. system.num_servers=5)")
+    parser_iv.add_argument("hydra_args", nargs="*", help="Arbitrary Hydra configuration overrides")
+    
+    # 'full_paper' subcommand
+    parser_full = subparsers.add_parser(
+        "full_paper",
+        parents=[parent_parser],
+        help="Execute the full end-to-end paper pipeline (Phases 0-3)"
+    )
+    parser_full.add_argument("--config-name", default="small", help="Hydra configuration profile to use")
+    parser_full.add_argument("hydra_args", nargs="*", help="Arbitrary Hydra configuration overrides")
     
     args = parser.parse_args()
     
@@ -157,6 +207,8 @@ def main():
             verify_standard(args)
         elif args.command == "phase_iv":
             verify_phase_iv(args)
+        elif args.command == "full_paper":
+            verify_full_paper(args)
             
         print("\n" + "="*60)
         print("  VERIFICATION COMPLETE!")

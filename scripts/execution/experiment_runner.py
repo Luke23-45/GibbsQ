@@ -12,20 +12,27 @@ from pathlib import Path
 
 # Experiment mappings
 EXPERIMENTS = {
+    # Phase 0: Validation & Pre-flight Sanity
+    "check_configs": "experiments.testing.check_configs",
+    "reinforce_check": "experiments.testing.reinforce_gradient_check",
+    "bias": "experiments.testing.reinforce_gradient_check",
+
+    # Phase 1: Foundational Metrics & Baselines
     "drift": "experiments.verification.drift_verification",
-    "sweep": "experiments.sweeps.stability_sweep", 
-    "policy": "experiments.evaluation.baselines_comparison",
+    "sweep": "experiments.sweeps.stability_sweep",
     "stress": "experiments.testing.stress_test",
+    "policy": "experiments.evaluation.baselines_comparison",
+    "corrected_policy": "experiments.evaluation.baselines_comparison",
+
+    # Phase 2: Neural Learning Pipeline (Training)
+    "bc_train": "experiments.training.pretrain_bc",
+    "reinforce_train": "experiments.training.train_reinforce",
+
+    # Phase 3: Deep Generational Analysis & Ablation
     "stats": "experiments.evaluation.n_gibbsq_evals.stats_bench",
     "generalize": "experiments.evaluation.n_gibbsq_evals.gen_sweep",
     "ablation": "experiments.evaluation.n_gibbsq_evals.ablation_ssa",
     "critical": "experiments.evaluation.n_gibbsq_evals.critical_load",
-    "bias": "experiments.testing.reinforce_gradient_check",
-    "reinforce_train": "experiments.training.train_reinforce",
-    "bc_train": "experiments.training.pretrain_bc",
-    "corrected_policy": "experiments.evaluation.baselines_comparison",
-    "reinforce_check": "experiments.testing.reinforce_gradient_check",
-    "check_configs": "experiments.testing.check_configs",
 }
 
 def print_usage():
