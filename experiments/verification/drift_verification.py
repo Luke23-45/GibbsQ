@@ -16,7 +16,7 @@ import hydra
 from omegaconf import DictConfig
 
 from gibbsq.core.config import hydra_to_config, validate, drift_constant_R, drift_rate_epsilon
-from gibbsq.core.policies import make_policy
+from gibbsq.core.builders import build_policy_by_name
 from gibbsq.engines.numpy_engine import simulate
 from gibbsq.core.drift import evaluate_grid, evaluate_trajectory
 from gibbsq.analysis.plotting import plot_drift_landscape, plot_drift_vs_norm
@@ -107,7 +107,7 @@ def main(raw_cfg: DictConfig) -> None:
 
     else:
         log.info("--- Trajectory Evaluation ---")
-        policy = make_policy("softmax", alpha=alpha)
+        policy = build_policy_by_name("softmax", alpha=alpha)
         
         sim_res = simulate(
             num_servers=N,

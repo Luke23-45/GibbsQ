@@ -20,13 +20,10 @@ import logging
 from pathlib import Path
 import numpy as np
 import jax
-import jax.numpy as jnp
 from omegaconf import DictConfig
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
-from gibbsq.core.policies import (
-    SoftmaxRouting, UniformRouting, ProportionalRouting,
-    JSQRouting, PowerOfDRouting, JSSQRouting, SojournTimeSoftmaxRouting
-)
+from gibbsq.core.builders import build_policy_by_name
+from gibbsq.utils.model_io import DeterministicNeuralPolicy, StochasticNeuralPolicy
 from gibbsq.engines.numpy_engine import simulate, run_replications, SimResult
 from gibbsq.analysis.metrics import (
     time_averaged_queue_lengths, gini_coefficient, sojourn_time_estimate
@@ -42,31 +39,7 @@ from gibbsq.core.neural_policies import NeuralRouter
 log = logging.getLogger(__name__)
 
 
-class DeterministicNeuralPolicy:
-    """
-    Wraps a trained NeuralRouter to provide deterministic actions.
-    Uses greedy argmax to remove policy sampling noise for final evaluations.
-    """
-    def __init__(self, net, mu):
-        self._net = net
-        self._mu = mu
-        self._np_params = net.get_numpy_params()
-        self._np_config = net.config
-        self._num_servers = len(mu)
-
-    def __call__(self, Q, rng):
-        # Feature vector: (Q+1)/mu
-        s = (Q + 1.0) / self._mu
-        # Fast numpy forward pass
-        logits = self._net.numpy_forward(s, self._np_params, self._np_config)
-        
-        # Greedy deterministic selection
-        best_idx = int(np.argmax(logits))
-        
-        # Return one-hot probability vector
-        probs = np.zeros(self._num_servers, dtype=np.float64)
-        probs[best_idx] = 1.0
-        return probs
+# DeterministicNeuralPolicy moved to gibbsq.utils.model_io.DeterministicNeuralPolicy
 
 
 # Corrected baseline hierarchy (per professor's spec at suggestions.md:517-539)
@@ -93,24 +66,7 @@ CORRECTED_POLICIES = [
 ]
 
 
-def make_corrected_policy(entry: dict, mu: np.ndarray) -> object:
-    """Create a policy from the corrected hierarchy entry."""
-    name = entry["name"]
-    
-    if name == "uniform":
-        return UniformRouting()
-    elif name == "proportional":
-        return ProportionalRouting(mu)
-    elif name == "jsq":
-        return JSQRouting()
-    elif name == "power_of_d":
-        return PowerOfDRouting(entry.get("d", 2))
-    elif name == "jssq":
-        return JSSQRouting(mu)
-    elif name == "sojourn_softmax":
-        return SojournTimeSoftmaxRouting(mu, entry.get("alpha", 1.0))
-    else:
-        raise ValueError(f"Unknown policy: {name}")
+# make_corrected_policy deprecated: using build_policy_by_name from Registry
 
 
 def evaluate_single_policy(
@@ -177,11 +133,16 @@ def run_corrected_comparison(
         
         log.info(f"Evaluating Tier {tier}: {label}...")
         
-        # Create policy
+        # Create policy via Builders (Configuration-as-Code)
+        kwargs = {}
         if entry.get("requires_mu", False):
-            policy = make_corrected_policy(entry, mu)
-        else:
-            policy = make_corrected_policy(entry, mu)
+            kwargs["mu"] = mu
+        if "alpha" in entry:
+            kwargs["alpha"] = entry["alpha"]
+        if "d" in entry:
+            kwargs["d"] = entry["d"]
+            
+        policy = build_policy_by_name(entry["name"], **kwargs)
         
         # Evaluate
         rng = np.random.default_rng(cfg.simulation.seed)
@@ -250,25 +211,7 @@ def run_corrected_comparison(
                     )
                     return
                 
-                # Optimization: Extract NumPy parameters once
-                np_params = policy_net.get_numpy_params()
-                np_config = policy_net.config
-                
                 deterministic = DeterministicNeuralPolicy(policy_net, mu)
-                # Standard stochastic policy for silver/bronze parity
-                class NeuralPolicyWrapper:
-                    def __init__(self, net, mu):
-                        self._net = net
-                        self._mu = mu
-                        self._np_params = net.get_numpy_params()
-                        self._np_config = net.config
-                    
-                    def __call__(self, Q, rng):
-                        s = (Q + 1.0) / self._mu
-                        logits = self._net.numpy_forward(s, self._np_params, self._np_config)
-                        logits = logits - np.max(logits)
-                        probs = np.exp(logits)
-                        return probs / probs.sum()
                 
                 log.info("Evaluating N-GibbsQ (Greedy Deterministic)...")
                 metrics = evaluate_single_policy(deterministic, cfg, 
@@ -280,12 +223,11 @@ def run_corrected_comparison(
                     **metrics,
                 }
                 
-                # Also keep the stochastic one for legacy parity analysis if needed
-                stochastic = NeuralPolicyWrapper(policy_net, mu)
-                
                 log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
-        except Exception as e:
-            log.warning(f"Could not evaluate neural policy: {e}")
+        except (KeyError, FileNotFoundError, ValueError, RuntimeError) as e:
+            # Catch specific exceptions that indicate configuration/model issues
+            # Do NOT catch all Exception types to avoid hiding real bugs
+            log.warning(f"Could not evaluate neural policy: {type(e).__name__}: {e}")
     
     # Compute parity result using corrected tiered criteria
     log.info("\n" + "=" * 60)
@@ -321,8 +263,8 @@ def run_corrected_comparison(
         
         def has_parity(q_agent, se_agent, q_base, se_base):
             # SG#4 FIX: Parity applies if the Agent performs better OR is within the statistical Margin of Error
-            # We calculate a 95% Confidence limit (approx 1.96 z-score) for the difference of two means
-            margin_of_error = 1.96 * np.sqrt(se_agent**2 + se_base**2)
+            # We calculate a Confidence limit (configurable via parity_z_score) for the difference of two means
+            margin_of_error = cfg.verification.parity_z_score * np.sqrt(se_agent**2 + se_base**2)
             return q_agent <= (q_base + margin_of_error)
 
         se_neural = neural_result["se_q_total"]
@@ -422,8 +364,8 @@ def run_grid_generalization(
     service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
     total_capacity = float(np.sum(service_rates))
     
-    # High-resolution grid targeting the critical load horizon
-    rho_grid = [0.45, 0.55, 0.65, 0.75, 0.80, 0.85, 0.90, 0.95]
+    # Use the generalization config grid instead of hardcoded
+    rho_grid = cfg.generalization.rho_grid_vals
     log.info(f"Evaluating across load factors: {rho_grid}")
     
     results = []
@@ -433,14 +375,14 @@ def run_grid_generalization(
         # 1. Uniform
         q_u = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum() 
                            for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates, 
-                                                   policy=UniformRouting(), 
+                                                   policy=build_policy_by_name("uniform"), 
                                                    num_replications=cfg.simulation.num_replications, sim_time=cfg.simulation.ssa.sim_time, 
                                                    base_seed=cfg.simulation.seed)]))
         
         # 2. JSQ
         q_j = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum() 
                            for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates, 
-                                                   policy=JSQRouting(), 
+                                                   policy=build_policy_by_name("jsq"), 
                                                    num_replications=cfg.simulation.num_replications, sim_time=cfg.simulation.ssa.sim_time, 
                                                    base_seed=cfg.simulation.seed)]))
         

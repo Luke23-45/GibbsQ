@@ -24,6 +24,7 @@ from jaxtyping import PRNGKeyArray, Array, Float
 from omegaconf import DictConfig
 
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
+from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import sojourn_time_features
 from gibbsq.utils.logging import setup_wandb, get_run_config
@@ -51,6 +52,7 @@ def compute_reinforce_gradient(
     sim_time: float,
     n_samples: int,
     base_seed: int,
+    cfg: Any, # Passed down for thresholds
 ) -> tuple[np.ndarray, float, float]:
     """Optimized REINFORCE gradient using JAX Chunked Vectorized Execution."""
     from jax.flatten_util import ravel_pytree
@@ -61,8 +63,8 @@ def compute_reinforce_gradient(
     from gibbsq.engines.jax_ssa import vmap_collect_trajectories
     
     # 1. Chunking configuration to prevent Out-Of-Memory (OOM)
-    chunk_size = 1500
-    max_steps = 300  # Highly safe Poisson bound for T=15 (E[events] ~ 75)
+    chunk_size = cfg.verification.gradient_check_chunk_size
+    max_steps = cfg.verification.gradient_check_max_steps
     
     keys = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
     service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
@@ -87,7 +89,7 @@ def compute_reinforce_gradient(
             sim_time=sim_time,
             keys=keys_chunk,
             max_steps=max_steps,
-            gamma=0.99
+            gamma=cfg.neural_training.gamma
         )
         
         mask = batch.is_action_mask & batch.valid_mask
@@ -185,6 +187,7 @@ def compute_finite_difference_gradient(
     epsilon: float,
     n_samples: int,
     base_seed: int,
+    cfg: Any, # Passed down for thresholds
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute gradient via finite differences using Chunked JAX Execution."""
     from jax.flatten_util import ravel_pytree
@@ -198,7 +201,7 @@ def compute_finite_difference_gradient(
     flat_params, unravel = ravel_pytree(params)
     
     n_params = flat_params.shape[0]
-    n_test = min(50, n_params)  # Test at least 14% of parameters 
+    n_test = min(cfg.verification.gradient_check_n_test, n_params)  # Configured test amount 
     rng_select = np.random.default_rng(base_seed + 999)
     selected_indices = rng_select.choice(n_params, size=n_test, replace=False)
     
@@ -206,8 +209,8 @@ def compute_finite_difference_gradient(
     service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
     
     # 1. Chunking config
-    chunk_size = 1500
-    max_steps = 300
+    chunk_size = cfg.verification.gradient_check_chunk_size
+    max_steps = cfg.verification.gradient_check_max_steps
     
     # Pre-generate keys arrays to prevent variance drift across parameters
     # CRN: Use SAME keys for both perturbations
@@ -224,7 +227,7 @@ def compute_finite_difference_gradient(
             sim_time=sim_time,
             keys=keys_chunk,
             max_steps=max_steps,
-            gamma=0.99
+            gamma=cfg.neural_training.gamma
         )
         
         first_action_idx = jnp.argmax(batch.is_action_mask, axis=1)
@@ -270,8 +273,8 @@ def compute_finite_difference_gradient(
 def run_gradient_check(
     cfg: ExperimentConfig,
     key: PRNGKeyArray,
-    n_samples: int = 2500,  # Restore professor's iteration-speed spec
-    epsilon: float = 0.05,
+    n_samples: int = None,  # Restore professor's iteration-speed spec
+    epsilon: float = None,
 ) -> GradientCheckResult:
     """
     Run the gradient estimator validation.
@@ -292,6 +295,11 @@ def run_gradient_check(
     GradientCheckResult
         Validation result.
     """
+    if n_samples is None:
+        n_samples = cfg.verification.gradient_check_n_samples
+    if epsilon is None:
+        epsilon = cfg.verification.gradient_check_epsilon
+        
     # Initialize policy
     key, policy_key = jax.random.split(key)
     policy_net = NeuralRouter(
@@ -306,14 +314,14 @@ def run_gradient_check(
     flat_params, unravel = ravel_pytree(params)
     # Use deterministic shake based on config seed
     shake_key = jax.random.PRNGKey(cfg.simulation.seed + 12345)
-    flat_params = flat_params + 0.1 * jax.random.normal(shake_key, flat_params.shape)
+    flat_params = flat_params + cfg.verification.gradient_shake_scale * jax.random.normal(shake_key, flat_params.shape)
     policy_net = unravel(flat_params)
     
     service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
     
     # DRASTIC CUT: sim_time=15.0 stops Gillespie trajectories from violently desynchronizing
     # This is the "Law of Large Numbers" config from professor's Patch 3
-    sim_time = 15.0
+    sim_time = cfg.verification.gradient_check_sim_time
     
     log.info("Computing REINFORCE gradient estimate...")
     reinforce_grad, bias, variance = compute_reinforce_gradient(
@@ -324,6 +332,7 @@ def run_gradient_check(
         sim_time,  # Use short horizon
         n_samples=n_samples,
         base_seed=cfg.simulation.seed,
+        cfg=cfg,
     )
     
     log.info("Computing finite-difference gradient estimate...")
@@ -336,6 +345,7 @@ def run_gradient_check(
         epsilon=epsilon,
         n_samples=n_samples,
         base_seed=cfg.simulation.seed + 10000,
+        cfg=cfg,
     )
     
     # Compute relative error using L2 norm as per professor's spec
@@ -374,9 +384,9 @@ def run_gradient_check(
         relative_bias = 0.0
     
     # Pass condition: BOTH cosine similarity AND relative error
-    # Patch H5: Stricter cosine threshold (0.9), realistic relative error (0.40)
+    # Patch H5: Configurable thresholds instead of hardcoded 0.9 / 0.40
     # Note: REINFORCE has inherent variance, so relative error of 0.10 is too strict
-    passed = (cosine_sim > 0.9) and (relative_error < 0.40)
+    passed = (cosine_sim > cfg.verification.gradient_check_cosine_threshold) and (relative_error < cfg.verification.gradient_check_error_threshold)
     
     log.info(f"Relative error: {relative_error:.4f}")
     log.info(f"Cosine similarity: {cosine_sim:.4f}")
@@ -410,8 +420,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     seed_key = jax.random.PRNGKey(cfg.simulation.seed)
-    # SG#2 FIX: Use default n_samples=15000 for proper Law of Large Numbers convergence
-    # Previously hardcoded n_samples=2500 which was 6x lower than designed
+    # Uses cfg.verification.gradient_check_n_samples under the hood now.
     result = run_gradient_check(cfg, seed_key)
     
     # Save results

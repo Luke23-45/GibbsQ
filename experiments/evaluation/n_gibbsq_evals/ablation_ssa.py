@@ -30,6 +30,7 @@ from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.numpy_engine import run_replications
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
+from gibbsq.utils.model_io import StochasticNeuralPolicy
 from experiments.training.train_reinforce import ReinforceTrainer
 
 log = logging.getLogger(__name__)
@@ -76,21 +77,8 @@ class UniformRouting:
         return np.full(n, 1.0 / n, dtype=np.float64)
 
 
-class NeuralPolicyWrapper:
-    """NumPy-SSA policy wrapper around a trained NeuralRouter."""
-
-    def __init__(self, model: NeuralRouter, service_rates: np.ndarray):
-        self._model = model
-        self._mu = service_rates
-        self._params = model.get_numpy_params()
-        self._config = model.config
-
-    def __call__(self, q, rng):
-        s = (np.asarray(q, dtype=np.float64) + 1.0) / self._mu
-        logits = self._model.numpy_forward(s, self._params, self._config)
-        logits = logits - np.max(logits)
-        p = np.exp(logits)
-        return p / p.sum()
+# NeuralPolicyWrapper moved to gibbsq.utils.model_io.StochasticNeuralPolicy
+NeuralPolicyWrapper = StochasticNeuralPolicy  # Backward-compat alias
 
 
 def evaluate_policy_ssa(policy, cfg: ExperimentConfig) -> dict:

@@ -24,6 +24,8 @@ from __future__ import annotations
 import numpy as np
 from typing import Protocol, runtime_checkable
 
+from gibbsq.core.registry import ComponentRegistry
+
 __all__ = [
     "RoutingPolicy",
     "SoftmaxRouting",
@@ -68,6 +70,7 @@ class RoutingPolicy(Protocol):
 #  Implementations
 # ──────────────────────────────────────────────────────────────
 
+@ComponentRegistry.register_policy("softmax")
 class SoftmaxRouting:
     """
     Boltzmann (softmax) routing.
@@ -110,6 +113,7 @@ class SoftmaxRouting:
         return f"SoftmaxRouting(α={self._alpha})"
 
 
+@ComponentRegistry.register_policy("uniform")
 class UniformRouting:
     """
     State-independent uniform routing:  p_i = 1/N  for all  i.
@@ -127,6 +131,7 @@ class UniformRouting:
         return "UniformRouting()"
 
 
+@ComponentRegistry.register_policy("proportional")
 class ProportionalRouting:
     """
     Proportional-to-capacity routing:  p_i = μ_i / Λ.
@@ -159,6 +164,7 @@ class ProportionalRouting:
         return f"ProportionalRouting(N={len(self._probs)})"
 
 
+@ComponentRegistry.register_policy("jsq")
 class JSQRouting:
     """
     Join-Shortest-Queue:  deterministically route to the server with
@@ -180,6 +186,7 @@ class JSQRouting:
         return "JSQRouting()"
 
 
+@ComponentRegistry.register_policy("power_of_d")
 class PowerOfDRouting:
     """
     Power-of-*d*-choices:  sample  *d*  servers uniformly at random,
@@ -220,6 +227,7 @@ class PowerOfDRouting:
         return f"PowerOfDRouting(d={self._d})"
 
 
+@ComponentRegistry.register_policy("jssq")
 class JSSQRouting:
     """
     Join-Shortest-Sojourn-Queue: route to server with minimum expected sojourn time.
@@ -274,6 +282,7 @@ class JSSQRouting:
         return f"JSSQRouting(N={len(self._mu)})"
 
 
+@ComponentRegistry.register_policy("sojourn_softmax")
 class SojournTimeSoftmaxRouting:
     """
     GibbsQ routing using sojourn-time representation.
@@ -347,6 +356,11 @@ def make_policy(
     """
     Construct a :class:`RoutingPolicy` from a string name and kwargs.
 
+    .. deprecated::
+        Use ``ComponentRegistry.build_policy()`` or
+        ``gibbsq.core.builders.build_policy()`` instead.
+        This function is kept for backward compatibility.
+
     Parameters
     ----------
     name : str
@@ -364,29 +378,4 @@ def make_policy(
     RoutingPolicy
         A callable conforming to the :class:`RoutingPolicy` protocol.
     """
-    match name:
-        case "softmax":
-            return SoftmaxRouting(alpha)
-        case "uniform":
-            return UniformRouting()
-        case "proportional":
-            if mu is None:
-                raise ValueError("Proportional routing requires 'mu' (service rates)")
-            return ProportionalRouting(np.asarray(mu, dtype=np.float64))
-        case "jsq":
-            return JSQRouting()
-        case "power_of_d":
-            return PowerOfDRouting(d)
-        case "jssq":
-            if mu is None:
-                raise ValueError("JSSQ routing requires 'mu' (service rates)")
-            return JSSQRouting(np.asarray(mu, dtype=np.float64))
-        case "sojourn_softmax":
-            if mu is None:
-                raise ValueError("SojournTimeSoftmax routing requires 'mu' (service rates)")
-            return SojournTimeSoftmaxRouting(np.asarray(mu, dtype=np.float64), alpha)
-        case _:
-            raise ValueError(
-                f"Unknown policy '{name}'.  "
-                f"Valid: softmax, uniform, proportional, jsq, power_of_d, jssq, sojourn_softmax"
-            )
+    return ComponentRegistry.build_policy(name, alpha=alpha, mu=mu, d=d)

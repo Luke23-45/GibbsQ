@@ -26,51 +26,17 @@ from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
 
 
-class _NeuralSSAPolicy:
-    """Bridges NeuralRouter → NumPy SSA. See eval.py for canonical version."""
-    def __init__(self, model):
-        import jax as _jax
-        self._model = model
-        @eqx.filter_jit
-        def _forward(m, x): return _jax.nn.softmax(m(x))
-        self._forward = _forward
-        @functools.lru_cache(maxsize=131072)
-        def _get_probs(q_tuple):
-            probs = self._forward(self._model, jnp.array(q_tuple, dtype=jnp.float32))
-            probs_np = np.array(probs, dtype=np.float64)
-            return probs_np / probs_np.sum()
-        self._get_probs = _get_probs
-    def __call__(self, Q, rng): return self._get_probs(tuple(Q))
+# _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
 
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
 
-def _resolve_model_pointer(project_root: Path, output_root: Path) -> Path:
-    """Resolve model weights pointer with REINFORCE-first fallback order."""
-    candidates = [
-        output_root / "latest_domain_randomized_weights.txt",
-        output_root / "latest_reinforce_weights.txt",
-        output_root / "latest_weights.txt",  # legacy DGA pointer
-    ]
-    for ptr in candidates:
-        if not ptr.exists():
-            continue
-        raw = Path(ptr.read_text(encoding='utf-8').strip())
-        model_path = raw if raw.is_absolute() else (project_root / raw)
-        if model_path.exists():
-            if ptr.name == "latest_weights.txt":
-                log.warning("Using legacy pointer latest_weights.txt; prefer REINFORCE pointers.")
-            return model_path
-    tried = "\n".join(f"  - {c}" for c in candidates)
-    raise FileNotFoundError(
-        "No valid model pointer found. Tried:\n"
-        f"{tried}\n"
-        "Run Track 1/3 training (reinforce_train or dr_train), or legacy train for latest_weights.txt."
-    )
+# _resolve_model_pointer moved to gibbsq.utils.model_io.resolve_model_pointer
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
     """Pure functional bridge."""
@@ -101,7 +67,7 @@ class StatsBenchmark:
         # --- 1. Load Model ---
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
-        model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
+        model_path = resolve_model_pointer(_PROJECT_ROOT, output_root)
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
@@ -141,7 +107,7 @@ class StatsBenchmark:
         gibbs_data = np.array(gibbs_list)
 
         log.info(f"Running {self.num_samples} Neural SSA simulations...")
-        _neural_policy = _NeuralSSAPolicy(model)
+        _neural_policy = NeuralSSAPolicy(model)
         _np_max_ev = int(
             (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
         ) + 1000
@@ -179,11 +145,11 @@ class StatsBenchmark:
         _pooled_std = float(np.sqrt(_pooled_var))
         cohen_d = float((np.mean(neural_data) - np.mean(gibbs_data)) / _pooled_std) if _pooled_std > 0 else 0.0
         
-        # 3. 95% Confidence Interval for the difference (independent samples)
+        # 3. Confidence Interval for the difference (independent samples)
         _diff_mean = np.mean(neural_data) - np.mean(gibbs_data)
         _diff_se = _pooled_std * np.sqrt(1.0/_n1 + 1.0/_n2)
         _df = _n1 + _n2 - 2
-        ci_low, ci_high = stats.t.interval(0.95, _df, loc=_diff_mean, scale=_diff_se)
+        ci_low, ci_high = stats.t.interval(self.cfg.verification.confidence_interval, _df, loc=_diff_mean, scale=_diff_se)
         
         improvement = (g_mean - n_mean) / g_mean * 100 if g_mean > 0 else 0
         
@@ -194,9 +160,9 @@ class StatsBenchmark:
         log.info(f"N-GibbsQ E[Q]:   {n_mean:.4f} ± {n_std:.4f}")
         log.info(f"Rel. Improve:  {improvement:.2f}%")
         log.info("-" * 40)
-        log.info(f"P-Value:       {p_val:.2e} ({'SIGNIFICANT' if p_val < 0.05 else 'NOT SIGNIFICANT'})")
+        log.info(f"P-Value:       {p_val:.2e} ({'SIGNIFICANT' if p_val < self.cfg.verification.alpha_significance else 'NOT SIGNIFICANT'})")
         log.info(f"Effect Size:   {cohen_d:.2f} (Cohen's d)")
-        log.info(f"95% CI (Diff): [{ci_low:.4f}, {ci_high:.4f}]")
+        log.info(f"{int(self.cfg.verification.confidence_interval*100)}% CI (Diff): [{ci_low:.4f}, {ci_high:.4f}]")
         log.info("=" * 60)
         
         # Assets

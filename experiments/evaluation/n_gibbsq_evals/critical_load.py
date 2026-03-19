@@ -28,51 +28,17 @@ from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
 
 
-class _NeuralSSAPolicy:
-    """Identical to eval.py."""
-    def __init__(self, model):
-        import jax as _jax
-        self._model = model
-        @eqx.filter_jit
-        def _forward(m, x): return _jax.nn.softmax(m(x))
-        self._forward = _forward
-        @functools.lru_cache(maxsize=131072)
-        def _get_probs(q_tuple):
-            probs = self._forward(self._model, jnp.array(q_tuple, dtype=jnp.float32))
-            probs_np = np.array(probs, dtype=np.float64)
-            return probs_np / probs_np.sum()
-        self._get_probs = _get_probs
-    def __call__(self, Q, rng): return self._get_probs(tuple(Q))
+# _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
 
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
 
-def _resolve_model_pointer(project_root: Path, output_root: Path) -> Path:
-    """Resolve model weights pointer with REINFORCE-first fallback order."""
-    candidates = [
-        output_root / "latest_domain_randomized_weights.txt",
-        output_root / "latest_reinforce_weights.txt",
-        output_root / "latest_weights.txt",  # legacy DGA pointer
-    ]
-    for ptr in candidates:
-        if not ptr.exists():
-            continue
-        raw = Path(ptr.read_text(encoding='utf-8').strip())
-        model_path = raw if raw.is_absolute() else (project_root / raw)
-        if model_path.exists():
-            if ptr.name == "latest_weights.txt":
-                log.warning("Using legacy pointer latest_weights.txt; prefer REINFORCE pointers.")
-            return model_path
-    tried = "\n".join(f"  - {c}" for c in candidates)
-    raise FileNotFoundError(
-        "No valid model pointer found. Tried:\n"
-        f"{tried}\n"
-        "Run Track 1/3 training (reinforce_train or dr_train), or legacy train for latest_weights.txt."
-    )
+# _resolve_model_pointer moved to gibbsq.utils.model_io.resolve_model_pointer
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
     """Pure functional bridge."""
@@ -101,7 +67,7 @@ class CriticalLoadTest:
         # 1. Load trained model
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
-        model_path = _resolve_model_pointer(_PROJECT_ROOT, output_root)
+        model_path = resolve_model_pointer(_PROJECT_ROOT, output_root)
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
@@ -119,7 +85,7 @@ class CriticalLoadTest:
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
         
         num_reps = int(self.cfg.simulation.num_replications)
-        _neural_ssa = _NeuralSSAPolicy(model)
+        _neural_ssa = NeuralSSAPolicy(model)
         
         for idx, rho in enumerate(self.rho_vals):
             arrival_rate = rho * total_capacity
@@ -131,14 +97,15 @@ class CriticalLoadTest:
             # Goldberg & Li 2022, Oper. Res. bounds that scale as 1/(1-ρ)).
             # The Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
             # the many-server asymptotic regime where both N and λ grow.
-            _base_rho = 0.8
+            _base_rho = self.cfg.stress.critical_load_base_rho
             _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
             _uncapped_sim_time = self.ssa_sim_time * _rho_factor
-            _rho_sim_time = min(_uncapped_sim_time, 200_000.0)
-            if _uncapped_sim_time > 200_000.0:
+            _cap = float(self.cfg.stress.critical_load_max_sim_time)
+            _rho_sim_time = min(_uncapped_sim_time, _cap)
+            if _uncapped_sim_time > _cap:
                 log.warning(
                     f"  [!] rho={rho:.4f}: mixing-time formula predicts "
-                    f"{_uncapped_sim_time:,.0f}s sim_time but cap is 200,000s. "
+                    f"{_uncapped_sim_time:,.0f}s sim_time but cap is {_cap:,.0f}s. "
                     f"E[Q] near criticality may be underestimated (stationarity "
                     f"not guaranteed). Interpret rho>{rho:.3f} results cautiously."
                 )

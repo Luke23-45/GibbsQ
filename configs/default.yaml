@@ -30,6 +30,15 @@ drift:
 stress:
   n_values: [8, 32, 128, 512, 1024]
   critical_rhos: [0.9, 0.95, 0.99, 0.999]
+  mu_het: [10.0, 0.1, 0.1, 0.1]
+  sample_interval: 1.0
+  massive_n_rho: 0.8
+  massive_n_sim_time: 500.0
+  critical_load_n: 10
+  critical_load_base_rho: 0.8
+  critical_load_max_sim_time: 100000.0
+  heterogeneity_rho: 0.5
+  heterogeneity_sim_time: 1000.0
 
 generalization:
   rho_boundary_vals: [0.90, 0.95, 0.98, 0.99, 0.999]
@@ -49,6 +58,38 @@ neural_training:
     - [20, 500]
     - [30, 2000]
     - [50, 5000]
+  eval_batches: 5
+  eval_trajs_per_batch: 10
+  perf_index_min_denom: 0.5
+  perf_index_jsq_margin: 0.05
+  bc_num_steps: 1000
+  bc_lr: 0.002
+  bc_label_smoothing: 0.1
+  shake_scale: 0.01
+  checkpoint_freq: 25
+  squash_scale: 100.0
+  squash_threshold: 500.0
+  gamma: 0.99
+  gae_lambda: 0.95
+
+neural:
+  hidden_size: 64
+  preprocessing: none
+  init_type: xavier_uniform
+  use_rho: true
+  rho_input_scale: 1.0
+  entropy_bonus: 0.01
+  entropy_final: 0.001
+  clip_global_norm: 0.5
+  actor_lr: 0.001
+  critic_lr: 0.001
+  lr_decay_rate: 0.9
+  weight_decay: 0.0001
+
+domain_randomization:
+  enabled: false
+  rho_min: 0.4
+  rho_max: 0.95
 
 jax:
   enabled: false
@@ -64,6 +105,23 @@ wandb:
 
 output_dir: outputs
 log_dir: ${output_dir}/logs
+
+verification:
+  parity_threshold_percent: 25.0
+  jacobian_rel_tol: 0.05
+  alpha_significance: 0.05
+  confidence_interval: 0.95
+  stationarity_threshold: 0.5
+  parity_z_score: 1.96
+  gradient_check_chunk_size: 1500
+  gradient_check_max_steps: 300
+  gradient_check_n_test: 50
+  gradient_check_sim_time: 15.0
+  gradient_check_n_samples: 15000
+  gradient_check_epsilon: 0.05
+  gradient_check_cosine_threshold: 0.9
+  gradient_check_error_threshold: 0.40
+  gradient_shake_scale: 0.1
 
 # Verification flags
 debug: false

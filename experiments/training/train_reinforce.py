@@ -204,12 +204,13 @@ def compute_performance_index(
     mean_queue: float,
     jsq_limit: float,
     random_limit: float,
-    random_empirical: float
+    random_empirical: float,
+    cfg: ExperimentConfig
 ) -> float:
     """Computes Performance Index where 0% = Random and 100% = JSQ."""
     # Use the same robust denominator as the original training loop
     fixed_random = max(jsq_limit * 1.01, random_limit, random_empirical)
-    denom = max(0.5, jsq_limit * 0.05, fixed_random - jsq_limit)
+    denom = max(cfg.neural_training.perf_index_min_denom, jsq_limit * cfg.neural_training.perf_index_jsq_margin, fixed_random - jsq_limit)
     perf_index = 100.0 * (fixed_random - mean_queue) / denom
     return perf_index
 
@@ -229,7 +230,7 @@ def collect_trajectory_ssa(
     sim_time: float,
     rng: np.random.Generator,
     use_jsq: bool = False,
-    rho: float = None,  # PI-V4: Optional load factor for neural policy
+    rho: float | None = None,  # PI-V4: Optional load factor for neural policy
     deterministic: bool = False, # PI-V5: Support for deterministic evaluation
 ) -> TrajectoryResult:
     """
@@ -429,10 +430,10 @@ class ReinforceTrainer:
             policy_net=policy_net,
             service_rates=self.service_rates,
             key=key,
-            num_steps=500,
-            lr=0.002,
-            weight_decay=1e-4,
-            label_smoothing=0.1
+            num_steps=self.cfg.neural_training.bc_num_steps,
+            lr=self.cfg.neural_training.bc_lr,
+            weight_decay=self.cfg.neural_training.weight_decay,
+            label_smoothing=self.cfg.neural_training.bc_label_smoothing
         )
 
         # 2. Train Value (Critic Warming)
@@ -441,9 +442,9 @@ class ReinforceTrainer:
             value_net=value_net,
             service_rates=self.service_rates,
             key=key,
-            num_steps=500,
-            lr=0.002,
-            weight_decay=1e-4
+            num_steps=self.cfg.neural_training.bc_num_steps,
+            lr=self.cfg.neural_training.bc_lr,
+            weight_decay=self.cfg.neural_training.weight_decay
         )
         
         log.info(f"--- Bootstrapping Complete (Actor-Critic Warmed) ---")
@@ -464,7 +465,7 @@ class ReinforceTrainer:
         shake_key = jax.random.PRNGKey(self.cfg.simulation.seed + 99999)
         params, static = eqx.partition(policy_net, eqx.is_array)
         flat_params, unravel = jax.flatten_util.ravel_pytree(params)
-        shake_scale = 0.01  # PI-V4.3: Refined Symmetry BreakingMag (0.1 -> 0.01)
+        shake_scale = self.cfg.neural_training.shake_scale
         flat_params = flat_params + shake_scale * jax.random.normal(shake_key, flat_params.shape)
         new_params = unravel(flat_params)
         policy_net = eqx.combine(new_params, static)
@@ -473,17 +474,17 @@ class ReinforceTrainer:
         value_net = ValueNetwork(
             num_servers=self.num_servers,
             config=self.cfg.neural,
-            hidden_size=64,
+            hidden_size=self.cfg.neural.hidden_size,
             key=critic_key,
         )
         
-        # PI-V4.3: Refined Global Norm Clipping (Patch H3: 0.5 per PPO literature)
+        # PI-V4.3: Refined Global Norm Clipping
         policy_opt = optax.chain(
-            optax.clip_by_global_norm(0.5),
+            optax.clip_by_global_norm(self.cfg.neural.clip_global_norm),
             optax.adamw(learning_rate=self.cfg.neural.actor_lr, weight_decay=self.cfg.neural.weight_decay)
         )
         value_opt = optax.chain(
-            optax.clip_by_global_norm(0.5),
+            optax.clip_by_global_norm(self.cfg.neural.clip_global_norm),
             optax.adamw(learning_rate=self.cfg.neural.critic_lr, weight_decay=self.cfg.neural.weight_decay)
         )
         
@@ -514,15 +515,15 @@ class ReinforceTrainer:
             eqx.tree_serialise_leaves(ckpt_path, policy_net)
             log.info(f"  [Checkpoint] Saved epoch {epoch_idx} model to {ckpt_path.name}")
             
-            # SG#11: Update pointer in real-time for comparison scripts
+            # SG#11: Update pointer in real-time for comparison scripts via model_io
             _PROJECT_ROOT = Path(__file__).resolve().parents[2]
             pointer_dir = self.run_dir.parent.parent
-            pointer_dir.mkdir(parents=True, exist_ok=True)
-            ptr_path = pointer_dir / "latest_reinforce_weights.txt"
-            
-            relative_model_path = ckpt_path.resolve().relative_to(_PROJECT_ROOT)
-            with open(ptr_path, "w", encoding='utf-8') as f:
-                f.write(str(relative_model_path))
+            save_model_pointer(
+                model_path=ckpt_path,
+                project_root=_PROJECT_ROOT,
+                output_root=pointer_dir,
+                pointer_name="latest_reinforce_weights.txt"
+            )
         
         # --- Pre-train Benchmark ---
         log.info("Computing JSQ and Random baselines...")
@@ -594,12 +595,12 @@ class ReinforceTrainer:
         
         for epoch in range(n_epochs):
             # Apply Adaptive Linear Decay to Actor LR (prevents unlearning)
-            epoch_actor_lr = base_actor_lr * (1.0 - (epoch / n_epochs) * 0.9)
+            epoch_actor_lr = base_actor_lr * (1.0 - (epoch / n_epochs) * self.cfg.neural.lr_decay_rate)
             
             # PATCH-P4: Entropy Annealing - decay from initial to final
             # Early exploration (high entropy) -> Late exploitation (low entropy)
             entropy_anneal_epochs = n_epochs  # Decay over full training
-            entropy_final = 0.001  # Final entropy coefficient
+            entropy_final = self.cfg.neural.entropy_final
             entropy_initial = self.cfg.neural.entropy_bonus
             if epoch < entropy_anneal_epochs:
                 progress = epoch / entropy_anneal_epochs
@@ -610,11 +611,11 @@ class ReinforceTrainer:
             # Re-optimizer with decayed LR (AdamW handles the rest)
             # This is a simple way to implement decay without complex optax schedules
             policy_opt = optax.chain(
-                optax.clip_by_global_norm(0.5),
+                optax.clip_by_global_norm(self.cfg.neural.clip_global_norm),
                 optax.adamw(learning_rate=epoch_actor_lr, weight_decay=self.cfg.neural.weight_decay)
             )
-            # Save checkpoint every 25 epochs
-            if epoch > 0 and epoch % 25 == 0:
+            # Save checkpoint
+            if epoch > 0 and epoch % self.cfg.neural_training.checkpoint_freq == 0:
                 save_checkpoint(epoch)
 
             # Collect batch of trajectories
@@ -623,10 +624,10 @@ class ReinforceTrainer:
             
             # PATCH-P2: Domain Randomization - sample rho from curriculum
             # This prevents overfitting to a single load factor
-            dr_cfg = getattr(self.cfg, 'domain_randomization', None)
-            if dr_cfg is not None and getattr(dr_cfg, 'enabled', False):
-                rho_min = getattr(dr_cfg, 'rho_min', 0.4)
-                rho_max = getattr(dr_cfg, 'rho_max', 0.95)
+            dr_cfg = self.cfg.domain_randomization
+            if dr_cfg.enabled:
+                rho_min = dr_cfg.rho_min
+                rho_max = dr_cfg.rho_max
             else:
                 # Default DR range if not configured
                 rho_min = 0.4
@@ -656,12 +657,12 @@ class ReinforceTrainer:
             
             # PI-V5: Use standardized compute_performance_index
             mean_queue = np.mean(epoch_rewards) / self.sim_time
-            perf_index = compute_performance_index(mean_queue, jsq_limit, random_limit, random_queue)
+            perf_index = compute_performance_index(mean_queue, jsq_limit, random_limit, random_queue, self.cfg)
             mean_reward = perf_index
             
             # Robust denominator for G_idx advantage signal
             fixed_random = max(jsq_limit * 1.01, random_limit, random_queue)
-            denom = max(0.5, jsq_limit * 0.05, fixed_random - jsq_limit)
+            denom = max(self.cfg.neural_training.perf_index_min_denom, jsq_limit * self.cfg.neural_training.perf_index_jsq_margin, fixed_random - jsq_limit)
             
 
             all_advantages = []
@@ -746,13 +747,13 @@ class ReinforceTrainer:
                     return G_centered / traj_stds[traj_indices]
 
                 # Target Tanh-Squashing: Prevent exploding V-loss from extreme episodes
-                G_scaled = 100.0 * jnp.tanh(G_tensor / 500.0)
+                G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
                 G_norm = local_norm_fn(G_scaled, idx_tensor)
                 
                 # PATCH: Compute Q_inst_scaled for critic target
                 # This aligns with pretraining which uses state-dependent queue sums
                 # Critic learns V(s, rho) ≈ E[sum(queue)], not performance index
-                Q_inst_scaled = 100.0 * jnp.tanh(Q_inst_tensor / 500.0)
+                Q_inst_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(Q_inst_tensor / self.cfg.neural_training.squash_threshold)
                 
                 # PI-V5: PROJECT ALIGNMENT - EXPLICIT ADVANTAGE NORMALIZATION
                 def advantage_norm_fn(advs):
@@ -949,22 +950,22 @@ class ReinforceTrainer:
         
         # Write pointer
         # SG#4 FIX: Write to output_dir from config instead of hardcoded "outputs/small"
-        # This ensures policy_comparison.py can find the weights pointer.
-        # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
         pointer_dir = self.run_dir.parent.parent
-        pointer_dir.mkdir(parents=True, exist_ok=True)
-        pointer_path = pointer_dir / "latest_reinforce_weights.txt"
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-        _relative_model_path = policy_path.resolve().relative_to(_PROJECT_ROOT)
-        pointer_path.write_text(str(_relative_model_path), encoding='utf-8')
+        save_model_pointer(
+            model_path=policy_path,
+            project_root=_PROJECT_ROOT,
+            output_root=pointer_dir,
+            pointer_name="latest_reinforce_weights.txt"
+        )
         
         log.info("-" * 55)
         log.info("-------------------------------------------------------")
-        log.info("Running Final Deterministic Evaluation (N=50)...")
+        log.info(f"Running Final Deterministic Evaluation (N={self.cfg.neural_training.eval_batches * self.cfg.neural_training.eval_trajs_per_batch})...")
         eval_indices = []
-        for b in range(5):
+        for b in range(self.cfg.neural_training.eval_batches):
             eval_trajs = []
-            for i in range(10):
+            for i in range(self.cfg.neural_training.eval_trajs_per_batch):
                 # Use a fresh seed for each evaluation trajectory
                 eval_rng = np.random.default_rng(self.cfg.simulation.seed + 10000 + b*10 + i)
                 t = collect_trajectory_ssa(
@@ -985,7 +986,8 @@ class ReinforceTrainer:
                     t.total_integrated_queue / self.sim_time, 
                     jsq_limit, 
                     random_limit, 
-                    random_queue
+                    random_queue,
+                    self.cfg
                 )
                 batch_indices.append(p_idx)
             eval_indices.extend(batch_indices)

@@ -5,7 +5,7 @@ import jax.numpy as jnp
 from omegaconf import DictConfig
 
 from gibbsq.core.config import hydra_to_config, validate
-from gibbsq.core.policies import make_policy
+from gibbsq.core.builders import build_policy_by_name
 from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.engines.jax_engine import run_replications_jax
 from gibbsq.analysis.metrics import time_averaged_queue_lengths, stationarity_diagnostic
@@ -119,7 +119,7 @@ def main(raw_cfg: DictConfig) -> None:
                     last_res = res
             else:
                 # --- STANDARD NUMPY EXECUTION (Sequential) ---
-                policy = make_policy(cfg.policy.name, alpha=float(alpha))
+                policy = build_policy_by_name(cfg.policy.name, alpha=float(alpha))
                 # Dynamic max_events ceiling matches the JAX engine formula and
                 # makes the NumPy path consistent with policy_comparison.py (SG#2/3 fix).
                 _np_max_events = int(
@@ -145,9 +145,8 @@ def main(raw_cfg: DictConfig) -> None:
                     rep_stationary_flags.append(bool(rep_diag["is_stationary"]))
                     last_res = res
 
-            mean_Q[i, j] = np.mean(rep_means)
             stationarity_rate = float(np.mean(rep_stationary_flags)) if rep_stationary_flags else 0.0
-            stationary[i, j] = stationarity_rate >= 0.5
+            stationary[i, j] = stationarity_rate >= cfg.verification.stationarity_threshold
             
             # Export scalar metrics
             metrics = {

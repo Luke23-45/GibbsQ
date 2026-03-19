@@ -15,6 +15,7 @@ from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.pretraining import train_robust_bc_policy
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.model_io import save_model_pointer
 
 log = logging.getLogger(__name__)
 
@@ -41,10 +42,10 @@ def main(raw_cfg: DictConfig):
         policy_net=policy_net,
         service_rates=cfg.system.service_rates,
         key=key,
-        num_steps=1000,
-        lr=0.002,
-        weight_decay=1e-4,
-        label_smoothing=0.1
+        num_steps=cfg.neural_training.bc_num_steps,
+        lr=cfg.neural_training.bc_lr,
+        weight_decay=cfg.neural_training.weight_decay,
+        label_smoothing=cfg.neural_training.bc_label_smoothing
     )
     
     # Save assets
@@ -54,16 +55,15 @@ def main(raw_cfg: DictConfig):
     eqx.tree_serialise_leaves(model_path, policy_net)
     log.info(f"\n[DONE] Platinum BC Weights saved to {model_path}")
     
-    # Update pointer for evaluation
+    # Update pointer for evaluation via centralized model_io
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
     pointer_dir = run_dir.parent.parent
-    pointer_dir.mkdir(parents=True, exist_ok=True)
-    
-    ptr_path = pointer_dir / "latest_domain_randomized_weights.txt"
-    relative_path = model_path.resolve().relative_to(_PROJECT_ROOT)
-    with open(ptr_path, "w", encoding='utf-8') as f:
-        f.write(str(relative_path))
-    log.info(f"[Pointer] Updated latest weights pointer at {ptr_path}")
+    save_model_pointer(
+        model_path=model_path,
+        project_root=_PROJECT_ROOT,
+        output_root=pointer_dir,
+        pointer_name="latest_domain_randomized_weights.txt",
+    )
 
 if __name__ == "__main__":
     import hydra

@@ -192,21 +192,35 @@ class NeuralConfig:
     use_rho: bool = True          # PI-V4: Append rho to state features
     rho_input_scale: float = 10.0  # PI-V4.1: Increased scale for better feature saliency
     entropy_bonus: float = 0.01    # PI-V4.1: Prevent premature determinism
-    grad_clip: float = 1.0         # PI-V4.1: Prevent loss explosions
+    entropy_final: float = 0.001
+    clip_global_norm: float = 1.0  # PI-V4.1: Prevent loss explosions
     actor_lr: float = 3e-4         # PI-V4.1: Separate LRs for stability
     critic_lr: float = 1e-3
+    lr_decay_rate: float = 0.9
     weight_decay: float = 1e-4     # L2 regularization for AdamW
 
 @dataclass
 class VerificationThresholds:
     """Research success boundaries."""
     parity_threshold_percent: float = 25.0
-    # SG#3 FIX: Reverted dangerous 10% tolerance for gradient checks. 
-    # With the softer DGA steepness (Constants.DGA_INDICATOR_STEEPNESS = 5.0), 
+    # SG#3 FIX: Reverted dangerous 10% tolerance for gradient checks.
+    # With the softer DGA steepness (Constants.DGA_INDICATOR_STEEPNESS = 5.0),
     # the finite-difference check passes reliably at the mathematically sound 5% threshold.
-    jacobian_rel_tol: float = 5e-2
+    jacobian_rel_tol: float = 0.05
+    stationarity_threshold: float = 0.5
     alpha_significance: float = 0.05
     confidence_interval: float = 0.95
+    parity_z_score: float = 1.96  # Z-score for parity margins
+    # Gradient Analysis Constants
+    gradient_check_chunk_size: int = 1500
+    gradient_check_max_steps: int = 300
+    gradient_check_n_test: int = 50
+    gradient_check_sim_time: float = 15.0
+    gradient_check_n_samples: int = 15000
+    gradient_check_epsilon: float = 0.05
+    gradient_check_cosine_threshold: float = 0.9
+    gradient_check_error_threshold: float = 0.40
+    gradient_shake_scale: float = 0.10
 
 @dataclass
 class WandbConfig:
@@ -255,11 +269,19 @@ class GeneralizationConfig:
 
 @dataclass
 class StressConfig:
-    # SOTA defaults from Phase 1 verification
-    # N values: Grid feasible for N≤3, trajectory mode for N>3
-    # Critical rhos: Halfin-Whitt regime boundary testing
-    n_values: List[int] = field(default_factory=lambda: [2, 4, 8])
-    critical_rhos: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98])
+    n_values: list[int] = field(default_factory=lambda: [4, 8, 16, 32, 64])
+    critical_rhos: list[float] = field(default_factory=lambda: [0.95, 0.98, 0.99, 0.995])
+    mu_het: list[float] = field(default_factory=lambda: [100.0, 1.0, 1.0, 1.0])
+    
+    # Phase 3 Hardcode Extractions
+    sample_interval: float = 1.0
+    massive_n_rho: float = 0.8
+    massive_n_sim_time: float = 500.0
+    critical_load_n: int = 10
+    critical_load_base_rho: float = 0.8
+    critical_load_max_sim_time: float = 100000.0
+    heterogeneity_rho: float = 0.5
+    heterogeneity_sim_time: float = 1000.0
 
 
 @dataclass
@@ -280,6 +302,23 @@ class NeuralTrainingConfig:
     gamma: float = 0.99            # HP-2 FIX: avoid hardcoded discount
     gae_lambda: float = 0.95       # PATCH-P1: GAE λ for bias-variance tradeoff (Schulman 2015)
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
+    eval_batches: int = 5          # Extracted from train_reinforce.py
+    eval_trajs_per_batch: int = 10 # Extracted from train_reinforce.py
+    bc_num_steps: int = 1000       # Extracted from pretrain_bc.py
+    bc_lr: float = 0.002
+    bc_label_smoothing: float = 0.1
+    perf_index_min_denom: float = 0.5
+    perf_index_jsq_margin: float = 0.05
+    shake_scale: float = 0.01
+    checkpoint_freq: int = 25
+    squash_scale: float = 100.0
+    squash_threshold: float = 500.0
+
+@dataclass
+class DomainRandomizationConfig:
+    enabled: bool = False
+    rho_min: float = 0.4
+    rho_max: float = 0.95
 
 
 @dataclass
@@ -327,12 +366,12 @@ class DomainRandomizationPhase:
 class DomainRandomizationConfig:
     """
     Configuration for domain randomization training.
-    
+
     Domain randomization exposes the neural network to diverse load
     conditions, preventing the curriculum failure where training on
     low-load regimes (ρ < 0.4) produces policies that cannot handle
     critical load conditions.
-    
+
     Fields
     ------
     enabled : bool
@@ -374,6 +413,7 @@ class ExperimentConfig:
     generalization: GeneralizationConfig = field(default_factory=GeneralizationConfig)
     stress:         StressConfig         = field(default_factory=StressConfig)
     stability_sweep: StabilitySweepConfig = field(default_factory=StabilitySweepConfig)
+    domain_randomization: DomainRandomizationConfig = field(default_factory=DomainRandomizationConfig)
     neural_training: NeuralTrainingConfig = field(default_factory=NeuralTrainingConfig)
     output_dir:   str              = "outputs"
     log_dir:      str              = "logs"
@@ -510,10 +550,10 @@ def validate(cfg: ExperimentConfig) -> None:
         raise ValueError(f"neural.entropy_bonus must be ≥ 0, got {neu.entropy_bonus}")
     if neu.entropy_bonus > 1.0:
         raise ValueError(f"neural.entropy_bonus must be <= 1.0, got {neu.entropy_bonus}")
-    if neu.grad_clip <= 0:
-        raise ValueError(f"neural.grad_clip must be > 0, got {neu.grad_clip}")
-    if neu.grad_clip > 10.0:
-        raise ValueError(f"neural.grad_clip must be <= 10.0, got {neu.grad_clip}")
+    if neu.clip_global_norm <= 0:
+        raise ValueError(f"neural.clip_global_norm must be > 0, got {neu.clip_global_norm}")
+    if neu.clip_global_norm > 10.0:
+        raise ValueError(f"neural.clip_global_norm must be <= 10.0, got {neu.clip_global_norm}")
     if neu.actor_lr <= 0 or neu.critic_lr <= 0:
         raise ValueError(f"neural.actor_lr and neural.critic_lr must be > 0, got {neu.actor_lr}, {neu.critic_lr}")
     if neu.actor_lr > 1e-1 or neu.critic_lr > 1e-1:
@@ -547,6 +587,19 @@ def validate(cfg: ExperimentConfig) -> None:
         raise ValueError(f"verification.jacobian_rel_tol must be > 0, got {ver.jacobian_rel_tol}")
     if not (0 < ver.alpha_significance < 0.5):
         raise ValueError(f"verification.alpha_significance must be in (0, 0.5), got {ver.alpha_significance}")
+    if not (0 < ver.stationarity_threshold <= 1.0):
+        raise ValueError(f"verification.stationarity_threshold must be in (0, 1.0], got {ver.stationarity_threshold}")
+    if not (0.5 < ver.confidence_interval < 1.0):
+        raise ValueError(f"verification.confidence_interval must be in (0.5, 1.0), got {ver.confidence_interval}")
+
+    # ── Domain Randomization ──────────────────────────────────
+    dr = cfg.domain_randomization
+    if dr.enabled:
+        for i, phase in enumerate(dr.phases):
+            if not (0 < phase.rho_min < phase.rho_max < 1.0):
+                raise ValueError(f"DR phase {i} has invalid rho range [{phase.rho_min}, {phase.rho_max}]")
+            if phase.epochs < 1:
+                raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
 
     _validate_jax_config(cfg.jax)
 
@@ -645,9 +698,9 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         jax=JAXConfig(**d.get("jax", {})),
         jax_engine=JAXEngineConfig(**d.get("jax_engine", {})),
         neural=NeuralConfig(**d.get("neural", {})),
-        verification=VerificationThresholds(**d.get("verification", {})),
+        verification=VerificationThresholds(**d.get("verification", {})),  # type: ignore[arg-type]
         generalization=GeneralizationConfig(**d.get("generalization", {})),
-        stress=StressConfig(**d.get("stress", {})),
+        stress=StressConfig(**d.get("stress", {})),  # type: ignore[arg-type]
         stability_sweep=StabilitySweepConfig(**d.get("stability_sweep", {})),
         neural_training=NeuralTrainingConfig(**d.get("neural_training", {})),
         output_dir=d.get("output_dir", "outputs"),

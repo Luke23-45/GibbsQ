@@ -53,9 +53,7 @@ log = logging.getLogger(__name__)
 # those arrays are loop-carried state in a nested lax.while_loop.
 #
 # 1.0 s gives 5 001 – 50 001 slots — fast to compile, statistically sound
-# for Gini and mean-queue metrics (stress tests do not need fine resolution).
-# ─────────────────────────────────────────────────────────────────────────────
-_STRESS_SAMPLE_INTERVAL: float = 1.0
+# Removed scripted hardcode, now using cfg.stress.sample_interval
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PATCH 2026-03-14: Reduced sim_time for all stress tests.
@@ -107,14 +105,14 @@ def main(raw_cfg: DictConfig) -> None:
 
     for N in n_targets:
         mu = jnp.ones(N) * 2.0          # normalised service rate
-        lam = 0.8 * float(jnp.sum(mu))  # rho = 0.8
+        lam = cfg.stress.massive_n_rho * float(jnp.sum(mu))
 
         # PATCH SG1: Apply the documented reduction to 500 s (non-debug).
         # cfg.simulation.ssa.sim_time (5000 s) causes O(N×T) OOM for N>=512.
-        _sim_time_t1 = 100.0 if raw_cfg.get("debug", False) else 500.0
-        max_samples_t1 = int(_sim_time_t1 / _STRESS_SAMPLE_INTERVAL) + 1
+        _sim_time_t1 = 100.0 if raw_cfg.get("debug", False) else cfg.stress.massive_n_sim_time
+        max_samples_t1 = int(_sim_time_t1 / cfg.stress.sample_interval) + 1
 
-        log.info(f"  Simulating N={N} experts (rho=0.8)...")
+        log.info(f"  Simulating N={N} experts (rho={cfg.stress.massive_n_rho})...")
 
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
@@ -123,7 +121,7 @@ def main(raw_cfg: DictConfig) -> None:
             service_rates=mu,
             alpha=cfg.system.alpha,
             sim_time=_sim_time_t1,
-            sample_interval=_STRESS_SAMPLE_INTERVAL,
+            sample_interval=cfg.stress.sample_interval,
             base_seed=cfg.simulation.seed,
             max_samples=max_samples_t1,
             policy_type=3  # Softmax
@@ -155,8 +153,8 @@ def main(raw_cfg: DictConfig) -> None:
     # ─────────────────────────────────────────────────────────────────────────
     # TEST 2: CRITICAL LOAD ANALYSIS
     # ─────────────────────────────────────────────────────────────────────────
-    log.info("\n[TEST 2] Critical Load Analysis (rho up to 0.999)")
-    N_fixed = 10
+    log.info(f"\n[TEST 2] Critical Load Analysis (rho up to {cfg.stress.critical_rhos[-1]})")
+    N_fixed = cfg.stress.critical_load_n
     mu_fixed = jnp.ones(N_fixed)
     cap_fixed = float(jnp.sum(mu_fixed))
 
@@ -179,12 +177,10 @@ def main(raw_cfg: DictConfig) -> None:
             # The quadratic O(1/(1-ρ)²) is only valid in the Halfin-Whitt
             # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
             # Formula now matches critical_load.py exactly (SG-B consistency fix).
-            #   rho=0.90 → 10,000s    rho=0.95 → 20,000s
-            #   rho=0.99 → 100,000s   rho=0.999 → 100,000s (capped)
-            _base_rho_crit = 0.8
+            _base_rho_crit = cfg.stress.critical_load_base_rho
             _rho_factor_crit = max(1.0, (1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6))
-            _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, 100_000.0)
-            if _sim_time_crit >= 100_000.0:
+            _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, cfg.stress.critical_load_max_sim_time)
+            if _sim_time_crit >= cfg.stress.critical_load_max_sim_time:
                 log.warning(
                     f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
                     f"(linear mixing time ~ {cfg.simulation.ssa.sim_time * _rho_factor_crit:.0f}s). "
@@ -192,7 +188,7 @@ def main(raw_cfg: DictConfig) -> None:
                     f"Report only rho<=0.999 and add mixing-time caveat."
                 )
 
-        max_samples_crit = int(_sim_time_crit / _STRESS_SAMPLE_INTERVAL) + 1
+        max_samples_crit = int(_sim_time_crit / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating rho={rho:.3f} (T={_sim_time_crit})...")
 
@@ -203,7 +199,7 @@ def main(raw_cfg: DictConfig) -> None:
             service_rates=mu_fixed,
             alpha=cfg.system.alpha,
             sim_time=_sim_time_crit,
-            sample_interval=_STRESS_SAMPLE_INTERVAL,
+            sample_interval=cfg.stress.sample_interval,
             base_seed=cfg.simulation.seed,
             max_samples=max_samples_crit,
             policy_type=3
@@ -288,9 +284,9 @@ def main(raw_cfg: DictConfig) -> None:
     # TEST 3: EXTREME HETEROGENEITY
     # ─────────────────────────────────────────────────────────────────────────
     log.info("\n[TEST 3] Extreme Heterogeneity Resilience (100x Speed Gap)")
-    mu_het = jnp.array([10.0, 0.1, 0.1, 0.1])
+    mu_het = jnp.array(cfg.stress.mu_het)
     cap_het = float(jnp.sum(mu_het))
-    lam_het = 0.5 * cap_het  # 50% load
+    lam_het = cfg.stress.heterogeneity_rho * cap_het
 
     log.info(f"  Simulating heterogenous setup: mu={mu_het}")
 
@@ -302,8 +298,8 @@ def main(raw_cfg: DictConfig) -> None:
     # new:  _sim_time_het = ... (same conditional)
     #       max_samples=int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1   ← consistent
     # PATCH 2026-03-14: reduced from 10000→1000 (debug: 1000→500).
-    _sim_time_het = 500.0 if raw_cfg.get("debug", False) else 1000.0
-    max_samples_het = int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1    # PATCH
+    _sim_time_het = 500.0 if raw_cfg.get("debug", False) else cfg.stress.heterogeneity_sim_time
+    max_samples_het = int(_sim_time_het / cfg.stress.sample_interval) + 1    # PATCH
 
     times, states, (arrs, deps) = sharded_replications(
         num_replications=cfg.simulation.num_replications,
@@ -312,7 +308,7 @@ def main(raw_cfg: DictConfig) -> None:
         service_rates=mu_het,
         alpha=cfg.system.alpha,
         sim_time=_sim_time_het,
-        sample_interval=_STRESS_SAMPLE_INTERVAL,    # PATCH: was cfg.simulation.sample_interval
+        sample_interval=cfg.stress.sample_interval,    # PATCH: was cfg.simulation.sample_interval
         base_seed=cfg.simulation.seed,
         max_samples=max_samples_het,               # PATCH: consistent with _sim_time_het
         policy_type=3
