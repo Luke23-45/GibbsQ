@@ -30,6 +30,8 @@ import optax
 from jaxtyping import PRNGKeyArray, Array, Float
 from jax.flatten_util import ravel_pytree
 from omegaconf import DictConfig
+import matplotlib.pyplot as plt # Added by user instruction
+import hydra # Added by user instruction
 
 from gibbsq.core.config import ExperimentConfig, NeuralConfig, hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
@@ -40,6 +42,7 @@ from gibbsq.core import constants
 # but here we use the local collect_trajectory_ssa.
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+from gibbsq.utils.model_io import save_model_pointer
 
 log = logging.getLogger(__name__)
 
@@ -624,24 +627,12 @@ class ReinforceTrainer:
             
             # PATCH-P2: Domain Randomization - sample rho from curriculum
             # This prevents overfitting to a single load factor
-            dr_cfg = getattr(self.cfg, 'domain_randomization', None)
-            if dr_cfg and getattr(dr_cfg, 'enabled', False):
-                if hasattr(dr_cfg, 'phases') and len(dr_cfg.phases) > 0:
-                    # Find the current phase based on epoch
-                    phase_idx = 0
-                    epochs_accum = 0
-                    for i, p in enumerate(dr_cfg.phases):
-                        epochs_accum += p.epochs
-                        if epoch < epochs_accum:
-                            phase_idx = i
-                            break
-                        phase_idx = i # cap at last phase
-                    active_phase = dr_cfg.phases[phase_idx]
-                    rho_min = active_phase.rho_min
-                    rho_max = active_phase.rho_max
-                else:
-                    rho_min = getattr(dr_cfg, 'rho_min', 0.4)
-                    rho_max = getattr(dr_cfg, 'rho_max', 0.85)
+            # Fix DomainRandomizationConfig definition collisions
+            dr_cfg = self.cfg.domain_randomization
+            is_enabled = getattr(dr_cfg, 'enabled', False)
+            if is_enabled:
+                rho_min = getattr(dr_cfg, 'rho_min', 0.4)
+                rho_max = getattr(dr_cfg, 'rho_max', 0.85)
             else:
                 # Default DR range if not configured
                 rho_min = 0.4
@@ -680,34 +671,20 @@ class ReinforceTrainer:
             
 
             all_advantages = []
-            gae_lambda = getattr(self.cfg.neural_training, 'gae_lambda', 0.95)
-            use_gae = gae_lambda > 0.0 and gae_lambda < 1.0
-            
             for traj in trajectories:
-                if use_gae:
-                    # PATCH-P1: Use GAE for advantage estimation
-                    G = compute_gae(
-                        traj.all_states, traj.jump_times, traj.action_step_indices,
-                        sim_time=self.sim_time,
-                        gamma=self.cfg.neural_training.gamma,
-                        gae_lambda=gae_lambda,
-                        value_net=value_net,
-                        service_rates=self.service_rates,
-                    )
-                else:
-                    # Fallback: Standard returns-to-go
-                    G = compute_causal_returns_to_go(
-                        traj.all_states, traj.jump_times, traj.action_step_indices, 
-                        sim_time=self.sim_time,
-                        gamma=self.cfg.neural_training.gamma
-                    )
+                # 1. Compute Standard Returns-to-go (Negative Queue Integral)
+                # This represents the raw future objective to minimize
+                G = compute_causal_returns_to_go(
+                    traj.all_states, traj.jump_times, traj.action_step_indices, 
+                    sim_time=self.sim_time,
+                    gamma=self.cfg.neural_training.gamma
+                )
                 all_advantages.append(G)
             
-            # 1. O(1) FLATTENING AND SHAPE CONTROL
+            # 2. O(1) FLATTENING AND SHAPE CONTROL
             batch_S = []
             batch_A = []
             batch_G = []
-            batch_Q_inst = []  # PATCH: Instantaneous queue sums for critic
             batch_rho = []
             batch_traj_indices = []
             
@@ -719,15 +696,12 @@ class ReinforceTrainer:
                     t_actions = np.array([traj.jump_times[idx] for idx in traj.action_step_indices])
                     t_rem = np.maximum(1e-3, self.sim_time - t_actions)
                     
+                    # Performance Index Calculation (Standardized scale 0-100)
                     G_idx = 100.0 * (random_limit * t_rem - G_raw) / (denom * t_rem)
                     
                     batch_S.extend(traj.states)
                     batch_A.extend(traj.actions)
                     batch_G.extend(np.atleast_1d(G_idx).tolist())
-                    # PATCH: Collect instantaneous queue sums for critic target
-                    # This aligns with pretraining which uses state-dependent queue sums
-                    for state in traj.states:
-                        batch_Q_inst.append(np.sum(state))
                     rho_val = self.cfg.system.arrival_rate / np.sum(self.service_rates)
                     batch_rho.extend([rho_val] * int(np.array(G_idx).size))
                     batch_traj_indices.extend([i] * int(np.array(G_idx).size))
@@ -743,7 +717,6 @@ class ReinforceTrainer:
                 S_tensor = jnp.asarray(np.stack(batch_S), dtype=jnp.float32)
                 A_tensor = jnp.asarray(batch_A, dtype=jnp.int32)
                 G_tensor = jnp.asarray(batch_G, dtype=jnp.float32)
-                Q_inst_tensor = jnp.asarray(batch_Q_inst, dtype=jnp.float32)  # PATCH: Queue sums
                 rho_tensor = jnp.asarray(batch_rho, dtype=jnp.float32)
                 idx_tensor = jnp.asarray(batch_traj_indices, dtype=jnp.int32)
                 
@@ -763,11 +736,6 @@ class ReinforceTrainer:
                 # Target Tanh-Squashing: Prevent exploding V-loss from extreme episodes
                 G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
                 G_norm = local_norm_fn(G_scaled, idx_tensor)
-                
-                # PATCH: Compute Q_inst_scaled for critic target
-                # This aligns with pretraining which uses state-dependent queue sums
-                # Critic learns V(s, rho) ≈ E[sum(queue)], not performance index
-                Q_inst_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(Q_inst_tensor / self.cfg.neural_training.squash_threshold)
                 
                 # PI-V5: PROJECT ALIGNMENT - EXPLICIT ADVANTAGE NORMALIZATION
                 def advantage_norm_fn(advs):
@@ -818,13 +786,12 @@ class ReinforceTrainer:
                     corr = corr_fn(chosen_log_probs, advs)
                         
                     # Critic Quality Metric
-                    # PATCH: Measure EV against Q_inst_scaled (the critic's actual target)
-                    # not against G_norm (the advantage target)
+                    # Measure EV against G_norm (the advantage target)
                     def explained_variance(y_true, y_pred):
                         var_y = jnp.var(y_true)
                         ev = 1.0 - jnp.var(y_true - y_pred) / (var_y + 1e-8)
                         return ev
-                    ev = explained_variance(Q_inst_scaled, v_preds)
+                    ev = explained_variance(G_norm, v_preds)
                     
                     mean_logp = jnp.mean(chosen_log_probs)
                     mean_adv = jnp.mean(advs)
@@ -849,14 +816,13 @@ class ReinforceTrainer:
                 policy_net = eqx.apply_updates(policy_net, updates)
                 
                 # 4. PURE VECTORIZED CRITIC GRAPH
-                # PATCH: Use Q_inst_scaled for critic loss (not G_norm)
-                # This aligns with pretraining which trains on state-dependent queue sums
-                def value_loss_fn(model, s_feat, rho_feat, queue_targets):
+                # Train Critic to predict the exact normalized returns it's subtracted from in Advantage
+                def value_loss_fn(model, s_feat, rho_feat, value_targets):
                     preds = jax.vmap(model)(s_feat, rho_feat)
-                    return jnp.mean((preds - queue_targets) ** 2)
+                    return jnp.mean((preds - value_targets) ** 2)
 
                 value_loss, value_grads = eqx.filter_value_and_grad(value_loss_fn)(
-                    value_net, s_feat, rho_tensor, Q_inst_scaled
+                    value_net, s_feat, rho_tensor, G_norm
                 )
                 
                 # Calculate Critic Gradient Norm
