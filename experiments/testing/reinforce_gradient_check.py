@@ -94,21 +94,25 @@ def compute_reinforce_gradient(
         )
         
         mask = batch.is_action_mask & batch.valid_mask
-        mask_f32 = mask.astype(jnp.float32)
-        b_k = jnp.sum(jnp.where(mask, batch.returns, 0.0), axis=0) / jnp.maximum(1.0, jnp.sum(mask_f32, axis=0))
         
-        # Realizations are constants for the gradient graph
-        adv = jax.lax.stop_gradient(batch.returns - b_k)
+        # Vanilla REINFORCE: Use total_integrated_queue as the scalar return
+        # per trajectory, multiplied by ALL score functions in that trajectory.
+        # This matches the FD objective exactly (both differentiate E[J(θ)]).
+        total_cost = jax.lax.stop_gradient(batch.total_integrated_queue)  # [batch]
+        
+        # Per-trajectory baseline (mean cost across batch) for variance reduction
+        baseline = jax.lax.stop_gradient(jnp.mean(total_cost))
+        advantage = jax.lax.stop_gradient(total_cost - baseline)  # [batch]
+        
         fixed_states = jax.lax.stop_gradient(batch.states)
         fixed_actions = jax.lax.stop_gradient(batch.actions)
         fixed_mask = jax.lax.stop_gradient(mask)
 
         def loss_fn(theta):
-            # 2. DIFFERENTIATE: Score function term grad(log π(a|s))
+            # Score function term: grad(log π(a|s))
             m = unravel(theta)
             s_feat = (fixed_states + 1.0) / service_rates_jax
             
-            # Application
             v_model = jax.vmap(jax.vmap(m))
             logits = v_model(s_feat)
             log_probs = jax.nn.log_softmax(logits, axis=-1)
@@ -119,13 +123,11 @@ def compute_reinforce_gradient(
             step_idx = jnp.arange(max_steps)[None, :]
             chosen_log_probs = log_probs[batch_idx, step_idx, safe_a]
             
-            # Temporal Credit Assignment correction (SG #1)
-            action_idx = jnp.cumsum(fixed_mask.astype(jnp.float32), axis=1) - 1.0
-            gamma_factors = cfg.neural_training.gamma ** action_idx
+            # Sum log_probs per trajectory (score function of trajectory)
+            traj_log_prob = jnp.sum(fixed_mask * chosen_log_probs, axis=1)  # [batch]
             
-            # Loss = - E[ gamma^t * Advantage * log_prob ] for maximization
-            # We return negative sum because jax.grad minimizes by default
-            return -jnp.sum(gamma_factors * fixed_mask * adv * chosen_log_probs)
+            # Vanilla REINFORCE: J * sum(log_pi) — matches FD objective
+            return -jnp.sum(advantage * traj_log_prob)
 
         # Differentiate with respect to the flat parameters
         return jax.grad(loss_fn)(flat_theta)
@@ -238,14 +240,8 @@ def compute_finite_difference_gradient(
             gamma=cfg.neural_training.gamma
         )
         
-        first_action_idx = jnp.argmax(batch.is_action_mask, axis=1)
-        has_action = jnp.max(batch.is_action_mask, axis=1)
-        
-        safe_idx = jnp.expand_dims(first_action_idx, -1)
-        first_returns = jnp.take_along_axis(batch.returns, safe_idx, axis=-1).squeeze(-1)
-        
-        G_0 = jnp.where(has_action, first_returns, 0.0)
-        return jnp.sum(G_0)
+        # Use total_integrated_queue (undiscounted total cost) — matches REINFORCE objective
+        return jnp.sum(batch.total_integrated_queue)
 
     def get_expected_return(flat_theta, all_keys):
         total_sum = 0.0
