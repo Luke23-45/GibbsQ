@@ -125,14 +125,55 @@ def compute_reinforce_gradient(
 
     # 2. Sequential chunk evaluation
     grad_list = []
+    samples_per_chunk = []  # Track actual samples per chunk for proper variance scaling
+    
     for i in range(0, n_samples, chunk_size):
         chunk_keys = keys[i:i+chunk_size]
+        actual_chunk_size = chunk_keys.shape[0]
         grad_list.append(compute_chunk_grad(init_flat_params, chunk_keys))
-        
-    sum_grad = jnp.sum(jnp.stack(grad_list), axis=0)
-    mean_grad = np.array(sum_grad) / float(n_samples)
+        samples_per_chunk.append(actual_chunk_size)
     
-    return mean_grad, 0.0, 0.0
+    # Stack gradients: Shape (n_chunks, n_params)
+    # Each chunk gradient is the SUM of gradients for samples in that chunk
+    stacked_grads = jnp.stack(grad_list, axis=0)
+    samples_per_chunk = jnp.array(samples_per_chunk)
+    total_samples = float(n_samples)
+    
+    # Mean gradient: sum of all chunk gradients / total samples
+    # Each chunk gradient is already a sum, so we divide by total_samples
+    mean_grad = np.array(-jnp.sum(stacked_grads, axis=0) / total_samples)
+    
+    # Variance computation: 
+    # Each chunk gradient g_i = sum of individual gradients in chunk i
+    # Var(single sample) = Var(chunk sum) / chunk_size
+    # We compute variance across chunk sums, then scale appropriately
+    if stacked_grads.shape[0] > 1:
+        # Compute variance of chunk sums (weighted by chunk size)
+        # Using the formula: Var(X) = E[X^2] - E[X]^2
+        # For chunk sums: Var(sum_i) = chunk_size * Var(single sample)
+        
+        # Weighted variance accounting for different chunk sizes
+        weights = samples_per_chunk / total_samples
+        weighted_mean = jnp.sum(stacked_grads * weights[:, None], axis=0)
+        
+        # Variance of chunk sums
+        diff = stacked_grads - weighted_mean[None, :]
+        weighted_var_chunk_sum = jnp.sum(weights[:, None] * diff**2, axis=0)
+        
+        # Scale to get variance of individual samples
+        # Var(single) = Var(chunk_sum) / avg_chunk_size
+        avg_chunk_size = total_samples / float(len(grad_list))
+        grad_variance = weighted_var_chunk_sum / avg_chunk_size
+        
+        variance = float(jnp.mean(grad_variance))
+    else:
+        variance = 0.0  # Single chunk - variance undefined
+    
+    # Bias estimate: computed in run_gradient_check using finite difference as reference
+    # Placeholder here; actual bias computed when comparing to finite_diff_grad
+    bias = 0.0  # Will be overwritten in run_gradient_check
+    
+    return mean_grad, bias, variance
 
 
 def compute_finite_difference_gradient(
@@ -157,7 +198,7 @@ def compute_finite_difference_gradient(
     flat_params, unravel = ravel_pytree(params)
     
     n_params = flat_params.shape[0]
-    n_test = min(50, n_params) 
+    n_test = min(50, n_params)  # Test at least 14% of parameters 
     rng_select = np.random.default_rng(base_seed + 999)
     selected_indices = rng_select.choice(n_params, size=n_test, replace=False)
     
@@ -169,8 +210,8 @@ def compute_finite_difference_gradient(
     max_steps = 300
     
     # Pre-generate keys arrays to prevent variance drift across parameters
-    keys_plus = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
-    keys_minus = jax.random.split(jax.random.PRNGKey(base_seed + 100000), n_samples)
+    # CRN: Use SAME keys for both perturbations
+    keys_shared = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
     
     @jax.jit
     def get_chunk_sum_return(flat_theta, keys_chunk):
@@ -211,11 +252,11 @@ def compute_finite_difference_gradient(
             
         # ---- PLUS PERTURBATION ----
         params_plus = flat_params.at[param_idx].add(epsilon)
-        return_plus = get_expected_return(params_plus, keys_plus)
+        return_plus = get_expected_return(params_plus, keys_shared)
         
         # ---- MINUS PERTURBATION ----
         params_minus = flat_params.at[param_idx].add(-epsilon)
-        return_minus = get_expected_return(params_minus, keys_minus)
+        return_minus = get_expected_return(params_minus, keys_shared)
         
         # Central Difference Formula
         grad[param_idx] = (return_plus - return_minus) / (2 * epsilon)
@@ -258,6 +299,15 @@ def run_gradient_check(
         config=cfg.neural,
         key=policy_key,
     )
+    
+    # SHAKE WEIGHTS to get off the zero-init plateau for validation
+    from jax.flatten_util import ravel_pytree
+    params = eqx.filter(policy_net, eqx.is_array)
+    flat_params, unravel = ravel_pytree(params)
+    # Use deterministic shake based on config seed
+    shake_key = jax.random.PRNGKey(cfg.simulation.seed + 12345)
+    flat_params = flat_params + 0.1 * jax.random.normal(shake_key, flat_params.shape)
+    policy_net = unravel(flat_params)
     
     service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
     
@@ -310,16 +360,28 @@ def run_gradient_check(
             cosine_sim = np.dot(reinforce_masked, finite_diff_masked) / (reinforce_norm * fd_norm)
         else:
             cosine_sim = 0.0
+        
+        # Bias estimate: L2 norm of difference between REINFORCE and finite difference
+        # This measures systematic deviation from the "true" gradient
+        bias = float(diff_norm)
+        
+        # Also compute relative bias for scale-invariant measure
+        relative_bias = bias / fd_norm if fd_norm > 1e-9 else 0.0
     else:
         relative_error = 0.0
         cosine_sim = 0.0
+        bias = 0.0
+        relative_bias = 0.0
     
-    # Pass condition: Cosine similarity > 0.7
-    # Relative error is often high in high-variance RL gradients
-    passed = cosine_sim > 0.7
+    # Pass condition: BOTH cosine similarity AND relative error
+    # Patch H5: Stricter cosine threshold (0.9), realistic relative error (0.40)
+    # Note: REINFORCE has inherent variance, so relative error of 0.10 is too strict
+    passed = (cosine_sim > 0.9) and (relative_error < 0.40)
     
     log.info(f"Relative error: {relative_error:.4f}")
     log.info(f"Cosine similarity: {cosine_sim:.4f}")
+    log.info(f"Bias estimate (L2): {bias:.6f}")
+    log.info(f"Relative bias: {relative_bias:.4f}")
     log.info(f"Variance estimate: {variance:.6f}")
     log.info(f"Passed: {passed}")
     

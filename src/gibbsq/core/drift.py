@@ -49,6 +49,7 @@ __all__ = [
     "DriftResult",
     "evaluate_grid",
     "evaluate_trajectory",
+    "compute_adaptive_q_max",
 ]
 
 
@@ -280,6 +281,61 @@ def evaluate_grid(
         violations=violations,
         norms=states.sum(axis=1).astype(np.float64),
     )
+
+
+def compute_adaptive_q_max(
+    lam: float,
+    mu: np.ndarray,
+    alpha: float,
+    safety_factor: float = 2.0,
+) -> int:
+    """
+    Compute adaptive q_max based on theoretical compact radius.
+
+    SOTA Enhancement: Ensures grid depth covers the compact set from
+    the Foster-Lyapunov proof (docs/gibbsq.md).
+
+    Parameters
+    ----------
+    lam : float
+        Arrival rate λ.
+    mu : ndarray
+        Service rates μ_i.
+    alpha : float
+        Inverse temperature α.
+    safety_factor : float
+        Multiplier for compact radius (default 2.0).
+
+    Returns
+    -------
+    int
+        Recommended q_max value.
+
+    Notes
+    -----
+    From the proof:
+        ε = min((Λ−λ)/N, min μ_i)
+        R = (λ log N)/α + (λ+Λ)/2
+        compact_radius = (R+1)/ε
+
+    The grid must cover states with |Q|₁ ≤ compact_radius * N.
+    """
+    mu_f = np.asarray(mu, dtype=np.float64)
+    N = len(mu_f)
+    cap = mu_f.sum()
+
+    # Compute theoretical constants
+    eps = min((cap - lam) / N, mu_f.min())
+    if eps <= 0:
+        # Capacity condition violated - return large default
+        return 500
+
+    R = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+    compact_radius = (R + 1.0) / eps
+
+    # q_max should cover compact set with safety margin
+    q_max = max(50, int(np.ceil(compact_radius * safety_factor)))
+    return q_max
 
 
 def evaluate_trajectory(

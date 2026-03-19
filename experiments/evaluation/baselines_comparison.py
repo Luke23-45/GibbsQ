@@ -18,11 +18,10 @@ not Tier 4 (broken GibbsQ baseline).
 
 import logging
 from pathlib import Path
-
 import numpy as np
+import jax
 import jax.numpy as jnp
 from omegaconf import DictConfig
-
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from gibbsq.core.policies import (
     SoftmaxRouting, UniformRouting, ProportionalRouting,
@@ -34,8 +33,40 @@ from gibbsq.analysis.metrics import (
 )
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+import pandas as pd
+import matplotlib.pyplot as plt
+import sys
+import equinox as eqx
+from gibbsq.core.neural_policies import NeuralRouter
 
 log = logging.getLogger(__name__)
+
+
+class DeterministicNeuralPolicy:
+    """
+    Wraps a trained NeuralRouter to provide deterministic actions.
+    Uses greedy argmax to remove policy sampling noise for final evaluations.
+    """
+    def __init__(self, net, mu):
+        self._net = net
+        self._mu = mu
+        self._np_params = net.get_numpy_params()
+        self._np_config = net.config
+        self._num_servers = len(mu)
+
+    def __call__(self, Q, rng):
+        # Feature vector: (Q+1)/mu
+        s = (Q + 1.0) / self._mu
+        # Fast numpy forward pass
+        logits = self._net.numpy_forward(s, self._np_params, self._np_config)
+        
+        # Greedy deterministic selection
+        best_idx = int(np.argmax(logits))
+        
+        # Return one-hot probability vector
+        probs = np.zeros(self._num_servers, dtype=np.float64)
+        probs[best_idx] = 1.0
+        return probs
 
 
 # Corrected baseline hierarchy (per professor's spec at suggestions.md:517-539)
@@ -191,10 +222,7 @@ def run_corrected_comparison(
     if ptr_to_use:
         log.info("\nEvaluating Tier 5: N-GibbsQ (REINFORCE trained)...")
         try:
-            import equinox as eqx
-            from gibbsq.core.neural_policies import NeuralRouter
-            
-            # Load weights
+                # Load weights
             relative_path = ptr_to_use.read_text(encoding='utf-8').strip()
             weights_path = _PROJECT_ROOT / relative_path
             
@@ -204,11 +232,12 @@ def run_corrected_comparison(
                 policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
                 
-                # SG-9 PATCH: Validate BOTH num_servers AND hidden_size.
-                if policy_net.layers[0].weight.shape[1] != N:
+                # SG-9 PATCH: Validate BOTH input_dim AND hidden_size.
+                input_dim = N + (1 if cfg.neural.use_rho else 0)
+                if policy_net.layers[0].weight.shape[1] != input_dim:
                     log.warning(
                         f"[SG-9] Neural model N-mismatch: model expects "
-                        f"N={policy_net.layers[0].weight.shape[1]}, system has N={N}. "
+                        f"input_dim={policy_net.layers[0].weight.shape[1]}, system has input_dim={input_dim}. "
                         f"Skipping neural evaluation."
                     )
                     return
@@ -225,30 +254,34 @@ def run_corrected_comparison(
                 np_params = policy_net.get_numpy_params()
                 np_config = policy_net.config
                 
-                # Create wrapper policy
+                deterministic = DeterministicNeuralPolicy(policy_net, mu)
+                # Standard stochastic policy for silver/bronze parity
                 class NeuralPolicyWrapper:
                     def __init__(self, net, mu):
                         self._net = net
                         self._mu = mu
+                        self._np_params = net.get_numpy_params()
+                        self._np_config = net.config
                     
                     def __call__(self, Q, rng):
-                        # 1. Compute routing probabilities using sojourn-time features
-                        # Use fast NumPy forward pass
                         s = (Q + 1.0) / self._mu
-                        logits = policy_net.numpy_forward(s, np_params, np_config)
+                        logits = self._net.numpy_forward(s, self._np_params, self._np_config)
                         logits = logits - np.max(logits)
                         probs = np.exp(logits)
                         return probs / probs.sum()
                 
-                neural_policy = NeuralPolicyWrapper(policy_net, mu)
-                metrics = evaluate_single_policy(neural_policy, cfg, 
+                log.info("Evaluating N-GibbsQ (Greedy Deterministic)...")
+                metrics = evaluate_single_policy(deterministic, cfg, 
                                                   np.random.default_rng(cfg.simulation.seed))
                 
-                results["N-GibbsQ (REINFORCE)"] = {
+                results["N-GibbsQ (Platinum)"] = {
                     "tier": 5,
-                    "name": "neural_reinforce",
+                    "name": "neural_platinum",
                     **metrics,
                 }
+                
+                # Also keep the stochastic one for legacy parity analysis if needed
+                stochastic = NeuralPolicyWrapper(policy_net, mu)
                 
                 log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
         except Exception as e:
@@ -270,11 +303,11 @@ def run_corrected_comparison(
     sojourn_result = results.get("GibbsQ-Sojourn (alpha=1.0)")
     proportional_result = results.get("Proportional (mu/Lambda)")
     
-    neural_result = results.get("N-GibbsQ (REINFORCE)")
+    neural_result = results.get("N-GibbsQ (Platinum)")
     
     if neural_result:
         neural_q = neural_result["mean_q_total"]
-        log.info(f"N-GibbsQ (REINFORCE): E[Q] = {neural_q:.4f}")
+        log.info(f"N-GibbsQ (Platinum/Greedy): E[Q] = {neural_q:.4f}")
         
         # Get reference thresholds
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
@@ -312,16 +345,16 @@ def run_corrected_comparison(
         # Strict conditional Parity limits
         if has_parity(neural_q, se_neural, jssq_q, jssq_se):
             parity = "GOLD"
-            log.info(f"PARITY RESULT: GOLD ✓ (Statistically identical to asymptotic optimum JSSQ)")
+            log.info(f"PARITY RESULT: GOLD [OK] (Statistically matches asymptotic optimum JSSQ)")
         elif has_parity(neural_q, se_neural, sojourn_q, sojourn_se):
             parity = "SILVER"
-            log.info(f"PARITY RESULT: SILVER ✓ (Statistically identical to analytical GibbsQ-Sojourn)")
+            log.info(f"PARITY RESULT: SILVER [OK] (Statistically matches analytical GibbsQ-Sojourn)")
         elif has_parity(neural_q, se_neural, proportional_q, proportional_se):
             parity = "BRONZE"
-            log.info(f"PARITY RESULT: BRONZE ✓ (Statistically dominates static Proportional baseline)")
+            log.info(f"PARITY RESULT: BRONZE [OK] (Statistically matches static Proportional baseline)")
         else:
             parity = "FAILED"
-            log.info(f"PARITY RESULT: FAILED ✗ (Statistically inferior to benchmark baselines)")
+            log.info(f"PARITY RESULT: FAILED [FAIL] (Statistically inferior to benchmark baselines)")
         
         # Store parity result
         neural_result["parity"] = parity
@@ -375,6 +408,103 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     log.info(f"Comparison plot saved to {plot_path}")
 
 
+def run_grid_generalization(
+    neural_policy,
+    cfg: ExperimentConfig,
+    run_dir: Path,
+):
+    """Evaluate generalization across a grid of load factors (Platinum Standard)."""
+    log.info("\n" + "=" * 60)
+    log.info("  Platinum Generalization Sweep (Grid Evaluation)")
+    log.info("=" * 60)
+    
+    num_servers = cfg.system.num_servers
+    service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
+    total_capacity = float(np.sum(service_rates))
+    
+    # High-resolution grid targeting the critical load horizon
+    rho_grid = [0.45, 0.55, 0.65, 0.75, 0.80, 0.85, 0.90, 0.95]
+    log.info(f"Evaluating across load factors: {rho_grid}")
+    
+    results = []
+    for rho in rho_grid:
+        arrival_rate = rho * total_capacity
+        log.info(f"--- rho = {rho:.2f} (lambda = {arrival_rate:.2f}) ---")
+        # 1. Uniform
+        q_u = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum() 
+                           for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates, 
+                                                   policy=UniformRouting(), 
+                                                   num_replications=cfg.simulation.num_replications, sim_time=cfg.simulation.ssa.sim_time, 
+                                                   base_seed=cfg.simulation.seed)]))
+        
+        # 2. JSQ
+        q_j = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum() 
+                           for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates, 
+                                                   policy=JSQRouting(), 
+                                                   num_replications=cfg.simulation.num_replications, sim_time=cfg.simulation.ssa.sim_time, 
+                                                   base_seed=cfg.simulation.seed)]))
+        
+        # 3. Neural (Greedy)
+        q_n = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum() 
+                           for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates, 
+                                                   policy=neural_policy, 
+                                                   num_replications=cfg.simulation.num_replications, sim_time=cfg.simulation.ssa.sim_time, 
+                                                   base_seed=cfg.simulation.seed)]))
+        
+        # Performance Index: 100% = JSQ, 0% = Uniform
+        dist = q_u - q_j
+        safe_dist = max(dist, 1e-6)
+        idx = 100.0 * ((q_u - q_n) / safe_dist)
+        if q_n <= q_j: idx = max(100.0, idx)
+        
+        results.append({
+            "rho": rho,
+            "Uniform_EQ": q_u,
+            "JSQ_EQ": q_j,
+            "Neural_EQ": q_n,
+            "Performance_Index": idx
+        })
+        log.info(f"  Idx: {idx:.1f}% | Neural E[Q]: {q_n:.2f} (JSQ: {q_j:.2f})")
+
+    # Save and Plot
+    df = pd.DataFrame(results)
+    df.to_csv(run_dir / "platinum_grid_results.csv", index=False)
+    
+    _plot_platinum_grid(df, run_dir)
+    return results
+
+def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
+    """Generate high-fidelity log-scale and index plots."""
+    plt.rcParams.update({'axes.grid': True, 'grid.alpha': 0.3})
+    
+    # Plot 1: E[Q] Log-Scale
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    ax1.plot(df['rho'], df['Uniform_EQ'], 'r--x', label='Uniform')
+    ax1.plot(df['rho'], df['Neural_EQ'], 'b-o', linewidth=2, label='N-GibbsQ (Platinum)')
+    ax1.plot(df['rho'], df['JSQ_EQ'], 'g-.s', label='JSQ (Optimal)')
+    ax1.set_yscale('log')
+    ax1.set_xlabel('Load Factor (rho)')
+    ax1.set_ylabel('Expected Queue Length (Log Scale)')
+    ax1.set_title('Performance Envelope')
+    ax1.legend()
+    
+    # Plot 2: Performance Index
+    ax2.plot(df['rho'], df['Performance_Index'], 'm-D', linewidth=2)
+    ax2.axhline(100, color='g', linestyle='--', alpha=0.5, label='JSQ Parity')
+    ax2.axhline(0, color='r', linestyle='--', alpha=0.5, label='Uniform Parity')
+    ax2.set_ylim(-10, 110)
+    ax2.set_xlabel('Load Factor (rho)')
+    ax2.set_ylabel('Performance Index (%)')
+    ax2.set_title('Generalization Efficiency')
+    ax2.legend()
+    
+    plt.tight_layout()
+    plt.savefig(output_dir / "platinum_grid_analysis.png", dpi=300)
+    plt.close()
+    log.info(f"Platinum grid analysis saved to {output_dir}")
+
+
 def main(raw_cfg: DictConfig):
     """Main entry point for corrected policy comparison."""
     cfg = hydra_to_config(raw_cfg)
@@ -386,6 +516,29 @@ def main(raw_cfg: DictConfig):
     
     import jax
     results = run_corrected_comparison(cfg, run_dir, run_logger)
+    
+    # Platinum Step: If we have a neural policy, run the full grid generalization sweep
+    if results and "N-GibbsQ (Platinum)" in results:
+        # Check for grid flag in the raw Hydra config
+        if raw_cfg.get("grid", False):
+            # We already have mu, cfg, run_dir.
+            log.info("\n--- Platinum Trigger: Running Grid Generalization Sweep ---")
+            
+            N = cfg.system.num_servers
+            mu = np.array(cfg.system.service_rates)
+            pointer_dir = run_dir.parent.parent
+            dr_ptr = pointer_dir / "latest_domain_randomized_weights.txt"
+            
+            if dr_ptr.exists():
+                weights_path = Path(__file__).resolve().parents[2] / dr_ptr.read_text().strip()
+                key = jax.random.PRNGKey(cfg.simulation.seed)
+                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
+                policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
+                
+                platinum_policy = DeterministicNeuralPolicy(policy_net, mu)
+                run_grid_generalization(platinum_policy, cfg, run_dir)
+            else:
+                log.warning("No latest_domain_randomized_weights.txt found - skipping grid sweep.")
     
     if run_logger:
         run_logger.finish()

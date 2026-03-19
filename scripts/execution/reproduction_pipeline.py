@@ -55,7 +55,7 @@ def main():
         
         # Phase 2: N-GibbsQ Neural Learning Pipeline
         ("reinforce_train", "[7/10] Running REINFORCE SSA Training (Track 1)..."),
-        ("dr_train", "[8/10] Running Domain Randomization Training (Track 3)..."),
+        ("bc_train", "[8/10] Running Platinum BC Pretraining (Track 2/3)..."),
         
         # Phase 3: Generational Analysis & Ablation
         ("stats", "[10/10] Running Deep Component Ablation & Generational Generalization..."),

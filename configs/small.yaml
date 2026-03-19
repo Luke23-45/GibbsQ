@@ -18,7 +18,7 @@ simulation:
   burn_in_fraction: 0.2
   export_trajectories: false
   ssa:
-    sim_time: 1000.0
+    sim_time: 5000.0  # Patch H4: Increased from 1000 for better steady-state estimation
     sample_interval: 1.0
   dga:
     sim_steps: 1000
@@ -47,6 +47,8 @@ neural_training:
   dga_learning_rate: 0.1
   weight_decay: 1e-4
   min_temperature: 0.3   # HP#2 FIX: Raise floor to 0.3 to prevent late-stage loss regression (PR#2)
+  gamma: 0.99            # Discount factor for returns
+  gae_lambda: 0.95       # PATCH-P1: GAE λ for bias-variance tradeoff (Schulman 2015)
   curriculum:
     - [10, 200]
     - [20, 1000]
@@ -61,5 +63,27 @@ jax:
 wandb:
   enabled: false
   project: GibbsQ-Small
+  
+batch_size: 64  # PI-V4.3: Increased from 32 to 64 (Patch H2: CLT variance reduction)
+
+neural:
+  hidden_size: 128  # Patch H6: Increased from 64 for better policy expressiveness
+  preprocessing: log1p
+  init_type: zero_final
+  use_rho: true
+  rho_input_scale: 10.0
+  entropy_bonus: 0.01  # STABILITY FIX: Increased from 0.001 to prevent premature policy collapse
+  grad_clip: 0.5  # Patch H3: Reduced from 1.0 per PPO literature
+  actor_lr: 0.0003  # actor learning rate (Patch H1: 3e-4 per PPO literature)
+  critic_lr: 0.003 # Patch H7: Increased from 0.001 for faster baseline adaptation
+  weight_decay: 0.0001
+
+train_epochs: 100  # FIX: Increased from 30 for more learning
+
+# PATCH-P2: Domain Randomization for generalization
+domain_randomization:
+  enabled: true
+  rho_min: 0.4
+  rho_max: 0.85
 
 output_dir: outputs/small

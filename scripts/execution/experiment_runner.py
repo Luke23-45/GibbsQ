@@ -20,11 +20,12 @@ EXPERIMENTS = {
     "generalize": "experiments.evaluation.n_gibbsq_evals.gen_sweep",
     "ablation": "experiments.evaluation.n_gibbsq_evals.ablation_ssa",
     "critical": "experiments.evaluation.n_gibbsq_evals.critical_load",
-    "bias": "experiments.testing.verify_bias",
+    "bias": "experiments.testing.reinforce_gradient_check",
     "reinforce_train": "experiments.training.train_reinforce",
-    "dr_train": "experiments.training.train_domain_randomized",
+    "bc_train": "experiments.training.pretrain_bc",
     "corrected_policy": "experiments.evaluation.baselines_comparison",
     "reinforce_check": "experiments.testing.reinforce_gradient_check",
+    "check_configs": "experiments.testing.check_configs",
 }
 
 def print_usage():
@@ -39,6 +40,7 @@ def print_usage():
     print("  python experiment_runner.py drift")
     print("  python experiment_runner.py sweep system.num_servers=5 simulation.ssa.sim_time=5000")
     print("  python experiment_runner.py policy +simulation.export_trajectories=True")
+    print("  python experiment_runner.py corrected_policy")
 
 def main():
     parser = argparse.ArgumentParser(

@@ -189,6 +189,13 @@ class NeuralConfig:
     preprocessing: str = "log1p"  # Phase 10: Superior for scale-invariance
     capacity_bound: float = constants.NEURAL_LINEAR_CAPACITY_BOUND
     init_type: str = "zero_final" # Standard safety requirement
+    use_rho: bool = True          # PI-V4: Append rho to state features
+    rho_input_scale: float = 10.0  # PI-V4.1: Increased scale for better feature saliency
+    entropy_bonus: float = 0.01    # PI-V4.1: Prevent premature determinism
+    grad_clip: float = 1.0         # PI-V4.1: Prevent loss explosions
+    actor_lr: float = 3e-4         # PI-V4.1: Separate LRs for stability
+    critic_lr: float = 1e-3
+    weight_decay: float = 1e-4     # L2 regularization for AdamW
 
 @dataclass
 class VerificationThresholds:
@@ -248,14 +255,20 @@ class GeneralizationConfig:
 
 @dataclass
 class StressConfig:
-    n_values: List[int] = field(default_factory=lambda: [4, 8, 16, 32, 64])
-    critical_rhos: List[float] = field(default_factory=lambda: [0.95, 0.98, 0.99, 0.995])
+    # SOTA defaults from Phase 1 verification
+    # N values: Grid feasible for N≤3, trajectory mode for N>3
+    # Critical rhos: Halfin-Whitt regime boundary testing
+    n_values: List[int] = field(default_factory=lambda: [2, 4, 8])
+    critical_rhos: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98])
 
 
 @dataclass
 class StabilitySweepConfig:
-    alpha_vals: List[float] = field(default_factory=lambda: [0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0])
-    rho_vals: List[float] = field(default_factory=lambda: [0.5, 0.7, 0.9, 0.95, 0.99])
+    # SOTA defaults from Phase 1 verification (ledger/01_sota_targets.md)
+    # Alpha sweep: Full temperature sensitivity [0.01, 100]
+    # Rho sweep: Heavy-traffic regime [0.80, 0.98]
+    alpha_vals: List[float] = field(default_factory=lambda: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0])
+    rho_vals: List[float] = field(default_factory=lambda: [0.80, 0.85, 0.90, 0.95, 0.98])
 
 
 @dataclass
@@ -265,6 +278,7 @@ class NeuralTrainingConfig:
     dga_learning_rate: float = 0.5
     min_temperature: float = 0.1   # SG-1 FIX: was in YAML but missing from dataclass
     gamma: float = 0.99            # HP-2 FIX: avoid hardcoded discount
+    gae_lambda: float = 0.95       # PATCH-P1: GAE λ for bias-variance tradeoff (Schulman 2015)
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
 
 
@@ -302,10 +316,11 @@ class ReinforceConfig:
 @dataclass
 class DomainRandomizationPhase:
     """Single phase of domain randomization curriculum."""
-    rho_min: float = 0.45
-    rho_max: float = 0.70
+    # SOTA: Start from higher load for critical regime training
+    rho_min: float = 0.60
+    rho_max: float = 0.85
     epochs: int = 20
-    horizon: int = 500
+    horizon: int = 1000  # INCREASED: Longer horizons for stability
 
 
 @dataclass
@@ -364,6 +379,7 @@ class ExperimentConfig:
     log_dir:      str              = "logs"
     debug:        bool             = False
     train_epochs: int              = 30
+    batch_size:   int              = 16
 
 
 # ──────────────────────────────────────────────────────────────
@@ -482,6 +498,37 @@ def validate(cfg: ExperimentConfig) -> None:
         raise ValueError(f"Unknown neural.preprocessing '{neu.preprocessing}'. Choose from {valid_pre}")
     if neu.capacity_bound <= 0:
         raise ValueError(f"neural.capacity_bound must be > 0, got {neu.capacity_bound}")
+    
+    # ── New neural configuration validation (PI-V4) ────────────────────────────
+    if neu.use_rho and not isinstance(neu.use_rho, bool):
+        raise ValueError(f"neural.use_rho must be boolean, got {type(neu.use_rho)}")
+    if neu.rho_input_scale <= 0:
+        raise ValueError(f"neural.rho_input_scale must be > 0, got {neu.rho_input_scale}")
+    if neu.rho_input_scale > 100.0:
+        raise ValueError(f"neural.rho_input_scale must be <= 100.0, got {neu.rho_input_scale}")
+    if neu.entropy_bonus < 0:
+        raise ValueError(f"neural.entropy_bonus must be ≥ 0, got {neu.entropy_bonus}")
+    if neu.entropy_bonus > 1.0:
+        raise ValueError(f"neural.entropy_bonus must be <= 1.0, got {neu.entropy_bonus}")
+    if neu.grad_clip <= 0:
+        raise ValueError(f"neural.grad_clip must be > 0, got {neu.grad_clip}")
+    if neu.grad_clip > 10.0:
+        raise ValueError(f"neural.grad_clip must be <= 10.0, got {neu.grad_clip}")
+    if neu.actor_lr <= 0 or neu.critic_lr <= 0:
+        raise ValueError(f"neural.actor_lr and neural.critic_lr must be > 0, got {neu.actor_lr}, {neu.critic_lr}")
+    if neu.actor_lr > 1e-1 or neu.critic_lr > 1e-1:
+        raise ValueError(f"neural.learning rates must be <= 1e-1, got {neu.actor_lr}, {neu.critic_lr}")
+    if neu.actor_lr < 1e-6 or neu.critic_lr < 1e-6:
+        raise ValueError(f"neural.learning rates must be >= 1e-6, got {neu.actor_lr}, {neu.critic_lr}")
+    if neu.weight_decay < 0:
+        raise ValueError(f"neural.weight_decay must be >= 0, got {neu.weight_decay}")
+    if neu.weight_decay > 1.0:
+        raise ValueError(f"neural.weight_decay must be <= 1.0, got {neu.weight_decay}")
+    
+    # PATCH: Validate gamma (discount factor) is in valid range
+    ntc = cfg.neural_training
+    if not (0 <= ntc.gamma <= 1):
+        raise ValueError(f"neural_training.gamma must be in [0, 1], got {ntc.gamma}")
 
     # ── JAX engine safety bounds ──────────────────────────────
     jen = cfg.jax_engine
@@ -607,6 +654,7 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         log_dir=d.get("log_dir", "logs"),
         debug=d.get("debug", False),
         train_epochs=d.get("train_epochs", 30),
+        batch_size=d.get("batch_size", 16),
     )
 
 
