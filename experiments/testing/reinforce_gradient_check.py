@@ -42,7 +42,8 @@ class GradientCheckResult(NamedTuple):
     cosine_similarity: float
     bias_estimate: float
     variance_estimate: float
-    reinforce_var_vector: np.ndarray # NEW: Per-parameter variance
+    reinforce_var_vector: np.ndarray 
+    fd_var_vector: np.ndarray # NEW: Per-parameter FD variance
     passed: bool
 
 def compute_reinforce_gradient(
@@ -94,25 +95,32 @@ def compute_reinforce_gradient(
         )
         
         mask = batch.is_action_mask & batch.valid_mask
+        mask_f32 = mask.astype(jnp.float32)
         
-        # Vanilla REINFORCE: Use total_integrated_queue as the scalar return
-        # per trajectory, multiplied by ALL score functions in that trajectory.
-        # This matches the FD objective exactly (both differentiate E[J(θ)]).
-        total_cost = jax.lax.stop_gradient(batch.total_integrated_queue)  # [batch]
+        # 1.5 LEAVE-ONE-OUT (LOO) BASELINE (SG#1 Fix)
+        # We need a baseline b_{k,i} that doesn't include the current trajectory i.
+        # This prevents the self-correlation bias that plagues standard REINFORCE in CTMCs.
+        sum_returns = jnp.sum(jnp.where(mask, batch.returns, 0.0), axis=0, keepdims=True)
+        sum_mask = jnp.sum(mask_f32, axis=0, keepdims=True)
         
-        # Per-trajectory baseline (mean cost across batch) for variance reduction
-        baseline = jax.lax.stop_gradient(jnp.mean(total_cost))
-        advantage = jax.lax.stop_gradient(total_cost - baseline)  # [batch]
+        loo_sum_returns = sum_returns - jnp.where(mask, batch.returns, 0.0)
+        loo_sum_mask = sum_mask - mask_f32
         
+        # Unbiased baseline: mean of others
+        b_k = jnp.where(loo_sum_mask > 0.5, loo_sum_returns / loo_sum_mask, 0.0)
+        
+        # Realizations are constants for the gradient graph
+        adv = jax.lax.stop_gradient(batch.returns - b_k)
         fixed_states = jax.lax.stop_gradient(batch.states)
         fixed_actions = jax.lax.stop_gradient(batch.actions)
         fixed_mask = jax.lax.stop_gradient(mask)
 
         def loss_fn(theta):
-            # Score function term: grad(log π(a|s))
+            # 2. DIFFERENTIATE: Score function term grad(log π(a|s))
             m = unravel(theta)
             s_feat = (fixed_states + 1.0) / service_rates_jax
             
+            # Application
             v_model = jax.vmap(jax.vmap(m))
             logits = v_model(s_feat)
             log_probs = jax.nn.log_softmax(logits, axis=-1)
@@ -123,11 +131,13 @@ def compute_reinforce_gradient(
             step_idx = jnp.arange(max_steps)[None, :]
             chosen_log_probs = log_probs[batch_idx, step_idx, safe_a]
             
-            # Sum log_probs per trajectory (score function of trajectory)
-            traj_log_prob = jnp.sum(fixed_mask * chosen_log_probs, axis=1)  # [batch]
+            # Temporal Credit Assignment correction (SG #1)
+            action_idx = jnp.cumsum(fixed_mask.astype(jnp.float32), axis=1) - 1.0
+            gamma_factors = cfg.neural_training.gamma ** action_idx
             
-            # Vanilla REINFORCE: J * sum(log_pi) — matches FD objective
-            return -jnp.sum(advantage * traj_log_prob)
+            # Loss = - E[ gamma^t * Advantage * log_prob ] for maximization
+            # We return negative sum because jax.grad minimizes by default
+            return -jnp.sum(gamma_factors * fixed_mask * adv * chosen_log_probs)
 
         # Differentiate with respect to the flat parameters
         return jax.grad(loss_fn)(flat_theta)
@@ -198,7 +208,7 @@ def compute_finite_difference_gradient(
     cfg: Any, # Passed down for thresholds
     reinforce_grad: np.ndarray = None, # for real-time comparison
     reinforce_var: np.ndarray = None,  # NEW: for Z-score calculation
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute gradient via finite differences using Chunked JAX Execution."""
     from jax.flatten_util import ravel_pytree
     import jax
@@ -240,31 +250,58 @@ def compute_finite_difference_gradient(
             gamma=cfg.neural_training.gamma
         )
         
-        # Use total_integrated_queue (undiscounted total cost) — matches REINFORCE objective
-        return jnp.sum(batch.total_integrated_queue)
+        first_action_idx = jnp.argmax(batch.is_action_mask, axis=1)
+        has_action = jnp.max(batch.is_action_mask, axis=1)
+        
+        safe_idx = jnp.expand_dims(first_action_idx, -1)
+        first_returns = jnp.take_along_axis(batch.returns, safe_idx, axis=-1).squeeze(-1)
+        
+        G_0 = jnp.where(has_action, first_returns, 0.0)
+        return jnp.sum(G_0)
 
     def get_expected_return(flat_theta, all_keys):
         total_sum = 0.0
+        chunk_sums = []
         # Sequential python loop over chunks maintains flat memory ceiling
         for i in range(0, n_samples, chunk_size):
             chunk_keys = all_keys[i:i+chunk_size]
             # Cast to Python float64 immediately to prevent float32 catastrophic cancellation
-            total_sum += float(get_chunk_sum_return(flat_theta, chunk_keys))
-        return total_sum / float(n_samples)
+            val = float(get_chunk_sum_return(flat_theta, chunk_keys))
+            total_sum += val
+            chunk_sums.append(val)
+        
+        # Compute sample variance across chunks for this parameter perturbation
+        # This is the variance of the mean estimate: Var(TotalMean) = Var(ChunkSum) / (C^2 * K)
+        chunk_arr = np.array(chunk_sums)
+        n_chunks = len(chunk_sums)
+        if n_chunks > 1:
+            chunk_var = np.var(chunk_arr) / (float(chunk_size)**2 * n_chunks)
+        else:
+            chunk_var = 0.0
+        
+        return total_sum / float(n_samples), chunk_var
 
     # 2. Evaluation
     computed_mask = np.zeros(n_params, dtype=bool)
+    fd_var = np.zeros(n_params)
+    
     for i, param_idx in enumerate(selected_indices):
         # ---- PLUS PERTURBATION ----
         params_plus = flat_params.at[param_idx].add(epsilon)
-        return_plus = get_expected_return(params_plus, keys_shared)
+        return_plus, var_plus = get_expected_return(params_plus, keys_shared)
         
         # ---- MINUS PERTURBATION ----
         params_minus = flat_params.at[param_idx].add(-epsilon)
-        return_minus = get_expected_return(params_minus, keys_shared)
+        return_minus, var_minus = get_expected_return(params_minus, keys_shared)
         
         # Central Difference Formula
         grad[param_idx] = (return_plus - return_minus) / (2 * epsilon)
+        # Effective variance of FD estimator (central difference)
+        # Var((R+ - R-) / 2e) = (Var(R+) + Var(R-) - 2Cov(R+, R-)) / (4e^2)
+        # Since R+ and R- share keys, they are highly correlated (CRN).
+        # We assume independent for a conservative (higher) variance estimate:
+        fd_var[param_idx] = (var_plus + var_minus) / (4 * epsilon**2)
+        
         computed_mask[param_idx] = True
         
         # ---- PERIODIC RUNNING STATS LOGGING ----
@@ -295,10 +332,14 @@ def compute_finite_difference_gradient(
 
             # Statistical Significance (Z-score)
             if reinforce_var is not None and reinforce_var[param_idx] > 1e-11:
-                std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
-                z_score = abs_diff / max(1e-12, std_err)
+                # POOLED STANDARD ERROR: Accounting for BOTH REINFORCE and FD variance
+                rf_std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
+                fd_std_err = np.sqrt(fd_var[param_idx]) # chunk-based var already scaled
+                pooled_std_err = np.sqrt(rf_std_err**2 + fd_std_err**2)
+                
+                z_score = abs_diff / max(1e-12, pooled_std_err)
                 z_str = f" | z={z_score:5.2f}"
-                is_bias = z_score > 3.0
+                is_bias = z_score > 3.0 # Standard 3-sigma flag
             else:
                 z_str = " | z=N/A "
                 is_bias = rel_err_p > cfg.verification.gradient_check_error_threshold
@@ -312,7 +353,7 @@ def compute_finite_difference_gradient(
             )
     
     
-    return grad, computed_mask
+    return grad, computed_mask, fd_var
 
 
 def run_gradient_check(
@@ -381,7 +422,7 @@ def run_gradient_check(
     )
     
     log.info("Computing finite-difference gradient estimate...")
-    finite_diff_grad, computed_mask = compute_finite_difference_gradient(
+    finite_diff_grad, computed_mask, fd_var = compute_finite_difference_gradient(
         policy_net,
         cfg.system.num_servers,
         cfg.system.arrival_rate,
@@ -450,6 +491,7 @@ def run_gradient_check(
         bias_estimate=bias,
         variance_estimate=variance,
         reinforce_var_vector=grad_variance,
+        fd_var_vector=fd_var,
         passed=passed,
     )
 
