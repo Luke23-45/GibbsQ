@@ -102,13 +102,15 @@ class GeneralizationSweeper:
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.layers[0].weight.shape[1] != self.cfg.system.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.cfg.system.num_servers}.")
+        from gibbsq.utils.model_io import validate_neural_model_shape
+        try:
+            validate_neural_model_shape(model, self.cfg.neural, self.cfg.system.num_servers)
+        except ValueError as e:
+            log.error(f"Model shape mismatch! {e}")
             return
         
         # SG-4 FIX: Replace single-sample DGA calls with replicated SSA.
         _cell_reps   = int(self.cfg.simulation.num_replications)
-        _neural_ssa  = NeuralSSAPolicy(model)  # one instance, reused across all cells
         _max_s_cell  = int(self.ssa_sim_time / self.ssa_sample_interval) + 1
 
         # Pre-generate unique keys for each grid cell (stochastic independence)
@@ -128,7 +130,8 @@ class GeneralizationSweeper:
                 cell_idx += 1
                 _mu_np = np.array(mu, dtype=np.float64)
 
-                # GibbsQ on true SSA
+                # Neural on true SSA
+                _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
                 times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
                     num_replications=_cell_reps,
                     num_servers=self.cfg.system.num_servers,
@@ -139,7 +142,7 @@ class GeneralizationSweeper:
                     sample_interval=self.ssa_sample_interval,
                     base_seed=_cell_seed,
                     max_samples=_max_s_cell,
-                    policy_type=3,
+                    policy_type=3,  # Raw-Q softmax: stronger baseline for publication
                 )
                 g_vals = []
                 for _r in range(_cell_reps):
@@ -177,37 +180,28 @@ class GeneralizationSweeper:
         self._plot_heatmap(grid, scale_vals, rho_vals)
 
     def _plot_heatmap(self, grid, scale_vals, rho_vals):
-        """Generates generalization heatmap."""
-        plt.figure(figsize=(10, 8))
-        # RdYlGn: Green = high ratio = Neural strongly wins
-        im = plt.imshow(grid, cmap="RdYlGn", aspect='auto', vmin=0.5, vmax=max(3.0, np.max(grid)))
-        
-        # Add values in cells
-        for i in range(len(scale_vals)):
-            for j in range(len(rho_vals)):
-                val = grid[i, j]
-                plt.text(j, i, f"{val:.2f}x", ha="center", va="center", 
-                         color="black" if 0.8 < val < 2.5 else "white", fontweight='bold')
-        
-        plt.colorbar(im, label='Improvement Factor (GibbsQ / Neural). > 1.0 = Neural Wins')
-        
-        plt.xticks(np.arange(len(rho_vals)), rho_vals)
-        plt.yticks(np.arange(len(scale_vals)), [f"{s}x" for s in scale_vals])
-        
-        plt.title('N-GibbsQ Zero-Shot Generalization\nImprovement Factor over GibbsQ (Higher = Better)')
-        plt.xlabel('Load Factor ($\\rho$)')
-        plt.ylabel('Service Rate Scale (x base distribution)')
-        
-        plot_path = self.run_dir / "generalization_heatmap.png"
-        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        log.info(f"Generalization analysis complete. Heatmap saved to {plot_path}")
+        """Generates generalization heatmap using chart-type-aware styling."""
+        from gibbsq.analysis.plotting import plot_improvement_heatmap
+
+        plot_path = self.run_dir / "generalization_heatmap"
+        fig = plot_improvement_heatmap(
+            grid=grid,
+            x_labels=[str(r) for r in rho_vals],
+            y_labels=[f"{s}x" for s in scale_vals],
+            x_axis_name=r"Load Factor $\rho$",
+            y_axis_name="Service Rate Scale (x base distribution)",
+            save_path=plot_path,
+            theme="publication",
+            formats=["png", "pdf"],
+        )
+        plt.close(fig)
+
+        log.info(f"Generalization analysis complete. Heatmap saved to {plot_path}.png, {plot_path}.pdf")
         
         if self.run_logger:
             try:
                 import wandb
-                self.run_logger.log({"generalization_heatmap": wandb.Image(str(plot_path))})
+                self.run_logger.log({"generalization_heatmap": wandb.Image(str(self.run_dir / "generalization_heatmap.png"))})
             except Exception:
                 pass
 

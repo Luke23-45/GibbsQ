@@ -21,7 +21,7 @@ env/
 *.swo
 
 # Hydra outputs
-outputs/
+# outputs/
 multirun/
 
 # Data artifacts
@@ -30,14 +30,15 @@ multirun/
 *.parquet
 temp
 # Plots (generated, not source)
-*.png
+# *.png
 *.pdf
 docs/plan
 docs/logs
 # OS
 .DS_Store
 Thumbs.db
-
+ledger
+docs/PROPOSED
 large_logs.md
 small_logs.md
 report_suggestion.md

@@ -33,9 +33,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Cross-platform master execution pipeline for GibbsQ research paper"
     )
-    parser.add_argument("hydra_args", nargs="*", help="Hydra configuration overrides")
+    parser.add_argument("--start-from", type=str, default=None, help="Experiment alias to start the pipeline from (e.g. 'drift', 'policy')")
     
-    args = parser.parse_args()
+    args, hydra_args = parser.parse_known_args()
     
     print("=" * 58)
     print("  GibbsQ Research Paper: Final Execution Pipeline")
@@ -44,25 +44,46 @@ def main():
     
     experiments = [
         # Phase 0: Gradient Estimator Validation
+        ("check_configs", "[Pre-Flight] Running Configuration Sanity Checks..."),
         ("reinforce_check", "[0/10] Running REINFORCE Gradient validation (Track 5)..."),
         
         # Phase 1: Foundational Analytical Metrics & Verification  
-        ("drift", "[1/11] Running Drift Verification (Phase 1a)..."),
-        # Note: "fidelity" experiment removed as it's deprecated
-        ("corrected_policy", "[4/10] Running Corrected Policy Evaluation Benchmark (Track 4)..."),
-        ("sweep", "[5/10] Running Stability Sweep..."),
-        ("stress", "[6/10] Running Scaling Stress Tests..."),
+        ("drift", "[1/10] Running Drift Verification (Phase 1a)..."),
+        ("sweep", "[2/10] Running Stability Sweep (Phase 1b)..."),
+        ("stress", "[3/10] Running Scaling Stress Tests (Phase 1c)..."),
         
         # Phase 2: N-GibbsQ Neural Learning Pipeline
-        ("reinforce_train", "[7/10] Running REINFORCE SSA Training (Track 1)..."),
-        ("bc_train", "[8/10] Running Platinum BC Pretraining (Track 2/3)..."),
+        ("bc_train", "[4/10] Running Platinum BC Pretraining (Phase 2a)..."),
+        ("reinforce_train", "[5/10] Running REINFORCE SSA Training (Phase 2b)..."),
         
-        # Phase 3: Generational Analysis & Ablation
-        ("stats", "[10/10] Running Deep Component Ablation & Generational Generalization..."),
-        ("generalize", ""),
-        ("critical", ""),
-        ("ablation", ""),
+        # Phase 3: Evaluation benchmarks (requires weights from Phase 2)
+        ("policy", "[6/10] Running Corrected Policy Evaluation Benchmark (Phase 3a)..."),
+        ("stats", "[7/10] Running Statistical Verification Analysis (Phase 3b)..."),
+        
+        # Phase 4: Generational Analysis & Ablation
+        ("generalize", "[8/10] Running Generalization Stress Heatmaps..."),
+        ("critical", "[9/10] Running Critical Load Boundary Analysis..."),
+        ("ablation", "[10/10] Running SSA Component Ablation..."),
     ]
+    
+    # Process --start-from logic
+    if args.start_from:
+        # Find index of start experiment
+        found_index = -1
+        for i, (exp_alias, _) in enumerate(experiments):
+            if exp_alias == args.start_from:
+                found_index = i
+                break
+        
+        if found_index == -1:
+            valid_aliases = [exp for exp, _ in experiments]
+            print(f"Error: Unknown start experiment '{args.start_from}'")
+            print(f"Valid options are: {', '.join(valid_aliases)}")
+            return 1
+        
+        experiments = experiments[found_index:]
+        print(f"  [Resuming pipeline from step: {args.start_from}]\n")
+
     
     # Special arguments for specific experiments
     special_args = {
@@ -72,14 +93,16 @@ def main():
     
     failed_experiments = []
     
+    global_hydra_args = list(hydra_args)
+    
     for i, (experiment, description) in enumerate(experiments):
         if description:
             print(f"\n{description}")
         
-        hydra_args = args.hydra_args + special_args.get(experiment, [])
+        current_hydra_args = global_hydra_args + special_args.get(experiment, [])
         
         print(f"Running: {experiment}")
-        result = run_experiment(experiment, hydra_args)
+        result = run_experiment(experiment, current_hydra_args)
         
         if result != 0:
             print(f"Experiment '{experiment}' failed with exit code {result}")

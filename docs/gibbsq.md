@@ -44,13 +44,13 @@ Consider $N \ge 1$ parallel servers. Jobs arrive according to a Poisson process 
 
 Upon arrival, a job is routed to server $i$ with probability:
 
-\begin{equation}
+\begin{equation} \label{eq:raw_q_softmax}
 
-p_i(Q) = \frac{\exp(-\alpha Q_i)}{\sum_{j=1}^N \exp(-\alpha Q_j)},
+p_i(Q) = \frac{\exp\left(-\alpha Q_i\right)}{\sum_{j=1}^N \exp\left(-\alpha Q_j\right)},
 
 \end{equation}
 
-where $\alpha > 0$ is the routing temperature parameter.
+where $\alpha > 0$ is the routing temperature parameter (inverse temperature).
 
 \begin{theorem}
 
@@ -153,6 +153,12 @@ Therefore, our drift inequality simplifies to:
 \end{equation}
 
 Let $C$ be the finite (and thus compact) set of states where $\varepsilon |Q|_1 \le R + 1$. Outside of $C$, we have $\mathcal{L}V(Q) \le -1$. By the continuous-time Foster-Lyapunov criteria (Theorem 4.2 in Meyn \& Tweedie, 1993), the existence of this norm-like Lyapunov function with strict negative drift outside a compact set guarantees that $Q(t)$ is positive Harris recurrent and possesses a unique stationary distribution.
+
+\section{Note on Deep Learning Implementation}
+
+While Section 1 establishes the Raw-Queue Softmax ($p_i \propto \exp(-\alpha Q_i)$) as the theoretically stable baseline, our empirical evaluations provide a critical insight for deep learning implementations. 
+
+For neural-policy initialization via Behavioral Cloning (BC) or REINFORCE warm-starting, the \textbf{Sojourn-Time} formulation ($\exp(-\alpha \frac{Q_i+1}{\mu_i})$) proves more efficient. Although the analytical Raw-Queue expert is stronger (yielding lower total queue length), the Sojourn-Time distribution is better aligned with the heterogeneity-aware input features $(\frac{Q+1}{\mu})$ seen by the neural network. This allows the gradient optimizer to converge faster and more accurately to the target, resulting in superior neural-policy performance compared to clones derived from raw queue states.
 
 \end{proof}
 

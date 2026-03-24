@@ -72,8 +72,11 @@ class CriticalLoadTest:
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.layers[0].weight.shape[1] != self.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
+        from gibbsq.utils.model_io import validate_neural_model_shape
+        try:
+            validate_neural_model_shape(model, self.cfg.neural, self.num_servers)
+        except ValueError as e:
+            log.error(f"Model shape mismatch! {e}")
             return
         
         total_capacity = jnp.sum(self.service_rates)
@@ -85,7 +88,6 @@ class CriticalLoadTest:
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
         
         num_reps = int(self.cfg.simulation.num_replications)
-        _neural_ssa = NeuralSSAPolicy(model)
         
         for idx, rho in enumerate(self.rho_vals):
             arrival_rate = rho * total_capacity
@@ -119,7 +121,7 @@ class CriticalLoadTest:
                 arrival_rate=float(arrival_rate), service_rates=jnp.array(_mu_np),
                 alpha=float(self.cfg.system.alpha), sim_time=_rho_sim_time,
                 sample_interval=self.ssa_sample_interval, base_seed=_rho_seed,
-                max_samples=_max_s, policy_type=3,
+                max_samples=_max_s, policy_type=3,  # Raw-Q softmax: stronger baseline
             )
             g_vals = []
             for _r in range(num_reps):
@@ -133,6 +135,7 @@ class CriticalLoadTest:
             g_loss = float(np.mean(g_vals))
 
             # Neural on true SSA
+            _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
             _max_ev = int((float(arrival_rate) + _mu_np.sum()) * _rho_sim_time * 1.5) + 1000
             n_vals = []
             for _rep in range(num_reps):
@@ -161,25 +164,22 @@ class CriticalLoadTest:
         self._plot(self.rho_vals, neural_results, gibbs_results)
 
     def _plot(self, rho_vals, neural_r, gibbs_r):
-        """Generates the stability breakdown plot."""
-        plt.figure(figsize=(10, 6))
-        
-        plt.plot(rho_vals, neural_r, marker='s', color='#2ecc71', linewidth=2, label='N-GibbsQ (Neural Router)')
-        plt.plot(rho_vals, gibbs_r, marker='o', color='#e74c3c', linestyle='--', linewidth=2, label='GibbsQ (Baseline)')
-        
-        plt.yscale('log')
-        plt.title('N-GibbsQ Stability Boundary Performance ($\\mathbb{E}[Q]$ vs $\\rho$)')
-        plt.xlabel('Load Factor $\\rho = \\lambda / \\sum \\mu_i$')
-        plt.ylabel('Expected Queue Length (Log Scale)')
-        plt.grid(True, which="both", ls="-", alpha=0.3)
-        plt.legend()
-        
-        plot_path = self.run_dir / "critical_load_curve.png"
-        plt.savefig(plot_path, dpi=300)
-        plt.close()
-        
-        log.info(f"Critical load test complete. Curve saved to {plot_path}")
-        
+        """Generates the stability breakdown plot using chart-type-aware styling."""
+        from gibbsq.analysis.plotting import plot_critical_load
+
+        plot_path = self.run_dir / "critical_load_curve"
+        fig = plot_critical_load(
+            rho_values=np.array(rho_vals),
+            neural_eq=np.array(neural_r),
+            gibbs_eq=np.array(gibbs_r),
+            save_path=plot_path,
+            theme="publication",
+            formats=["png", "pdf"],
+        )
+        plt.close(fig)
+
+        log.info(f"Critical load test complete. Curve saved to {plot_path}.png, {plot_path}.pdf")
+
         if self.run_logger:
             self.run_logger.log({
                 "critical_load/rho": rho_vals,
@@ -188,7 +188,7 @@ class CriticalLoadTest:
             })
             try:
                 import wandb
-                self.run_logger.log({"critical_load_curve": wandb.Image(str(plot_path))})
+                self.run_logger.log({"critical_load_curve": wandb.Image(str(self.run_dir / "critical_load_curve.png"))})
             except Exception:
                 pass
 

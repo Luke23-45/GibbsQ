@@ -22,6 +22,7 @@ from gibbsq.core.drift import evaluate_grid, evaluate_trajectory
 from gibbsq.analysis.plotting import plot_drift_landscape, plot_drift_vs_norm
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.analysis.theme import apply_theme
 
 try:
     import wandb
@@ -43,6 +44,9 @@ def main(raw_cfg: DictConfig) -> None:
 
     # Initialize WandB via centralized utility
     run = setup_wandb(cfg, raw_cfg, default_group="drift_verification", run_id=run_id, run_dir=run_dir)
+
+    # Apply publication theme for paper-ready charts
+    apply_theme('publication')
 
     # Use the isolated Run Directory for all outputs
     out_dir = run_dir
@@ -80,18 +84,19 @@ def main(raw_cfg: DictConfig) -> None:
 
 
         if N == 2:
-            f1 = out_dir / "drift_heatmap.png"
-            plot_drift_landscape(res, alpha, save_path=f1)
-            log.info(f"Saved: {f1}")
+            f1 = out_dir / "drift_heatmap"
+            plot_drift_landscape(res, alpha, save_path=f1, theme='publication', formats=['png', 'pdf'])
+            log.info(f"Saved: {f1}.png, {f1}.pdf")
 
-        f2 = out_dir / "drift_vs_norm.png"
-        plot_drift_vs_norm(res, eps, R, save_path=f2)
-        log.info(f"Saved: {f2}")
+        f2 = out_dir / "drift_vs_norm"
+        plot_drift_vs_norm(res, eps, R, save_path=f2, theme='publication', formats=['png', 'pdf'])
+        log.info(f"Saved: {f2}.png, {f2}.pdf")
         
         if run:
+            png_path = str(out_dir / "drift_heatmap.png") if N == 2 else None
             run.log({
-                "drift_heatmap": wandb.Image(str(f1)) if N == 2 else None,
-                "drift_vs_norm": wandb.Image(str(f2))
+                "drift_heatmap": wandb.Image(png_path) if png_path else None,
+                "drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))
             })
 
         # Persist metrics locally for capsule integrity
@@ -107,7 +112,7 @@ def main(raw_cfg: DictConfig) -> None:
 
     else:
         log.info("--- Trajectory Evaluation ---")
-        policy = build_policy_by_name("softmax", alpha=alpha)
+        policy = build_policy_by_name("sojourn_softmax", alpha=alpha, mu=np.asarray(mu, dtype=np.float64))
         
         sim_res = simulate(
             num_servers=N,
@@ -125,12 +130,12 @@ def main(raw_cfg: DictConfig) -> None:
         log.info(f"States evaluated: {len(res.states):,}")
         log.info(f"Bound violations: {res.violations:,}")
 
-        f = out_dir / "drift_vs_norm.png"
-        plot_drift_vs_norm(res, eps, R, save_path=f)
-        log.info(f"Saved: {f}")
+        f = out_dir / "drift_vs_norm"
+        plot_drift_vs_norm(res, eps, R, save_path=f, theme='publication', formats=['png', 'pdf'])
+        log.info(f"Saved: {f}.png, {f}.pdf")
         
         if run:
-            run.log({"drift_vs_norm": wandb.Image(str(f))})
+            run.log({"drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))})
 
         # Persist metrics locally for capsule integrity
         append_metrics_jsonl({

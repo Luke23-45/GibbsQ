@@ -97,6 +97,11 @@ def main(raw_cfg: DictConfig) -> None:
     log.info("  GibbsQ Stress Test (JAX Accelerator Active)")
     log.info("=" * 60)
 
+    # Dashboard data accumulators (for plot_stress_dashboard at the end)
+    _scaling_data = {"n_values": [], "mean_q": [], "gini": []}
+    _critical_data = {"rho_values": [], "mean_q": [], "stationary": []}
+    _hetero_data = {"scenario_names": [], "mean_q": [], "gini": []}
+
     # ─────────────────────────────────────────────────────────────────────────
     # TEST 1: MASSIVE-N SCALING
     # ─────────────────────────────────────────────────────────────────────────
@@ -144,6 +149,16 @@ def main(raw_cfg: DictConfig) -> None:
         log.info(f"    -> Average Gini Imbalance: {avg_gini:.4f}")
         if wandb and wandb.run:
             wandb.log({"massive_n/N": N, "massive_n/avg_gini": avg_gini})
+
+        # Accumulate for dashboard — need mean_q for scaling panel too
+        _mean_q_t1 = float(np.mean([time_averaged_queue_lengths(
+            SimResult(np.array(times[r]), np.array(states[r]),
+                      int(arrs[r]), int(deps[r]), float(times[r][-1]), N),
+            cfg.simulation.burn_in_fraction).sum()
+            for r in range(cfg.simulation.num_replications)]))
+        _scaling_data["n_values"].append(int(N))
+        _scaling_data["mean_q"].append(_mean_q_t1)
+        _scaling_data["gini"].append(float(avg_gini))
 
         append_metrics_jsonl(
             {"test": "massive_n", "N": int(N), "avg_gini": float(avg_gini)},
@@ -270,6 +285,11 @@ def main(raw_cfg: DictConfig) -> None:
                 "critical_load/stationary_rate": stationary_count / cfg.simulation.num_replications
             })
 
+        # Accumulate for dashboard
+        _critical_data["rho_values"].append(float(rho))
+        _critical_data["mean_q"].append(float(np.mean(q_totals)))
+        _critical_data["stationary"].append(stationary_count == cfg.simulation.num_replications)
+
         append_metrics_jsonl(
             {
                 "test": "critical_load",
@@ -311,7 +331,7 @@ def main(raw_cfg: DictConfig) -> None:
         sample_interval=cfg.stress.sample_interval,    # PATCH: was cfg.simulation.sample_interval
         base_seed=cfg.simulation.seed,
         max_samples=max_samples_het,               # PATCH: consistent with _sim_time_het
-        policy_type=3
+        policy_type=5  # PATCH P2: Use sojourn-time softmax for heterogeneity-aware routing
     )
 
     work_dist = []
@@ -331,6 +351,11 @@ def main(raw_cfg: DictConfig) -> None:
         wandb.log({"heterogeneity/gini": gini_coefficient(mean_dist)})
         wandb.finish()
 
+    # Accumulate for dashboard
+    _hetero_data["scenario_names"].append("100x Gap")
+    _hetero_data["mean_q"].append(float(mean_dist.sum()))
+    _hetero_data["gini"].append(float(gini_coefficient(mean_dist)))
+
     append_metrics_jsonl(
         {
             "test": "heterogeneity",
@@ -339,6 +364,24 @@ def main(raw_cfg: DictConfig) -> None:
         },
         out_dir / "metrics.jsonl"
     )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STRESS TEST DASHBOARD
+    # ─────────────────────────────────────────────────────────────────────────
+    from gibbsq.analysis.plotting import plot_stress_dashboard
+    import matplotlib.pyplot as plt
+
+    plot_path = out_dir / "stress_dashboard"
+    fig = plot_stress_dashboard(
+        scaling_data=_scaling_data,
+        critical_data=_critical_data,
+        hetero_data=_hetero_data,
+        save_path=plot_path,
+        theme="publication",
+        formats=["png", "pdf"],
+    )
+    plt.close(fig)
+    log.info(f"Stress dashboard saved to {plot_path}.png, {plot_path}.pdf")
 
     log.info("\nStress test complete.")
 

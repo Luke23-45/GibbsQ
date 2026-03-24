@@ -62,9 +62,10 @@ def lyapunov_V(Q: np.ndarray) -> float:
     return 0.5 * float(np.dot(Q.astype(np.float64), Q.astype(np.float64)))
 
 
-def _softmax_probs(Q: np.ndarray, alpha: float) -> np.ndarray:
-    """Log-sum-exp stable softmax:  p_i = exp(−α Q_i) / Σ exp(−α Q_j)."""
-    logits = -alpha * Q.astype(np.float64)
+def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray) -> np.ndarray:
+    """Log-sum-exp stable softmax on expected sojourn time."""
+    sojourn = (Q.astype(np.float64) + 1.0) / mu
+    logits = -alpha * sojourn
     logits -= logits.max()
     w = np.exp(logits)
     return w / w.sum()
@@ -88,7 +89,7 @@ def generator_drift(
     """
     Q_f  = Q.astype(np.float64)
     mu_f = np.asarray(mu, dtype=np.float64)
-    p    = _softmax_probs(Q, alpha)
+    p    = _softmax_probs(Q, alpha, mu_f)
 
     arrival_term  = lam * np.dot(p, Q_f)            # λ ⟨p, Q⟩
     service_term  = np.dot(mu_f, Q_f)               # ⟨μ, Q⟩
@@ -183,20 +184,22 @@ class DriftResult:
 #  Vectorised grid evaluation
 # ──────────────────────────────────────────────────────────────
 
-def _vectorised_softmax(Q_all: np.ndarray, alpha: float) -> np.ndarray:
+def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray) -> np.ndarray:
     """
-    Batch softmax over  M  states at once.
+    Batch softmax over M states at once using expected sojourn time.
 
     Parameters
     ----------
     Q_all : ndarray, shape (M, N)
     alpha : float
+    mu : ndarray, shape (N,)
 
     Returns
     -------
     probs : ndarray, shape (M, N)
     """
-    logits = -alpha * Q_all.astype(np.float64)        # (M, N)
+    sojourn = (Q_all.astype(np.float64) + 1.0) / mu
+    logits = -alpha * sojourn                         # (M, N)
     logits -= logits.max(axis=1, keepdims=True)        # shift per state
     w = np.exp(logits)
     return w / w.sum(axis=1, keepdims=True)
@@ -220,7 +223,7 @@ def _vectorised_drift(
     cap = mu_f.sum()
 
     # ── Exact drift ───────────────────────────────────
-    p       = _vectorised_softmax(Q, alpha)             # (M, N)
+    p       = _vectorised_softmax(Q, alpha, mu_f)       # (M, N)
     pQ      = (p * Q).sum(axis=1)                       # (M,)  ⟨p, Q⟩
     muQ     = Q @ mu_f                                  # (M,)  ⟨μ, Q⟩
     active  = (Q > 0).astype(np.float64)                # (M, N)

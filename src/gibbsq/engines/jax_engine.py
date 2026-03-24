@@ -41,8 +41,8 @@ def _validate_inputs(
         raise ValueError(f"sample_interval must be > 0, got {sample_interval}")
     if max_samples < 1:
         raise ValueError(f"max_samples must be >= 1, got {max_samples}")
-    if policy_type not in (0, 1, 2, 3, 4):
-        raise ValueError(f"policy_type must be one of 0..4, got {policy_type}")
+    if policy_type not in (0, 1, 2, 3, 4, 5):
+        raise ValueError(f"policy_type must be one of 0..5, got {policy_type}")
     if d < 1:
         raise ValueError(f"d must be >= 1, got {d}")
 
@@ -109,7 +109,7 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         idx = jnp.argmax(masked_noise)
         return jnp.zeros(params.num_servers).at[idx].set(1.0)
         
-    elif params.policy_type == 3:  # Softmax
+    elif params.policy_type == 3:  # Softmax on queue lengths
         logits = -params.alpha * Q.astype(params.service_rates.dtype)
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
@@ -125,6 +125,16 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         winner_local = jnp.argmin(candidate_queues)
         winner = candidates[winner_local]
         return jnp.zeros(N).at[winner].set(1.0)
+        
+    elif params.policy_type == 5:  # Sojourn-Time Softmax (heterogeneity-aware)
+        # SG#7 FIX: Use (Q+1)/mu to match policies.py, drift.py, and
+        # the sojourn_time_features used during neural network training.
+        # Previously used Q/mu which was inconsistent (shifted input domain).
+        sojourn = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
+        logits = -params.alpha * sojourn
+        max_logit = jnp.max(logits)
+        exp_logits = jnp.exp(logits - max_logit)
+        return exp_logits / jnp.sum(exp_logits)
         
     else:
         # Fallback to avoid compilation errors

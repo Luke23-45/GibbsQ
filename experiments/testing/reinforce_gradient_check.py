@@ -18,6 +18,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+import scipy.stats as stats
 import equinox as eqx
 from jax.flatten_util import ravel_pytree
 from jaxtyping import PRNGKeyArray, Array, Float
@@ -208,6 +209,7 @@ def compute_finite_difference_gradient(
     cfg: Any, # Passed down for thresholds
     reinforce_grad: np.ndarray = None, # for real-time comparison
     reinforce_var: np.ndarray = None,  # NEW: for Z-score calculation
+    z_critical: float = 3.0,           # NEW: dynamic FWER threshold
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute gradient via finite differences using Chunked JAX Execution."""
     from jax.flatten_util import ravel_pytree
@@ -301,6 +303,9 @@ def compute_finite_difference_gradient(
         # Since R+ and R- share keys, they are highly correlated (CRN).
         # We assume independent for a conservative (higher) variance estimate:
         fd_var[param_idx] = (var_plus + var_minus) / (4 * epsilon**2)
+        # For Z-score calculation, use unscaled variance (variance of mean return)
+        # The epsilon scaling is a numerical artifact, not statistical
+        fd_var_unscaled = (var_plus + var_minus) / 2.0
         
         computed_mask[param_idx] = True
         
@@ -334,12 +339,15 @@ def compute_finite_difference_gradient(
             if reinforce_var is not None and reinforce_var[param_idx] > 1e-11:
                 # POOLED STANDARD ERROR: Accounting for BOTH REINFORCE and FD variance
                 rf_std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
-                fd_std_err = np.sqrt(fd_var[param_idx]) # chunk-based var already scaled
+                # FIX: Use unscaled variance for Z-score (not epsilon-scaled)
+                # The epsilon scaling is a numerical artifact; for statistical
+                # comparison we need the variance of the mean estimate
+                fd_std_err = np.sqrt(fd_var_unscaled)  # Use unscaled variance
                 pooled_std_err = np.sqrt(rf_std_err**2 + fd_std_err**2)
                 
                 z_score = abs_diff / max(1e-12, pooled_std_err)
                 z_str = f" | z={z_score:5.2f}"
-                is_bias = z_score > 3.0 # Standard 3-sigma flag
+                is_bias = z_score > z_critical # Dynamic FWER flag
             else:
                 z_str = " | z=N/A "
                 is_bias = rel_err_p > cfg.verification.gradient_check_error_threshold
@@ -403,6 +411,28 @@ def run_gradient_check(
     flat_params = flat_params + cfg.verification.gradient_shake_scale * jax.random.normal(shake_key, flat_params.shape)
     policy_net = unravel(flat_params)
     
+    # --- DYNAMIC STATISTICAL SCALING ---
+    n_params = flat_params.shape[0]
+    n_test = min(cfg.verification.gradient_check_n_test, n_params)
+    
+    alpha = 0.05
+    base_test = 50  # Baseline dimensionality calibrated safely at base_samples
+    base_samples = n_samples
+    
+    # Calculate required Z-scores using Bonferroni correction
+    z_base = stats.norm.ppf(1.0 - (alpha / (2.0 * base_test)))
+    z_new = stats.norm.ppf(1.0 - (alpha / (2.0 * n_test)))
+    
+    # Scale N proportional to the squared critical Z-score to maintain bounds
+    scaled_n_samples = base_samples * (z_new**2 / z_base**2)
+    chunk_size = cfg.verification.gradient_check_chunk_size
+    n_samples = int(np.ceil(scaled_n_samples / chunk_size) * chunk_size)
+    
+    log.info(f"Statistical Scaling: D={n_test} parameters.")
+    log.info(f"Adjusted Z-Critical Threshold: {z_new:.2f}")
+    log.info(f"Scaled n_samples from {base_samples} -> {n_samples} to maintain confidence bounds.")
+    # -----------------------------------
+
     service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
     
     # DRASTIC CUT: sim_time=15.0 stops Gillespie trajectories from violently desynchronizing
@@ -434,6 +464,7 @@ def run_gradient_check(
         cfg=cfg,
         reinforce_grad=reinforce_grad,
         reinforce_var=grad_variance,
+        z_critical=z_new,
     )
     
     # Compute relative error using L2 norm as per professor's spec
@@ -525,6 +556,34 @@ def main(raw_cfg: DictConfig):
         }, f, indent=2)
     
     log.info(f"Results saved to {result_path}")
+    
+    # Generate gradient agreement scatter plot
+    from gibbsq.analysis.plotting import plot_gradient_scatter
+    
+    # Compute per-parameter z-scores where variance is available
+    z_scores = None
+    if result.reinforce_var_vector is not None and result.fd_var_vector is not None:
+        combined_se = np.sqrt(result.reinforce_var_vector + result.fd_var_vector)
+        safe_se = np.where(combined_se > 1e-12, combined_se, 1e-12)
+        z_scores = np.abs(result.reinforce_grad - result.finite_diff_grad) / safe_se
+    
+    plot_path = run_dir / "gradient_scatter"
+    fig = plot_gradient_scatter(
+        fd_grads=result.finite_diff_grad,
+        rf_grads=result.reinforce_grad,
+        z_scores=z_scores,
+        summary_stats={
+            "cosine_similarity": float(result.cosine_similarity),
+            "relative_error": float(result.relative_error),
+            "passed": bool(result.passed),
+        },
+        save_path=plot_path,
+        theme="publication",
+        formats=["png", "pdf"],
+    )
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+    log.info(f"Gradient scatter plot saved to {plot_path}.png, {plot_path}.pdf")
     
     if not result.passed:
         log.warning("GRADIENT CHECK FAILED - REINFORCE estimator may be biased")

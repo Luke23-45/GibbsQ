@@ -12,6 +12,7 @@ from gibbsq.analysis.metrics import time_averaged_queue_lengths, stationarity_di
 from gibbsq.analysis.plotting import plot_alpha_sweep
 from gibbsq.utils.exporter import save_trajectory_parquet, append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.analysis.theme import apply_theme
 
 try:
     import wandb
@@ -34,6 +35,9 @@ def main(raw_cfg: DictConfig) -> None:
     # Initialize WandB via centralized utility
     run = setup_wandb(cfg, raw_cfg, default_group="stability_sweep", run_id=run_id, run_dir=run_dir)
 
+    # Apply publication theme for paper-ready charts
+    apply_theme('publication')
+
     sc = cfg.system
     N = sc.num_servers
     mu = np.asarray(sc.service_rates, dtype=np.float64)
@@ -45,9 +49,9 @@ def main(raw_cfg: DictConfig) -> None:
     (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
 
     # SG#16 FIX: Replace bare assert with if/raise to survive python -O.
-    if cfg.policy.name != "softmax":
+    if cfg.policy.name not in ["softmax", "sojourn_softmax"]:
         raise ValueError(
-            f"Stability sweep requires policy.name == 'softmax', "
+            f"Stability sweep requires policy.name == 'sojourn_softmax', "
             f"but config has '{cfg.policy.name}'."
         )
 
@@ -99,7 +103,8 @@ def main(raw_cfg: DictConfig) -> None:
                     sim_time=_sim_time,
                     sample_interval=_sample_interval,
                     base_seed=_cell_seed,
-                    max_samples=max_samples
+                    max_samples=max_samples,
+                    policy_type=3,  # Raw-Q softmax: stronger baseline for publication
                 )
                 
                 # Convert JAX results to NumPy-friendly lists for metric computation
@@ -119,7 +124,7 @@ def main(raw_cfg: DictConfig) -> None:
                     last_res = res
             else:
                 # --- STANDARD NUMPY EXECUTION (Sequential) ---
-                policy = build_policy_by_name(cfg.policy.name, alpha=float(alpha))
+                policy = build_policy_by_name(cfg.policy.name, alpha=float(alpha), mu=mu)
                 # Dynamic max_events ceiling matches the JAX engine formula and
                 # makes the NumPy path consistent with policy_comparison.py (SG#2/3 fix).
                 _np_max_events = int(
@@ -144,6 +149,11 @@ def main(raw_cfg: DictConfig) -> None:
                     rep_diag = stationarity_diagnostic(res, burn_in_fraction=cfg.simulation.burn_in_fraction)
                     rep_stationary_flags.append(bool(rep_diag["is_stationary"]))
                     last_res = res
+
+            # SG#1 FIX: Aggregate per-replication means into mean_Q
+            # Previously, rep_means was collected but never averaged into mean_Q[i,j],
+            # causing all E[Q_total] values to be 0.0 across all configurations.
+            mean_Q[i, j] = float(np.mean(rep_means)) if rep_means else 0.0
 
             stationarity_rate = float(np.mean(rep_stationary_flags)) if rep_stationary_flags else 0.0
             stationary[i, j] = stationarity_rate >= cfg.verification.stationarity_threshold
@@ -172,11 +182,11 @@ def main(raw_cfg: DictConfig) -> None:
 
     # Outputs
     rho_labels = [f"ρ={r:.2f}" for r in rho_values]
-    f_plot = out_dir / "alpha_sweep.png"
-    plot_alpha_sweep(alpha_values, mean_Q, rho_labels, save_path=f_plot)
-    log.info(f"\nSaved plot: {f_plot}")
+    f_plot = out_dir / "alpha_sweep"
+    plot_alpha_sweep(alpha_values, mean_Q, rho_labels, save_path=f_plot, theme='publication', formats=['png', 'pdf'])
+    log.info(f"\nSaved plot: {f_plot}.png, {f_plot}.pdf")
     if run:
-        run.log({"alpha_sweep_plot": wandb.Image(str(f_plot))})
+        run.log({"alpha_sweep_plot": wandb.Image(str(out_dir / "alpha_sweep.png"))})
 
     # Summary Log
     n_fail = np.sum(~stationary)

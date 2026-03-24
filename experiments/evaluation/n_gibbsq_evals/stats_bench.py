@@ -26,7 +26,7 @@ from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
-from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
+from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer_or_none
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -67,13 +67,28 @@ class StatsBenchmark:
         # --- 1. Load Model ---
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
-        model_path = resolve_model_pointer(_PROJECT_ROOT, output_root)
+        
+        # PATCH H#3: Graceful fallback for missing pointers
+        model_path = resolve_model_pointer_or_none(_PROJECT_ROOT, output_root)
         skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
-        model = eqx.tree_deserialise_leaves(model_path, skeleton)
+        
+        if model_path is None:
+            log.warning("No trained model found. Creating fresh JSQ-initialized model for evaluation.")
+            # Create a fresh model and bootstrap it to JSQ behavior
+            from gibbsq.core.pretraining import train_robust_bc_policy
+            model = train_robust_bc_policy(
+                skeleton, np.array(self.service_rates), k_load, num_steps=500
+            )
+            log.info("Fresh JSQ-initialized model created successfully.")
+        else:
+            model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
-        if model.layers[0].weight.shape[1] != self.num_servers:
-            log.error(f"Model shape mismatch! Loaded model expects N={model.layers[0].weight.shape[1]}, but eval config requires N={self.num_servers}.")
+        from gibbsq.utils.model_io import validate_neural_model_shape
+        try:
+            validate_neural_model_shape(model, self.cfg.neural, self.num_servers)
+        except ValueError as e:
+            log.error(f"Model shape mismatch! {e}")
             return
         
         # --- 2. Benchmark on True Gillespie SSA ---
@@ -93,7 +108,7 @@ class StatsBenchmark:
             sample_interval=_ssa.sample_interval,
             base_seed=_sc.seed,
             max_samples=_max_samples,
-            policy_type=3,
+            policy_type=3,  # Raw-Q softmax: stronger baseline for publication
         )
         gibbs_list = []
         for _r in range(self.num_samples):
@@ -107,7 +122,7 @@ class StatsBenchmark:
         gibbs_data = np.array(gibbs_list)
 
         log.info(f"Running {self.num_samples} Neural SSA simulations...")
-        _neural_policy = NeuralSSAPolicy(model)
+        _neural_policy = NeuralSSAPolicy(model, mu=_mu_np, rho=self.arrival_rate / float(_mu_np.sum()))
         _np_max_ev = int(
             (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
         ) + 1000
@@ -166,14 +181,24 @@ class StatsBenchmark:
         log.info("=" * 60)
         
         # Assets
-        plt.figure(figsize=(10, 6))
-        plt.boxplot([gibbs_data, neural_data], tick_labels=['GibbsQ (Baseline)', 'N-GibbsQ (Proposed)'])
-        plt.title(f'Performance Distribution Comparison (n={self.num_samples} seeds)')
-        plt.ylabel('Expected Queue Length $\\mathbb{E}[Q]$')
-        plt.grid(True, alpha=0.3)
-        plot_path = self.run_dir / "stats_boxplot.png"
-        plt.savefig(plot_path, dpi=300)
-        plt.close()
+        from gibbsq.analysis.plotting import plot_raincloud
+
+        plot_path = self.run_dir / "stats_boxplot"
+        fig = plot_raincloud(
+            group_a_data=gibbs_data,
+            group_b_data=neural_data,
+            group_a_label="GibbsQ (Baseline)",
+            group_b_label="N-GibbsQ (Proposed)",
+            stats={
+                "p_value": float(p_val),
+                "cohen_d": float(cohen_d),
+                "improvement_pct": float(improvement),
+            },
+            save_path=plot_path,
+            theme="publication",
+            formats=["png", "pdf"],
+        )
+        plt.close(fig)
 
         append_metrics_jsonl({
             "gibbs_mean": float(g_mean), "gibbs_std": float(g_std),
@@ -193,7 +218,7 @@ class StatsBenchmark:
             })
             try:
                 import wandb
-                self.run_logger.log({"stats_boxplot": wandb.Image(str(plot_path))})
+                self.run_logger.log({"stats_boxplot": wandb.Image(str(self.run_dir / "stats_boxplot.png"))})
             except Exception:
                 pass
 

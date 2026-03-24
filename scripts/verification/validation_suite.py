@@ -121,7 +121,7 @@ def verify_phase_iv(args):
     
     # Track 4: Platinum Benchmark
     print("\n[4/4] Track 4: Running Platinum Parity Benchmark (Corrected Grid)...")
-    run_cmd(["corrected_policy"] + common, dry_run)
+    run_cmd(["policy"] + common, dry_run)
 
 def verify_full_paper(args):
     """Executes the entire research pipeline from Phases 0-3."""

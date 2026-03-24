@@ -20,20 +20,27 @@ class NeuralRouter(eqx.Module):
     Maps Q ∈ R^N to routing logits via log1p preprocessing (to compress
     large queue lengths) and a 3-layer MLP. Final layer is zero-initialized
     so initial output is uniform: softmax(0) = 1/N.
+    
+    PATCH P2 (H5): Heterogeneity-aware routing - includes normalized service rates
+    as input features so the policy can learn to prefer faster servers.
     """
     layers: list[eqx.Module]
     config: NeuralConfig = eqx.field(static=True)
+    service_rates: Float[Array, "N"]
+    num_servers: int = eqx.field(static=True)
 
     def __init__(
         self, 
         num_servers: int, 
         config: NeuralConfig, 
+        service_rates: Float[Array, "N"] = None,
         key: PRNGKeyArray = None
     ):
         """
         Args:
             num_servers: Number of servers (input/output dimension).
             config: Configuration object (hidden_size, preprocessing, init_type).
+            service_rates: Service rates for each server (for heterogeneity awareness).
             key: JAX PRNG key for parameter initialization.
         """
         if key is None:
@@ -43,8 +50,17 @@ class NeuralRouter(eqx.Module):
         
 
         self.config = config
+        self.num_servers = num_servers
+        
+        # PATCH P2: Store service rates for heterogeneity-aware features
+        if service_rates is None:
+            self.service_rates = jnp.ones(num_servers)
+        else:
+            self.service_rates = jnp.asarray(service_rates)
+        
         hidden_size = config.hidden_size
-        input_dim = num_servers + (1 if config.use_rho else 0)
+        # PATCH P2: Input dim includes service rate features (num_servers for mu_normalized)
+        input_dim = num_servers + num_servers + (1 if config.use_rho else 0)
         l1 = eqx.nn.Linear(input_dim, hidden_size, key=keys[0])
         l2 = eqx.nn.Linear(hidden_size, hidden_size, key=keys[1])
         l3 = eqx.nn.Linear(hidden_size, num_servers, key=keys[2])
@@ -63,48 +79,47 @@ class NeuralRouter(eqx.Module):
         rho: Float[Array, "..."] = None
     ) -> Float[Array, "..."]:
         """Forward pass. Returns routing logits."""
+        # Dispatch to _single_forward which handles all preprocessing.
+        # Batched inputs are handled via vmap.
+        is_batched = Q.ndim > 1
+        
+        if is_batched:
+            if rho is None:
+                return jax.vmap(lambda q: self._single_forward(q, None))(Q)
+            elif hasattr(rho, 'ndim') and rho.ndim > 0:
+                return jax.vmap(self._single_forward, in_axes=(0, 0))(Q, rho)
+            else:
+                return jax.vmap(lambda q: self._single_forward(q, rho))(Q)
+        else:
+            return self._single_forward(Q, rho)
+    
+    def _single_forward(self, Q, rho):
+        """Process a single (non-batched) input."""
         # Preprocessing selection based on config
         if self.config.preprocessing == "log1p":
             x = jnp.log1p(Q)
         elif self.config.preprocessing == "linear_min_max":
-            # Normalized by theoretical capacity bound
             x = Q / self.config.capacity_bound
         elif self.config.preprocessing == "standardize":
-            # Z-score normalization across the N server queue lengths.
-            # When all queues are equal (std == 0), numerator is zero so x == 0
-            # regardless of epsilon, giving uniform routing logits — correct behavior.
             mean_q = jnp.mean(Q)
             std_q = jnp.std(Q)
             x = (Q - mean_q) / (std_q + constants.NUMERICAL_STABILITY_EPSILON)
-        else:  # preprocessing == "none"
+        else:
             x = Q
-
-        # PI-V4: Append rho to features if enabled
+        
+        # PATCH P2: Append normalized service rates for heterogeneity awareness
+        mu_sum = jnp.sum(self.service_rates)
+        mu_normalized = self.service_rates / jnp.where(mu_sum > 0, mu_sum, 1.0)
+        x = jnp.concatenate([x, mu_normalized])
+        
+        # Append rho feature
         if self.config.use_rho:
-            # Handle both scalar and batched rho
             if rho is None:
-                # Default case for backward compatibility in non-DR tests
-                rho_feat = jnp.zeros_like(x[..., :1])
+                rho_feat = jnp.zeros((1,), dtype=x.dtype)
             else:
-                rho_feat = jnp.atleast_1d(rho) * self.config.rho_input_scale
-                # PATCH: Ensure proper broadcasting for all cases
-                # Note: atleast_1d always returns ndim >= 1, so we only handle 1D case
-                if x.ndim > 1:
-                    # 1D rho array - handle broadcasting
-                    if rho_feat.ndim == 1:
-                        if rho_feat.shape[0] == x.shape[0]:
-                            rho_feat = rho_feat[:, None]  # (batch, 1)
-                        elif rho_feat.shape[0] == 1:
-                            rho_feat = jnp.full((x.shape[0], 1), rho_feat[0], dtype=x.dtype)
-                        else:
-                            raise ValueError(f"rho shape {rho_feat.shape} incompatible with x shape {x.shape}")
-                    else:
-                        raise ValueError(f"rho must be scalar or 1D, got shape {rho_feat.shape}")
-                else:  # x is 1D (scalar input)
-                    if rho_feat.ndim > 1:
-                        raise ValueError(f"rho must be scalar for scalar input, got shape {rho_feat.shape}")
-                    rho_feat = rho_feat[:1]  # Ensure single feature
-            
+                rho_feat = jnp.atleast_1d(rho * self.config.rho_input_scale)
+                if rho_feat.shape[0] > 1:
+                    rho_feat = rho_feat[:1]  # Take first if somehow batched
             x = jnp.concatenate([x, rho_feat], axis=-1)
 
         for i, layer in enumerate(self.layers[:-1]):
@@ -134,9 +149,14 @@ class NeuralRouter(eqx.Module):
         return params
     
     @staticmethod
-    def numpy_forward(Q, params, config, rho=None):
-        """Pure NumPy implementation of the forward pass for extreme speed in SSA loops."""
+    def numpy_forward(Q, params, config, rho=None, service_rates=None):
+        """Pure NumPy implementation of the forward pass for extreme speed in SSA loops.
+        
+        PATCH P2: Added service_rates parameter for heterogeneity-aware routing.
+        """
         import numpy as np
+        
+        num_servers = Q.shape[-1] if hasattr(Q, 'shape') else len(Q)
         
         # Preprocessing
         if config.preprocessing == "log1p":
@@ -150,6 +170,15 @@ class NeuralRouter(eqx.Module):
         else:
             x = np.asarray(Q, dtype=np.float64)
 
+        # PATCH P2: Append normalized service rates for heterogeneity awareness
+        if service_rates is None:
+            mu_normalized = np.ones(num_servers) / num_servers
+        else:
+            mu = np.asarray(service_rates, dtype=np.float64)
+            mu_sum = np.sum(mu)
+            mu_normalized = mu / np.where(mu_sum > 0, mu_sum, 1.0)
+        x = np.concatenate([x, mu_normalized])
+        
         # PI-V4: Append rho
         if config.use_rho:
             # PATCH: Safe conversion that handles numpy/JAX arrays properly
@@ -224,19 +253,27 @@ class ValueNetwork(eqx.Module):
     ) -> Float[Array, ""]:
         """Forward pass. Returns scalar value estimate V(s, rho).
         
-        Handles both single inputs (num_servers,) and batched inputs (batch, num_servers).
-        For batched inputs, automatically applies vmap internally.
+        ROBUST FIX: Handle both single and batched inputs correctly.
+        Single input: s shape (N,), rho scalar or None
+        Batched input: s shape (batch, N), rho shape (batch,) or scalar
+        Equinox Linear layers require single inputs, so batched calls use internal vmap.
         """
-        x = s
+        is_batched = s.ndim > 1
         
-        # Handle batched vs single input
-        if x.ndim > 1:
-            # Batched input: use vmap to process each sample
-            # This is more efficient than manual loop and handles rho broadcasting
-            return jax.vmap(lambda single_s: self._single_forward(single_s, rho))(x)
+        if is_batched:
+            # Batched input: use vmap with correct in_axes
+            if rho is None:
+                # Broadcast None to all batch elements
+                return jax.vmap(lambda single_s: self._single_forward(single_s, None))(s)
+            elif hasattr(rho, 'ndim') and rho.ndim > 0:
+                # rho is array - map over both s and rho
+                return jax.vmap(self._single_forward, in_axes=(0, 0))(s, rho)
+            else:
+                # rho is scalar - broadcast to all batch elements
+                return jax.vmap(lambda single_s: self._single_forward(single_s, rho))(s)
         else:
-            # Single input
-            return self._single_forward(x, rho)
+            # Single input: direct call
+            return self._single_forward(s, rho)
     
     def _single_forward(self, x, rho):
         """Process a single (non-batched) input."""
@@ -252,3 +289,44 @@ class ValueNetwork(eqx.Module):
         for layer in self.layers[:-1]:
             x = jax.nn.relu(layer(x))
         return self.layers[-1](x).squeeze()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATCH P4: Adaptive Temperature for Load-Dependent Routing
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_adaptive_alpha(rho: float, base_alpha: float = 1.0) -> float:
+    """
+    Compute temperature based on load factor for ROUTING.
+    
+    Temperature interpretation for softmax routing:
+    - alpha → ∞: uniform distribution (exploratory)
+    - alpha → 0: argmax (greedy, JSQ-like)
+    - alpha = 1: standard softmax
+    
+    For routing:
+    - Low load (rho<0.7): high alpha (exploratory is fine, no congestion)
+    - Medium load (0.7<=rho<0.85): moderate alpha
+    - Heavy load (0.85<=rho<0.95): lower alpha (more greedy)
+    - Critical load (rho>=0.95): very low alpha (JSQ-like greedy needed)
+    
+    Args:
+        rho: Current load factor (0 < rho < 1)
+        base_alpha: Base temperature to scale from (default 1.0)
+        
+    Returns:
+        Adaptive temperature alpha (higher = more exploratory, lower = more greedy)
+    """
+    if rho < 0.70:
+        # Low load: exploratory routing is fine
+        return base_alpha * 2.0
+    elif rho < 0.85:
+        # Medium load: moderate exploration
+        return base_alpha * 1.0
+    elif rho < 0.95:
+        # Heavy load: more greedy
+        return base_alpha * 0.5
+    else:
+        # Critical load: JSQ-like greedy routing
+        # Ramp down further as rho approaches 1.0
+        return base_alpha * max(0.1, 0.5 - 5.0 * (rho - 0.95))

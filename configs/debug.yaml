@@ -25,7 +25,7 @@ simulation:
     temperature: 0.5
 
 policy:
-  name: softmax
+  name: sojourn_softmax
   d: 2
 
 drift:
@@ -75,7 +75,7 @@ neural_training:
   squash_threshold: 500.0
 
 jax:
-  enabled: false
+  enabled: true
   platform: auto
   precision: float32
   fallback_to_cpu: true
@@ -103,10 +103,11 @@ neural:
 train_epochs: 100  # FIX: Increased from 30 for more learning
 
 # PATCH-P2: Domain Randomization for generalization
+# PATCH-P3: Extended rho_max to 0.98 for heavy-traffic generalization (SOTA target)
 domain_randomization:
   enabled: true
   rho_min: 0.4
-  rho_max: 0.85
+  rho_max: 0.98
 
 generalization:
   rho_boundary_vals: [0.95]

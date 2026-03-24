@@ -56,6 +56,7 @@ class PolicyName(str, Enum):
     PROPORTIONAL  = "proportional"
     JSQ           = "jsq"
     POWER_OF_D    = "power_of_d"
+    SOJOURN_SOFTMAX = "sojourn_softmax"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -314,11 +315,6 @@ class NeuralTrainingConfig:
     squash_scale: float = 100.0
     squash_threshold: float = 500.0
 
-@dataclass
-class DomainRandomizationConfig:
-    enabled: bool = False
-    rho_min: float = 0.4
-    rho_max: float = 0.95
 
 
 @dataclass
@@ -380,6 +376,8 @@ class DomainRandomizationConfig:
         Curriculum phases with increasing load ranges.
     """
     enabled: bool = True
+    rho_min: float = 0.4
+    rho_max: float = 0.95
     phases: List[DomainRandomizationPhase] = field(
         default_factory=lambda: [
             DomainRandomizationPhase(rho_min=0.45, rho_max=0.70, epochs=20, horizon=500),
@@ -679,6 +677,21 @@ def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
         **sim_dict,
     )
 
+def _build_dr_config(dr_dict: dict) -> DomainRandomizationConfig:
+    """Build DomainRandomizationConfig from YAML dict.
+
+    SG-1 FIX: Handles both simple YAML format (enabled/rho_min/rho_max
+    without phases) and full format (with explicit phases list).
+    When 'phases' is absent, the dataclass default curriculum is used.
+    """
+    dr_dict = dict(dr_dict)  # shallow copy
+    phases_raw = dr_dict.pop("phases", None)
+    if phases_raw is not None:
+        phases = [DomainRandomizationPhase(**p) for p in phases_raw]
+        return DomainRandomizationConfig(**dr_dict, phases=phases)
+    return DomainRandomizationConfig(**dr_dict)
+
+
 def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
     """
     Convert a Hydra ``DictConfig`` (loaded from YAML at runtime) into
@@ -702,6 +715,7 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         generalization=GeneralizationConfig(**d.get("generalization", {})),
         stress=StressConfig(**d.get("stress", {})),  # type: ignore[arg-type]
         stability_sweep=StabilitySweepConfig(**d.get("stability_sweep", {})),
+        domain_randomization=_build_dr_config(d.get("domain_randomization", {})),  # SG-1 FIX
         neural_training=NeuralTrainingConfig(**d.get("neural_training", {})),
         output_dir=d.get("output_dir", "outputs"),
         log_dir=d.get("log_dir", "logs"),

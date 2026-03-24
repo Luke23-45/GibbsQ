@@ -25,7 +25,7 @@ simulation:
     temperature: 0.5
 
 policy:
-  name: softmax
+  name: sojourn_softmax
   d: 2
 
 drift:

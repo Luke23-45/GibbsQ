@@ -15,14 +15,12 @@ EXPERIMENTS = {
     # Phase 0: Validation & Pre-flight Sanity
     "check_configs": "experiments.testing.check_configs",
     "reinforce_check": "experiments.testing.reinforce_gradient_check",
-    "bias": "experiments.testing.reinforce_gradient_check",
 
     # Phase 1: Foundational Metrics & Baselines
     "drift": "experiments.verification.drift_verification",
     "sweep": "experiments.sweeps.stability_sweep",
     "stress": "experiments.testing.stress_test",
     "policy": "experiments.evaluation.baselines_comparison",
-    "corrected_policy": "experiments.evaluation.baselines_comparison",
 
     # Phase 2: Neural Learning Pipeline (Training)
     "bc_train": "experiments.training.pretrain_bc",
@@ -47,7 +45,6 @@ def print_usage():
     print("  python experiment_runner.py drift")
     print("  python experiment_runner.py sweep system.num_servers=5 simulation.ssa.sim_time=5000")
     print("  python experiment_runner.py policy +simulation.export_trajectories=True")
-    print("  python experiment_runner.py corrected_policy")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -55,9 +52,8 @@ def main():
         add_help=False
     )
     parser.add_argument("experiment", nargs="?", help="Experiment name to run")
-    parser.add_argument("hydra_args", nargs="*", help="Hydra configuration overrides")
     
-    args, unknown = parser.parse_known_args()
+    args, hydra_overrides = parser.parse_known_args()
     
     if not args.experiment or args.experiment in ["-h", "--help", "help"]:
         print_usage()
@@ -80,17 +76,16 @@ def main():
     env["PYTHONPATH"] = os.pathsep.join([str(project_root), str(project_root / "src")])
     
     python_script = EXPERIMENTS[experiment]
-    hydra_args = args.hydra_args + unknown
     
     print("=" * 58)
     print(f" Starting Experiment: {experiment}")
-    print(f" Remaining Args (Hydra Overrides): {' '.join(hydra_args)}")
+    print(f" Remaining Args (Hydra Overrides): {' '.join(hydra_overrides)}")
     print("=" * 58)
     
     # Change to project root and run
     os.chdir(project_root)
     
-    cmd = ["python", "-m", python_script] + hydra_args
+    cmd = ["python", "-m", python_script] + hydra_overrides
     
     try:
         result = subprocess.run(cmd, env=env)

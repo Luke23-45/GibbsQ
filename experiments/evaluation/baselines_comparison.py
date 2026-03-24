@@ -30,6 +30,8 @@ from gibbsq.analysis.metrics import (
 )
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
+from gibbsq.analysis.theme import apply_theme, THEMES
+from gibbsq.utils.chart_exporter import save_chart
 import pandas as pd
 import matplotlib.pyplot as plt
 import sys
@@ -194,21 +196,11 @@ def run_corrected_comparison(
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
                 
                 # SG-9 PATCH: Validate BOTH input_dim AND hidden_size.
-                input_dim = N + (1 if cfg.neural.use_rho else 0)
-                if policy_net.layers[0].weight.shape[1] != input_dim:
-                    log.warning(
-                        f"[SG-9] Neural model N-mismatch: model expects "
-                        f"input_dim={policy_net.layers[0].weight.shape[1]}, system has input_dim={input_dim}. "
-                        f"Skipping neural evaluation."
-                    )
-                    return
-                elif policy_net.layers[0].weight.shape[0] != cfg.neural.hidden_size:
-                    log.warning(
-                        f"[SG-9] Neural model hidden_size mismatch: "
-                        f"model={policy_net.layers[0].weight.shape[0]}, "
-                        f"config expects={cfg.neural.hidden_size}. "
-                        f"Skipping neural evaluation to avoid corrupt weights."
-                    )
+                from gibbsq.utils.model_io import validate_neural_model_shape
+                try:
+                    validate_neural_model_shape(policy_net, cfg.neural, N)
+                except ValueError as e:
+                    log.warning(f"[SG-9] {e} Skipping neural evaluation.")
                     return
                 
                 deterministic = DeterministicNeuralPolicy(policy_net, mu)
@@ -310,8 +302,8 @@ def run_corrected_comparison(
 
 
 def _generate_comparison_plot(results: dict, run_dir: Path):
-    """Generate comparison bar chart."""
-    import matplotlib.pyplot as plt
+    """Generate comparison bar chart with chart-type-aware styling."""
+    from gibbsq.analysis.plotting import plot_tier_comparison_bars
     
     # Sort by tier and E[Q]
     sorted_results = sorted(results.items(), key=lambda x: (x[1]["tier"], x[1]["mean_q_total"]))
@@ -321,33 +313,20 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     q_errors = [r["se_q_total"] for _, r in sorted_results]
     tiers = [r["tier"] for _, r in sorted_results]
     
-    # Color by tier
-    tier_colors = {1: 'gray', 2: 'blue', 3: 'green', 4: 'purple', 5: 'red'}
-    colors = [tier_colors.get(t, 'black') for t in tiers]
+    plot_path = run_dir / "corrected_policy_comparison"
+    fig = plot_tier_comparison_bars(
+        labels=labels,
+        q_values=q_values,
+        q_errors=q_errors,
+        tiers=tiers,
+        save_path=plot_path,
+        theme="publication",
+        formats=["png", "pdf"]
+    )
+    import matplotlib.pyplot as plt
+    plt.close(fig)
     
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    x = np.arange(len(labels))
-    bars = ax.bar(x, q_values, yerr=q_errors, color=colors, alpha=0.7, capsize=3)
-    
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=45, ha='right')
-    ax.set_ylabel('Expected Total Queue Length E[Q_total]')
-    ax.set_title('Corrected Policy Comparison')
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    # Add tier legend
-    from matplotlib.patches import Patch
-    legend_elements = [Patch(facecolor=c, label=f'Tier {t}', alpha=0.7) 
-                       for t, c in tier_colors.items()]
-    ax.legend(handles=legend_elements, loc='upper right')
-    
-    plt.tight_layout()
-    plot_path = run_dir / "corrected_policy_comparison.png"
-    plt.savefig(plot_path, dpi=300)
-    plt.close()
-    
-    log.info(f"Comparison plot saved to {plot_path}")
+    log.info(f"Comparison plot saved to {plot_path}.png, {plot_path}.pdf")
 
 
 def run_grid_generalization(
@@ -416,35 +395,23 @@ def run_grid_generalization(
     return results
 
 def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
-    """Generate high-fidelity log-scale and index plots."""
-    plt.rcParams.update({'axes.grid': True, 'grid.alpha': 0.3})
+    """Generate high-fidelity log-scale and index plots with chart-type-aware styling."""
+    from gibbsq.analysis.plotting import plot_platinum_grid
     
-    # Plot 1: E[Q] Log-Scale
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-    
-    ax1.plot(df['rho'], df['Uniform_EQ'], 'r--x', label='Uniform')
-    ax1.plot(df['rho'], df['Neural_EQ'], 'b-o', linewidth=2, label='N-GibbsQ (Platinum)')
-    ax1.plot(df['rho'], df['JSQ_EQ'], 'g-.s', label='JSQ (Optimal)')
-    ax1.set_yscale('log')
-    ax1.set_xlabel('Load Factor (rho)')
-    ax1.set_ylabel('Expected Queue Length (Log Scale)')
-    ax1.set_title('Performance Envelope')
-    ax1.legend()
-    
-    # Plot 2: Performance Index
-    ax2.plot(df['rho'], df['Performance_Index'], 'm-D', linewidth=2)
-    ax2.axhline(100, color='g', linestyle='--', alpha=0.5, label='JSQ Parity')
-    ax2.axhline(0, color='r', linestyle='--', alpha=0.5, label='Uniform Parity')
-    ax2.set_ylim(-10, 110)
-    ax2.set_xlabel('Load Factor (rho)')
-    ax2.set_ylabel('Performance Index (%)')
-    ax2.set_title('Generalization Efficiency')
-    ax2.legend()
-    
-    plt.tight_layout()
-    plt.savefig(output_dir / "platinum_grid_analysis.png", dpi=300)
-    plt.close()
-    log.info(f"Platinum grid analysis saved to {output_dir}")
+    plot_path = output_dir / "platinum_grid_analysis"
+    fig = plot_platinum_grid(
+        rho_values=df['rho'].values,
+        uniform_eq=df['Uniform_EQ'].values,
+        neural_eq=df['Neural_EQ'].values,
+        jsq_eq=df['JSQ_EQ'].values,
+        performance_index=df['Performance_Index'].values,
+        save_path=plot_path,
+        theme="publication",
+        formats=["png", "pdf"]
+    )
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+    log.info(f"Platinum grid analysis saved to {plot_path}.png, {plot_path}.pdf")
 
 
 def main(raw_cfg: DictConfig):

@@ -38,9 +38,16 @@ log = logging.getLogger(__name__)
 
 class AblationReinforceTrainer(ReinforceTrainer):
     """REINFORCE trainer variant that does not rewrite global model pointers."""
+    
 
-    def _save_assets(self, policy_net, value_net, history_loss, history_reward):
+    def _save_assets(self, *args, **kwargs):
         import matplotlib.pyplot as plt
+        from gibbsq.analysis.plotting import plot_training_dashboard
+
+        policy_net = args[0] if len(args) > 0 else kwargs.get('policy_net')
+        value_net = args[1] if len(args) > 1 else kwargs.get('value_net')
+        history_loss = args[2] if len(args) > 2 else kwargs.get('history_loss')
+        history_reward = args[3] if len(args) > 3 else kwargs.get('history_reward')
 
         policy_path = self.run_dir / "n_gibbsq_reinforce_weights.eqx"
         eqx.tree_serialise_leaves(policy_path, policy_net)
@@ -48,23 +55,18 @@ class AblationReinforceTrainer(ReinforceTrainer):
         value_path = self.run_dir / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        axes[0].plot(history_loss, color='blue', linewidth=2)
-        axes[0].set_title('REINFORCE Policy Loss')
-        axes[0].set_xlabel('Epoch')
-        axes[0].set_ylabel('Loss')
-        axes[0].grid(True, alpha=0.3)
-
-        axes[1].plot(history_reward, color='green', linewidth=2)
-        axes[1].axhline(y=0, color='gray', linestyle='--', alpha=0.5)
-        axes[1].set_title('Mean Reward (-E[Q])')
-        axes[1].set_xlabel('Epoch')
-        axes[1].set_ylabel('Reward')
-        axes[1].grid(True, alpha=0.3)
-
-        plt.tight_layout()
-        plt.savefig(self.run_dir / "reinforce_training_curve.png", dpi=300)
-        plt.close()
+        plot_path = self.run_dir / "reinforce_training_curve"
+        fig = plot_training_dashboard(
+            metrics={
+                "epoch": list(range(len(history_loss))),
+                "policy_loss": history_loss,
+                "performance_index": history_reward,
+            },
+            save_path=plot_path,
+            theme="publication",
+            formats=["png", "pdf"],
+        )
+        plt.close(fig)
 
         log.info(f"Saved variant artifacts in {self.run_dir}")
 
@@ -173,24 +175,28 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
 
     names = list(summary.keys())
     values = [summary[n]["mean_q_total"] for n in names]
+    se_values = [summary[n]["se_q_total"] for n in names]
 
-    plt.figure(figsize=(11, 6))
-    bars = plt.bar(names, values, color=['#2ecc71', '#e67e22', '#e74c3c', '#95a5a6'])
-    plt.title('N-GibbsQ SSA Ablation Study')
-    plt.ylabel('Expected Total Queue Length E[Q_total]')
-    plt.xticks(rotation=15)
-    plt.grid(True, axis='y', alpha=0.3)
-    for bar, name in zip(bars, names):
-        y = bar.get_height()
-        se = summary[name]["se_q_total"]
-        plt.text(bar.get_x() + bar.get_width() / 2, y + 0.5, f"{y:.2f}\n±{se:.2f}", ha='center', va='bottom', fontsize=9)
-    plt.tight_layout()
-    plot_path = run_dir / "ablation_ssa.png"
-    plt.savefig(plot_path, dpi=300)
-    plt.close()
+    from gibbsq.analysis.plotting import plot_ablation_bars
+
+    plot_path = run_dir / "ablation_ssa"
+    fig = plot_ablation_bars(
+        variant_names=names,
+        mean_values=values,
+        se_values=se_values,
+        save_path=plot_path,
+        theme="publication",
+        formats=["png", "pdf"],
+    )
+    import matplotlib.pyplot as plt
+    plt.close(fig)
 
     if run_logger:
-        run_logger.log({"ablation_ssa_plot": str(plot_path)})
+        try:
+            import wandb
+            run_logger.log({"ablation_ssa_plot": wandb.Image(str(plot_path.with_suffix(".png")))})
+        except Exception:
+            pass
 
 
 def main(raw_cfg: DictConfig):
