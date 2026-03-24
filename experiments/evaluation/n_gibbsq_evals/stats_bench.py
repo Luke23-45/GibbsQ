@@ -70,7 +70,7 @@ class StatsBenchmark:
         
         # PATCH H#3: Graceful fallback for missing pointers
         model_path = resolve_model_pointer_or_none(_PROJECT_ROOT, output_root)
-        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
+        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, service_rates=self.service_rates, key=k_load)
         
         if model_path is None:
             log.warning("No trained model found. Creating fresh JSQ-initialized model for evaluation.")

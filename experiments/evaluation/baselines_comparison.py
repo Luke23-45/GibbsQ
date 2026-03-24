@@ -192,7 +192,7 @@ def run_corrected_comparison(
             if weights_path.exists():
                 # Initialize and load
                 key = jax.random.PRNGKey(cfg.simulation.seed)
-                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
+                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
                 
                 # SG-9 PATCH: Validate BOTH input_dim AND hidden_size.
@@ -441,7 +441,7 @@ def main(raw_cfg: DictConfig):
             if dr_ptr.exists():
                 weights_path = Path(__file__).resolve().parents[2] / dr_ptr.read_text().strip()
                 key = jax.random.PRNGKey(cfg.simulation.seed)
-                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
+                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
                 
                 rho = cfg.system.arrival_rate / float(mu.sum())

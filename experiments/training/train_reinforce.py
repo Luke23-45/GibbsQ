@@ -505,6 +505,7 @@ class ReinforceTrainer:
         policy_net = NeuralRouter(
             num_servers=self.num_servers,
             config=self.cfg.neural,
+            service_rates=self.service_rates,
             key=actor_key,
         )
         # SHAKE WEIGHTS to break zero-init symmetry

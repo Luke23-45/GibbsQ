@@ -145,6 +145,7 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
         skeleton = NeuralRouter(
             num_servers=v_cfg.system.num_servers,
             config=v_cfg.neural,
+            service_rates=v_cfg.system.service_rates,
             key=jax.random.PRNGKey(v_cfg.simulation.seed + 10_000 + idx),
         )
         model = eqx.tree_deserialise_leaves(model_path, skeleton)

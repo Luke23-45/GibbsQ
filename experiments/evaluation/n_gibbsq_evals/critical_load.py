@@ -68,7 +68,7 @@ class CriticalLoadTest:
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         model_path = resolve_model_pointer(_PROJECT_ROOT, output_root)
-        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, key=k_load)
+        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, service_rates=self.service_rates, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config

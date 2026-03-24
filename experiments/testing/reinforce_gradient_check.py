@@ -399,6 +399,7 @@ def run_gradient_check(
     policy_net = NeuralRouter(
         num_servers=cfg.system.num_servers,
         config=cfg.neural,
+        service_rates=cfg.system.service_rates,
         key=policy_key,
     )
     

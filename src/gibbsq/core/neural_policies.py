@@ -40,7 +40,7 @@ class NeuralRouter(eqx.Module):
         Args:
             num_servers: Number of servers (input/output dimension).
             config: Configuration object (hidden_size, preprocessing, init_type).
-            service_rates: Service rates for each server (for heterogeneity awareness).
+            service_rates: REQUIRED for heterogeneous systems. If omitted, defaults to homogeneous (all 1.0), causing severe degradation in asymmetric environments.
             key: JAX PRNG key for parameter initialization.
         """
         if key is None:

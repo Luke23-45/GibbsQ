@@ -98,7 +98,7 @@ class GeneralizationSweeper:
         log.info(f"Initiating Generalization Sweep (Scales={scale_vals}, rho={rho_vals})")
         
         # Load Neural model matching training dimensions using validated NeuralConfig
-        skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, config=self.cfg.neural, key=k_load)
+        skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, config=self.cfg.neural, service_rates=self.cfg.system.service_rates, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
         
         # SG#16 Fix: Validate that the loaded model matches the current config
