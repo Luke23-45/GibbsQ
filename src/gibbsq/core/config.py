@@ -191,6 +191,7 @@ class NeuralConfig:
     capacity_bound: float = constants.NEURAL_LINEAR_CAPACITY_BOUND
     init_type: str = "zero_final" # Standard safety requirement
     use_rho: bool = True          # PI-V4: Append rho to state features
+    use_service_rates: bool = True # SG#13 FIX: Restore heterogeneity awareness
     rho_input_scale: float = 10.0  # PI-V4.1: Increased scale for better feature saliency
     entropy_bonus: float = 0.01    # PI-V4.1: Prevent premature determinism
     entropy_final: float = 0.001

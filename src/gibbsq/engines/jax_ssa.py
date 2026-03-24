@@ -127,8 +127,9 @@ def collect_trajectory_jax(
         
         # FIX SG#1: Dynamically compute and pass the domain-randomized rho
         # to ensure the policy network can adapt across capacity regimes.
+        # SG#13: Also pass service_rates for heterogeneity-aware features.
         rho_val = arrival_rate / jnp.sum(service_rates)
-        logits = policy_net(s, rho=rho_val)
+        logits = policy_net(s, mu=service_rates, rho=rho_val)
         
         # Log-sum-exp for numerical stability
         log_probs = jax.nn.log_softmax(logits, axis=-1)

@@ -122,8 +122,15 @@ def compute_reinforce_gradient(
             s_feat = (fixed_states + 1.0) / service_rates_jax
             
             # Application
-            v_model = jax.vmap(jax.vmap(m))
-            logits = v_model(s_feat)
+            # s_feat shape: (batch, step, N)
+            # m(Q, mu, rho) -> logits
+            # We need to map over batch and step, but broadcast mu and rho
+            inner_vmap = jax.vmap(m, in_axes=(0, None, None))
+            v_model = jax.vmap(inner_vmap, in_axes=(0, None, None))
+            
+            # SG#13 FIX: Pass rho and mu to ensure consistency with JAX SSA engine
+            rho_val = arrival_rate / jnp.sum(service_rates_jax)
+            logits = v_model(s_feat, service_rates_jax, rho_val)
             log_probs = jax.nn.log_softmax(logits, axis=-1)
             
             # Gather log_prob(a_t | s_t)

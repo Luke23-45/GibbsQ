@@ -59,8 +59,12 @@ class NeuralRouter(eqx.Module):
             self.service_rates = jnp.asarray(service_rates)
         
         hidden_size = config.hidden_size
-        # PATCH P2: Input dim includes service rate features (num_servers for mu_normalized)
-        input_dim = num_servers + num_servers + (1 if config.use_rho else 0)
+        # SG#13: Heterogeneity awareness (Patch P2) appends normalized mu to features
+        input_dim = num_servers
+        if config.use_service_rates:
+            input_dim += num_servers
+        if config.use_rho:
+            input_dim += 1
         l1 = eqx.nn.Linear(input_dim, hidden_size, key=keys[0])
         l2 = eqx.nn.Linear(hidden_size, hidden_size, key=keys[1])
         l3 = eqx.nn.Linear(hidden_size, num_servers, key=keys[2])
@@ -76,6 +80,7 @@ class NeuralRouter(eqx.Module):
     def __call__(
         self, 
         Q: Float[Array, "..."], 
+        mu: Float[Array, "..."] = None,
         rho: Float[Array, "..."] = None
     ) -> Float[Array, "..."]:
         """Forward pass. Returns routing logits."""
@@ -84,16 +89,18 @@ class NeuralRouter(eqx.Module):
         is_batched = Q.ndim > 1
         
         if is_batched:
-            if rho is None:
-                return jax.vmap(lambda q: self._single_forward(q, None))(Q)
-            elif hasattr(rho, 'ndim') and rho.ndim > 0:
-                return jax.vmap(self._single_forward, in_axes=(0, 0))(Q, rho)
-            else:
-                return jax.vmap(lambda q: self._single_forward(q, rho))(Q)
+            # Robust vmap dispatch: Map over leading dimension of Q.
+            # Only map over mu/rho if they have the same batch dimension as Q.
+            # Otherwise, use None to broadcast them.
+            
+            mu_axis = 0 if (mu is not None and mu.ndim == Q.ndim) else None
+            rho_axis = 0 if (rho is not None and jnp.ndim(rho) > 0 and rho.shape[0] == Q.shape[0]) else None
+            
+            return jax.vmap(self._single_forward, in_axes=(0, mu_axis, rho_axis))(Q, mu, rho)
         else:
-            return self._single_forward(Q, rho)
+            return self._single_forward(Q, mu, rho)
     
-    def _single_forward(self, Q, rho):
+    def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
         # Preprocessing selection based on config
         if self.config.preprocessing == "log1p":
@@ -108,9 +115,16 @@ class NeuralRouter(eqx.Module):
             x = Q
         
         # PATCH P2: Append normalized service rates for heterogeneity awareness
-        mu_sum = jnp.sum(self.service_rates)
-        mu_normalized = self.service_rates / jnp.where(mu_sum > 0, mu_sum, 1.0)
-        x = jnp.concatenate([x, mu_normalized])
+        if self.config.use_service_rates:
+            effective_mu = mu if mu is not None else self.service_rates
+            mu_sum = jnp.sum(effective_mu, axis=-1, keepdims=True)
+            mu_normalized = effective_mu / jnp.where(mu_sum > 0, mu_sum, 1.0)
+            
+            # Match batch dimensions if x is batched but mu is not
+            if x.ndim > mu_normalized.ndim:
+                mu_normalized = jnp.broadcast_to(mu_normalized, x.shape)
+            
+            x = jnp.concatenate([x, mu_normalized], axis=-1)
         
         # Append rho feature
         if self.config.use_rho:
