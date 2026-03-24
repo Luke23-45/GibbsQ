@@ -118,6 +118,7 @@ def main(raw_cfg: DictConfig) -> None:
         max_samples_t1 = int(_sim_time_t1 / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating N={N} experts (rho={cfg.stress.massive_n_rho})...")
+        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
 
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
@@ -129,14 +130,21 @@ def main(raw_cfg: DictConfig) -> None:
             sample_interval=cfg.stress.sample_interval,
             base_seed=cfg.simulation.seed,
             max_samples=max_samples_t1,
-            policy_type=3  # Softmax
+            policy_type=_pmap.get(cfg.policy.name, 3)
         )
 
         ginis = []
+        avg_q_vals_t1 = []
         for r in range(cfg.simulation.num_replications):
+            _np_t = np.array(times[r])
+            _np_s = np.array(states[r])
+            # Truncate invalid trailing JAX buffer slots (SG#5 fix)
+            _vm = _np_t > 0; _vm[0] = True
+            _vl = int(np.sum(_vm))
+            if _vl < _np_s.shape[0]:
+                _np_t = _np_t[:_vl]; _np_s = _np_s[:_vl]
             res = SimResult(
-                times=np.array(times[r]),
-                states=np.array(states[r]),
+                times=_np_t, states=_np_s,
                 arrival_count=int(arrs[r]),
                 departure_count=int(deps[r]),
                 final_time=float(times[r][-1]),
@@ -144,18 +152,15 @@ def main(raw_cfg: DictConfig) -> None:
             )
             avg_q = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
             ginis.append(gini_coefficient(avg_q))
+            avg_q_vals_t1.append(avg_q.sum())
 
         avg_gini = np.mean(ginis)
         log.info(f"    -> Average Gini Imbalance: {avg_gini:.4f}")
         if wandb and wandb.run:
             wandb.log({"massive_n/N": N, "massive_n/avg_gini": avg_gini})
 
-        # Accumulate for dashboard — need mean_q for scaling panel too
-        _mean_q_t1 = float(np.mean([time_averaged_queue_lengths(
-            SimResult(np.array(times[r]), np.array(states[r]),
-                      int(arrs[r]), int(deps[r]), float(times[r][-1]), N),
-            cfg.simulation.burn_in_fraction).sum()
-            for r in range(cfg.simulation.num_replications)]))
+        # Accumulate for dashboard
+        _mean_q_t1 = float(np.mean(avg_q_vals_t1))
         _scaling_data["n_values"].append(int(N))
         _scaling_data["mean_q"].append(_mean_q_t1)
         _scaling_data["gini"].append(float(avg_gini))
@@ -206,6 +211,7 @@ def main(raw_cfg: DictConfig) -> None:
         max_samples_crit = int(_sim_time_crit / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating rho={rho:.3f} (T={_sim_time_crit})...")
+        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
 
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
@@ -217,7 +223,7 @@ def main(raw_cfg: DictConfig) -> None:
             sample_interval=cfg.stress.sample_interval,
             base_seed=cfg.simulation.seed,
             max_samples=max_samples_crit,
-            policy_type=3
+            policy_type=_pmap.get(cfg.policy.name, 3)
         )
 
         q_totals = []
@@ -248,17 +254,18 @@ def main(raw_cfg: DictConfig) -> None:
         log.info(f"    -> Gelman-Rubin R-hat across replicas (post MSER-5 burn-in): {r_hat:.4f}")
 
         for r in range(cfg.simulation.num_replications):
-            # SG-2 FIX: apply the same flat-tail fill to the raw states array
-            # that was already applied to total_q_trajectories above.
-            # Without this, time_averaged_queue_lengths averages zero-padded
-            # JAX buffer slots and biases E[Q] downward at high rho.
+            # SG-2 FIX (v2): Truncate invalid trailing buffer slots instead
+            # of padding with the last valid state. Padding gives the final
+            # state disproportionate weight in time_averaged_queue_lengths.
+            _np_times_r = np.array(times[r])
             _np_states_r = np.array(states[r])
             _vl = valid_lens[r]
             if _vl < _np_states_r.shape[0]:
-                _np_states_r[_vl:] = _np_states_r[_vl - 1]
+                _np_times_r = _np_times_r[:_vl]
+                _np_states_r = _np_states_r[:_vl]
 
             res = SimResult(
-                np.array(times[r]), _np_states_r,
+                _np_times_r, _np_states_r,
                 int(arrs[r]), int(deps[r]), float(times[r][-1]), N_fixed
             )
 
@@ -336,8 +343,15 @@ def main(raw_cfg: DictConfig) -> None:
 
     work_dist = []
     for r in range(cfg.simulation.num_replications):
+        _np_t3 = np.array(times[r])
+        _np_s3 = np.array(states[r])
+        # Truncate invalid trailing JAX buffer slots (SG#5 fix)
+        _vm3 = _np_t3 > 0; _vm3[0] = True
+        _vl3 = int(np.sum(_vm3))
+        if _vl3 < _np_s3.shape[0]:
+            _np_t3 = _np_t3[:_vl3]; _np_s3 = _np_s3[:_vl3]
         res = SimResult(
-            np.array(times[r]), np.array(states[r]),
+            _np_t3, _np_s3,
             int(arrs[r]), int(deps[r]), float(times[r][-1]), 4
         )
         avg_q_per_srv = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)

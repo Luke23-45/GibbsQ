@@ -37,22 +37,6 @@ docs/logs
 # OS
 .DS_Store
 Thumbs.db
-ledger
+outputs
+# ledger
 docs/PROPOSED
-large_logs.md
-small_logs.md
-report_suggestion.md
-# logs.md
-# suggestions.md
-patches_utf8.txt
-# suggestions.md
-# logs23.md
-# suggestions.md
-# yu.md
-# ledger_patches.md
-# patches/patches.md
-# main_logs.md
-# final_report.md
-# suggestions.md
-docs/final_experiment_run_plan.md
-# logsz.md

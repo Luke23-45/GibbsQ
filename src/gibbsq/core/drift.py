@@ -62,10 +62,9 @@ def lyapunov_V(Q: np.ndarray) -> float:
     return 0.5 * float(np.dot(Q.astype(np.float64), Q.astype(np.float64)))
 
 
-def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray) -> np.ndarray:
-    """Log-sum-exp stable softmax on expected sojourn time."""
-    sojourn = (Q.astype(np.float64) + 1.0) / mu
-    logits = -alpha * sojourn
+def _softmax_probs(Q: np.ndarray, alpha: float) -> np.ndarray:
+    """Raw-Q softmax routing probabilities p_i = exp(-α Q_i) / Σ exp(-α Q_j)."""
+    logits = -alpha * Q.astype(np.float64)
     logits -= logits.max()
     w = np.exp(logits)
     return w / w.sum()
@@ -89,7 +88,7 @@ def generator_drift(
     """
     Q_f  = Q.astype(np.float64)
     mu_f = np.asarray(mu, dtype=np.float64)
-    p    = _softmax_probs(Q, alpha, mu_f)
+    p    = _softmax_probs(Q, alpha)
 
     arrival_term  = lam * np.dot(p, Q_f)            # λ ⟨p, Q⟩
     service_term  = np.dot(mu_f, Q_f)               # ⟨μ, Q⟩
@@ -198,8 +197,7 @@ def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray) -> np.n
     -------
     probs : ndarray, shape (M, N)
     """
-    sojourn = (Q_all.astype(np.float64) + 1.0) / mu
-    logits = -alpha * sojourn                         # (M, N)
+    logits = -alpha * Q_all.astype(np.float64)                         # (M, N)
     logits -= logits.max(axis=1, keepdims=True)        # shift per state
     w = np.exp(logits)
     return w / w.sum(axis=1, keepdims=True)

@@ -203,7 +203,7 @@ def run_corrected_comparison(
                     log.warning(f"[SG-9] {e} Skipping neural evaluation.")
                     return
                 
-                deterministic = DeterministicNeuralPolicy(policy_net, mu)
+                deterministic = DeterministicNeuralPolicy(policy_net, mu, rho=rho)
                 
                 log.info("Evaluating N-GibbsQ (Greedy Deterministic)...")
                 metrics = evaluate_single_policy(deterministic, cfg, 
@@ -444,7 +444,8 @@ def main(raw_cfg: DictConfig):
                 policy_net = NeuralRouter(num_servers=N, config=cfg.neural, key=key)
                 policy_net = eqx.tree_deserialise_leaves(weights_path, policy_net)
                 
-                platinum_policy = DeterministicNeuralPolicy(policy_net, mu)
+                rho = cfg.system.arrival_rate / float(mu.sum())
+                platinum_policy = DeterministicNeuralPolicy(policy_net, mu, rho=rho)
                 run_grid_generalization(platinum_policy, cfg, run_dir)
             else:
                 log.warning("No latest_domain_randomized_weights.txt found - skipping grid sweep.")

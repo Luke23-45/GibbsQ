@@ -124,7 +124,11 @@ def collect_trajectory_jax(
         # FIX: The scan iterates single trajectories, so s is strictly 1D shape (N,).
         # We do NOT use vmap here, as policy_net expects 1D input for a single step.
         s = (Q + 1.0) / service_rates
-        logits = policy_net(s)
+        
+        # FIX SG#1: Dynamically compute and pass the domain-randomized rho
+        # to ensure the policy network can adapt across capacity regimes.
+        rho_val = arrival_rate / jnp.sum(service_rates)
+        logits = policy_net(s, rho=rho_val)
         
         # Log-sum-exp for numerical stability
         log_probs = jax.nn.log_softmax(logits, axis=-1)

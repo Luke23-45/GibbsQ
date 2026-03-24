@@ -82,9 +82,18 @@ def main():
         q_totals = []
         q_per_server = []
         for r in range(num_replications):
+            _np_times = np.array(times[r])
+            _np_states = np.array(states[r])
+            # Truncate invalid trailing JAX buffer slots (SG#5 fix)
+            _valid_mask = _np_times > 0
+            _valid_mask[0] = True
+            _vl = int(np.sum(_valid_mask))
+            if _vl < _np_states.shape[0]:
+                _np_times = _np_times[:_vl]
+                _np_states = _np_states[:_vl]
             res = SimResult(
-                times=np.array(times[r]),
-                states=np.array(states[r]),
+                times=_np_times,
+                states=_np_states,
                 arrival_count=int(arrs[r]),
                 departure_count=int(deps[r]),
                 final_time=float(times[r][-1]),

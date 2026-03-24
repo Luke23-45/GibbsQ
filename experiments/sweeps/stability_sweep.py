@@ -94,6 +94,7 @@ def main(raw_cfg: DictConfig) -> None:
                 _sim_time = cfg.simulation.ssa.sim_time
                 _sample_interval = cfg.simulation.ssa.sample_interval
                 max_samples = int(_sim_time / _sample_interval) + 1
+                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
                 times, states, (arrs, deps) = run_replications_jax(
                     num_replications=cfg.simulation.num_replications,
                     num_servers=N,
@@ -104,14 +105,23 @@ def main(raw_cfg: DictConfig) -> None:
                     sample_interval=_sample_interval,
                     base_seed=_cell_seed,
                     max_samples=max_samples,
-                    policy_type=3,  # Raw-Q softmax: stronger baseline for publication
+                    policy_type=_pmap.get(cfg.policy.name, 3),
                 )
                 
                 # Convert JAX results to NumPy-friendly lists for metric computation
                 for r in range(cfg.simulation.num_replications):
+                    _np_times = np.array(times[r])
+                    _np_states = np.array(states[r])
+                    _valid_mask = _np_times > 0
+                    _valid_mask[0] = True
+                    _vl = int(np.sum(_valid_mask))
+                    if _vl < _np_states.shape[0]:
+                        _np_times = _np_times[:_vl]
+                        _np_states = _np_states[:_vl]
+
                     res = SimResult(
-                        times=np.array(times[r]),
-                        states=np.array(states[r]),
+                        times=_np_times,
+                        states=_np_states,
                         arrival_count=int(arrs[r]),
                         departure_count=int(deps[r]),
                         final_time=float(times[r][-1]),

@@ -83,6 +83,7 @@ def compute_causal_returns_to_go(
     
     # 2. Assign the immediate cost of an action to the interval BEFORE the next action
     action_intervals = []
+    action_durations = []
     n_actions = len(action_step_indices)
     for i in range(n_actions):
         start_idx = action_step_indices[i]
@@ -91,14 +92,17 @@ def compute_causal_returns_to_go(
         # Immediate area under the queue before the system must decide routing again
         interval_cost = np.sum(q_integrals[start_idx:end_idx])
         action_intervals.append(interval_cost)
+        action_durations.append(np.sum(dt[start_idx:end_idx]))
         
     action_intervals = np.array(action_intervals)
+    action_durations = np.array(action_durations)
     
-    # 3. Standard backward discounting (Solves the Critic's impossible T-t prediction task)
+    # 3. Continuous-time backward discounting (Solves the Critic's impossible T-t prediction task)
     returns = np.zeros_like(action_intervals, dtype=np.float64)
     R = 0.0
     for i in reversed(range(len(action_intervals))):
-        R = action_intervals[i] + gamma * R
+        gamma_dt = gamma ** action_durations[i]
+        R = action_intervals[i] + gamma_dt * R
         returns[i] = R
         
     return returns
@@ -607,14 +611,15 @@ class ReinforceTrainer:
             log.info(f"  [Checkpoint] Saved epoch {epoch_idx} model to {ckpt_path.name}")
             
             # SG#11: Update pointer in real-time for comparison scripts via model_io
-            _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-            pointer_dir = self.run_dir.parent.parent
-            save_model_pointer(
-                model_path=ckpt_path,
-                project_root=_PROJECT_ROOT,
-                output_root=pointer_dir,
-                pointer_name="latest_reinforce_weights.txt"
-            )
+            if getattr(self, "save_global_pointer", True):
+                _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+                pointer_dir = self.run_dir.parent.parent
+                save_model_pointer(
+                    model_path=ckpt_path,
+                    project_root=_PROJECT_ROOT,
+                    output_root=pointer_dir,
+                    pointer_name="latest_reinforce_weights.txt"
+                )
         
         # PI-V4.3: Exponential Moving Averages for stable diagnostics
         ema_idx = 0.0

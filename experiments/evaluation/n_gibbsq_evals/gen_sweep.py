@@ -132,6 +132,7 @@ class GeneralizationSweeper:
 
                 # Neural on true SSA
                 _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
+                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
                 times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
                     num_replications=_cell_reps,
                     num_servers=self.cfg.system.num_servers,
@@ -142,12 +143,20 @@ class GeneralizationSweeper:
                     sample_interval=self.ssa_sample_interval,
                     base_seed=_cell_seed,
                     max_samples=_max_s_cell,
-                    policy_type=3,  # Raw-Q softmax: stronger baseline for publication
+                    policy_type=_pmap.get(self.cfg.policy.name, 3),
                 )
                 g_vals = []
                 for _r in range(_cell_reps):
+                    _np_times = np.array(times_g[_r])
+                    _np_states = np.array(states_g[_r])
+                    _valid_mask = _np_times > 0
+                    _valid_mask[0] = True
+                    _vl = int(np.sum(_valid_mask))
+                    _np_times = _np_times[:_vl]
+                    _np_states = _np_states[:_vl]
+                        
                     _res = SimResult(
-                        times=np.array(times_g[_r]), states=np.array(states_g[_r]),
+                        times=_np_times, states=_np_states,
                         arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
                         final_time=float(times_g[_r][-1]),
                         num_servers=self.cfg.system.num_servers,

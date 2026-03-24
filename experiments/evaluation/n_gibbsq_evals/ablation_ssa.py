@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 class AblationReinforceTrainer(ReinforceTrainer):
     """REINFORCE trainer variant that does not rewrite global model pointers."""
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.save_global_pointer = False
 
     def _save_assets(self, *args, **kwargs):
         import matplotlib.pyplot as plt
@@ -145,7 +148,9 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
             key=jax.random.PRNGKey(v_cfg.simulation.seed + 10_000 + idx),
         )
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
-        policy = NeuralPolicyWrapper(model, np.array(v_cfg.system.service_rates, dtype=np.float64))
+        mu_arr = np.array(v_cfg.system.service_rates, dtype=np.float64)
+        rho = v_cfg.system.arrival_rate / float(mu_arr.sum())
+        policy = NeuralPolicyWrapper(model, mu_arr, rho=rho)
         metrics = evaluate_policy_ssa(policy, v_cfg)
         summary[name] = metrics
 

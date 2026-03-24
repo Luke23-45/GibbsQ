@@ -34,6 +34,7 @@ def main(raw_cfg: DictConfig):
     policy_net = NeuralRouter(
         num_servers=cfg.system.num_servers,
         config=cfg.neural,
+        service_rates=cfg.system.service_rates,
         key=actor_key,
     )
     
