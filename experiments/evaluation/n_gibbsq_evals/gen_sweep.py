@@ -44,6 +44,7 @@ from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
+from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -166,7 +167,7 @@ class GeneralizationSweeper:
                 g_loss = float(np.mean(g_vals))
 
                 # Neural on true SSA
-                _max_ev = int((lambda_rate + _mu_np.sum()) * self.ssa_sim_time * 1.5) + 1000
+                _max_ev = compute_poisson_max_steps(lambda_rate, _mu_np, self.ssa_sim_time)
                 n_vals = []
                 for _rep in range(_cell_reps):
                     _rng = np.random.default_rng(_cell_seed + _rep)

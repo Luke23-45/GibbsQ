@@ -235,21 +235,26 @@ class NeuralSSAPolicy:
         self.active_rho = float(rho) if rho is not None else 0.0
 
         @eqx.filter_jit
-        def _forward(m, x, r):
-            return _jax.nn.softmax(m(x, rho=r))
+        def _forward(m, x, r, mu_val):
+            # m(x, ...) now returns logits. We pass mu to the model.
+            return m(x, rho=r, mu=mu_val)
 
         self._forward = _forward
 
         @functools.lru_cache(maxsize=131072)
         def _get_probs(q_tuple, rho_val):
             q_arr = jnp.array(q_tuple, dtype=jnp.float32)
-            if self.mu is not None:
-                s_feat = (q_arr + 1.0) / self.mu
-            else:
-                s_feat = q_arr
             r_tensor = jnp.array(rho_val, dtype=jnp.float32)
-            probs = self._forward(self._model, s_feat, r_tensor)
-            probs_np = np.array(probs, dtype=np.float64)
+            
+            # FIX SG#4 & SG#7: Pass raw Q and operating mu. 
+            # Encapsulation in NeuralRouter handles Sojourn math natively.
+            logits = self._forward(self._model, q_arr, r_tensor, mu_val=self.mu)
+            
+            # Apply numerically stable softmax to the returned logits
+            import numpy as np
+            logits_np = np.array(logits, dtype=np.float64)
+            logits_np = logits_np - np.max(logits_np)
+            probs_np = np.exp(logits_np)
             return probs_np / probs_np.sum()
 
         self._get_probs = _get_probs
@@ -276,9 +281,11 @@ class DeterministicNeuralPolicy:
         self._service_rates = self._mu
         self._rho = float(rho) if rho is not None else 0.0
 
-    def __call__(self, Q, rng):
-        s = (np.asarray(Q, dtype=np.float64) + 1.0) / self._mu
-        logits = self._net.numpy_forward(s, self._np_params, self._np_config, rho=self._rho, service_rates=self._service_rates)
+    def __call__(self, Q: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        # SG#4: Remove external transform; numpy_forward expects raw Q and mu
+        # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
+        mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
+        logits = self._net.numpy_forward(Q, self._np_params, self._np_config, rho=self._rho, mu=mu_val)
         best_idx = int(np.argmax(logits))
         probs = np.zeros(self._num_servers, dtype=np.float64)
         probs[best_idx] = 1.0
@@ -301,9 +308,11 @@ class StochasticNeuralPolicy:
         self._service_rates = self._mu
         self._rho = float(rho) if rho is not None else 0.0
 
-    def __call__(self, Q, rng):
-        s = (np.asarray(Q, dtype=np.float64) + 1.0) / self._mu
-        logits = self._net.numpy_forward(s, self._np_params, self._np_config, rho=self._rho, service_rates=self._service_rates)
+    def __call__(self, Q: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+        # SG#4: Remove external transform; numpy_forward expects raw Q and mu
+        # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
+        mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
+        logits = self._net.numpy_forward(Q, self._np_params, self._np_config, rho=self._rho, mu=mu_val)
         logits = logits - np.max(logits)
         probs = np.exp(logits)
         return probs / probs.sum()

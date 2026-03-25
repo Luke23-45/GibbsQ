@@ -166,7 +166,9 @@ def main(raw_cfg: DictConfig) -> None:
             mean_Q[i, j] = float(np.mean(rep_means)) if rep_means else 0.0
 
             stationarity_rate = float(np.mean(rep_stationary_flags)) if rep_stationary_flags else 0.0
-            stationary[i, j] = stationarity_rate >= cfg.verification.stationarity_threshold
+            # SG#1: Enforce stability threshold safely via the Hydra Config Source of Truth
+            threshold = float(cfg.verification.stationarity_threshold)
+            stationary[i, j] = stationarity_rate >= threshold
             
             # Export scalar metrics
             metrics = {

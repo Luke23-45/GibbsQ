@@ -102,17 +102,22 @@ class NeuralRouter(eqx.Module):
     
     def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
+        # Standardize state features (Sojourn Time proxy)
+        effective_mu = mu if mu is not None else self.service_rates
+        # SOTA: Always use Sojourn-Time features for neural policies
+        s_feat = (Q + 1.0) / effective_mu
+        
         # Preprocessing selection based on config
         if self.config.preprocessing == "log1p":
-            x = jnp.log1p(Q)
+            x = jnp.log1p(s_feat)
         elif self.config.preprocessing == "linear_min_max":
-            x = Q / self.config.capacity_bound
+            x = s_feat / self.config.capacity_bound
         elif self.config.preprocessing == "standardize":
-            mean_q = jnp.mean(Q)
-            std_q = jnp.std(Q)
-            x = (Q - mean_q) / (std_q + constants.NUMERICAL_STABILITY_EPSILON)
+            mean_s = jnp.mean(s_feat)
+            std_s = jnp.std(s_feat)
+            x = (s_feat - mean_s) / (std_s + constants.NUMERICAL_STABILITY_EPSILON)
         else:
-            x = Q
+            x = s_feat
         
         # PATCH P2: Append normalized service rates for heterogeneity awareness
         if self.config.use_service_rates:
@@ -163,34 +168,37 @@ class NeuralRouter(eqx.Module):
         return params
     
     @staticmethod
-    def numpy_forward(Q, params, config, rho=None, service_rates=None):
+    def numpy_forward(Q, params, config, mu=None, rho=None, service_rates=None, **kwargs):
         """Pure NumPy implementation of the forward pass for extreme speed in SSA loops.
         
-        PATCH P2: Added service_rates parameter for heterogeneity-aware routing.
+        Encapsulated: Automatically converts Q to Sojourn-Time features (Q+1)/mu.
         """
         import numpy as np
         
         num_servers = Q.shape[-1] if hasattr(Q, 'shape') else len(Q)
         
-        # Preprocessing
+        # FIX SG#3: Safely resolve mu, catching legacy 'service_rates' kwargs
+        effective_mu = mu if mu is not None else (service_rates if service_rates is not None else np.ones(num_servers) / num_servers)
+        effective_mu = np.asarray(effective_mu, dtype=np.float64)
+        
+        # 1. Base Feature Representation (Sojourn Time Proxy)
+        s_feat = (Q + 1.0) / effective_mu
+
+        # 2. Preprocessing
         if config.preprocessing == "log1p":
-            x = np.log1p(Q)
+            x = np.log1p(s_feat)
         elif config.preprocessing == "linear_min_max":
-            x = Q / config.capacity_bound
+            x = s_feat / config.capacity_bound
         elif config.preprocessing == "standardize":
-            mean_q = np.mean(Q)
-            std_q = np.std(Q)
-            x = (Q - mean_q) / (std_q + 1e-8)
+            mean_s = np.mean(s_feat)
+            std_s = np.std(s_feat)
+            x = (s_feat - mean_s) / (std_s + 1e-8)
         else:
-            x = np.asarray(Q, dtype=np.float64)
+            x = np.asarray(s_feat, dtype=np.float64)
 
         # PATCH P2: Append normalized service rates for heterogeneity awareness
-        if service_rates is None:
-            mu_normalized = np.ones(num_servers) / num_servers
-        else:
-            mu = np.asarray(service_rates, dtype=np.float64)
-            mu_sum = np.sum(mu)
-            mu_normalized = mu / np.where(mu_sum > 0, mu_sum, 1.0)
+        mu_sum = np.sum(effective_mu)
+        mu_normalized = effective_mu / np.where(mu_sum > 0, mu_sum, 1.0)
         x = np.concatenate([x, mu_normalized])
         
         # PI-V4: Append rho
@@ -208,11 +216,7 @@ class NeuralRouter(eqx.Module):
                 elif rho_feat.shape[0] != x.shape[0]:
                     raise ValueError(f"rho shape {rho_feat.shape} incompatible with x shape {x.shape}")
             else:  # x is 1D
-                if rho_feat.ndim > 1:
-                    raise ValueError(f"rho must be scalar for scalar input, got shape {rho_feat.shape}")
-                # Keep rho_feat as 1D for concatenation with 1D x
-            
-            x = np.concatenate([x, rho_feat], axis=-1)
+                x = np.concatenate([x, rho_feat], axis=-1)
 
         # MLP layers
         for i, (w, b) in enumerate(params):
@@ -222,6 +226,8 @@ class NeuralRouter(eqx.Module):
             if i < len(params) - 1:
                 x = np.maximum(0, x)  # ReLU
         
+        # FIX SG#5: Return RAW LOGITS for training-sampling parity.
+        # (Previously x = x - np.max(x); return np.exp(x) / np.sum(np.exp(x)))
         return x
 
 class ValueNetwork(eqx.Module):
@@ -262,7 +268,8 @@ class ValueNetwork(eqx.Module):
     
     def __call__(
         self, 
-        s: Float[Array, "dim"], 
+        Q: Float[Array, "dim"], 
+        mu: Float[Array, "dim"] = None,
         rho: Float[Array, ""] = None
     ) -> Float[Array, ""]:
         """Forward pass. Returns scalar value estimate V(s, rho).
@@ -276,21 +283,28 @@ class ValueNetwork(eqx.Module):
         
         if is_batched:
             # Batched input: use vmap with correct in_axes
-            if rho is None:
-                # Broadcast None to all batch elements
-                return jax.vmap(lambda single_s: self._single_forward(single_s, None))(s)
-            elif hasattr(rho, 'ndim') and rho.ndim > 0:
-                # rho is array - map over both s and rho
-                return jax.vmap(self._single_forward, in_axes=(0, 0))(s, rho)
-            else:
-                # rho is scalar - broadcast to all batch elements
-                return jax.vmap(lambda single_s: self._single_forward(single_s, rho))(s)
+            # BROADCAST mu: Every state in the batch uses the same service_rates_jax
+            return jax.vmap(self._single_forward, in_axes=(0, None, None))(Q, mu, rho)
         else:
             # Single input: direct call
-            return self._single_forward(s, rho)
+            return self._single_forward(Q, mu, rho)
     
-    def _single_forward(self, x, rho):
+    def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
+        # 1. Base Feature Representation (Sojourn Time Proxy)
+        # S_i = (Q_i + 1) / mu_i
+        # mu is required for ValueNetwork consistency
+        effective_mu = mu if mu is not None else jnp.ones_like(Q)
+        s_feat = (Q + 1.0) / effective_mu
+
+        # Preprocessing selection based on config
+        if self.config.preprocessing == "log1p":
+            x = jnp.log1p(s_feat)
+        elif self.config.preprocessing == "linear_min_max":
+            x = s_feat / self.config.capacity_bound
+        else:
+            x = s_feat
+
         if self.config is not None and self.config.use_rho:
             rho_val = rho if rho is not None else 0.0
             rho_feat = jnp.atleast_1d(rho_val) * self.config.rho_input_scale

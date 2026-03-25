@@ -123,8 +123,9 @@ def train_robust_bc_policy(
     @eqx.filter_jit
     def loss_fn(model, x, r, target_probs, mu_batch):
         # PATCH: Use local mu_batch so generated features match the domain randomization
-        s_feat = jax.vmap(sojourn_time_features)(x, mu_batch)
-        logits = jax.vmap(model)(s_feat, r)
+        # SG#2: Pass raw Q and explicit kwargs. 
+        # Use lambda to perfectly bind the vmap axes and protect the XLA tracer.
+        logits = jax.vmap(lambda q, m, rh: model(q, mu=m, rho=rh))(x, mu_batch, r)
         
         # Softmax over expert exact probability mass
         soft_labels = target_probs * (1.0 - label_smoothing) + (label_smoothing / num_servers)
@@ -182,14 +183,18 @@ def train_robust_bc_value(
     
     # SOTA FIX: Map instantaneous expert queue lengths to Performance Index (G_idx)
     # This precisely aligns the Critic initialization with the RL advantage target.
-    G_idx = 100.0 * (random_limit - G) / denom
+    # SG#3: Sample-specific M/M/1 limit for cross-regime Domain Randomization
+    # CRITICAL: Added jnp.maximum to prevent division by zero NaN explosions at rho=1.0
+    G_rand = jax.vmap(lambda r, m: (r / jnp.maximum(1.0 - r, 1e-6)) * (jnp.sum(m) / jnp.mean(m)))(R, MU)
+    G_den  = jnp.maximum(jax.vmap(lambda m: jnp.sum(m))(MU), 1e-6)
+    G_idx  = 100.0 * (G_rand - G) / G_den
     G_scaled = squash_scale * jnp.tanh(G_idx / squash_threshold)
 
     @eqx.filter_jit
     def loss_fn(model, x, r, g, mu_batch):
         # PATCH: Use local mu_batch so generated features match the domain randomization
-        s_feat = jax.vmap(sojourn_time_features)(x, mu_batch)
-        preds = jax.vmap(model)(s_feat, r)
+        # SG#2 Fix for Value Network: Pass raw Q and explicit kwargs.
+        preds = jax.vmap(lambda q, m, rh: model(q, mu=m, rho=rh))(x, mu_batch, r)
         loss = jnp.mean((preds - g)**2)
         return loss
 

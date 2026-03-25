@@ -62,9 +62,16 @@ def lyapunov_V(Q: np.ndarray) -> float:
     return 0.5 * float(np.dot(Q.astype(np.float64), Q.astype(np.float64)))
 
 
-def _softmax_probs(Q: np.ndarray, alpha: float) -> np.ndarray:
-    """Raw-Q softmax routing probabilities p_i = exp(-α Q_i) / Σ exp(-α Q_j)."""
-    logits = -alpha * Q.astype(np.float64)
+def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "sojourn") -> np.ndarray:
+    if mode == "sojourn":
+        feat = (Q.astype(np.float64) + 1.0) / mu
+    elif mode == "raw":
+        feat = Q.astype(np.float64)
+    else:
+        raise ValueError(f"Unknown drift mode: {mode}")
+    logits = -alpha * feat
+    # Ensure logits is a numpy array for .max() instability
+    logits = np.asarray(logits)
     logits -= logits.max()
     w = np.exp(logits)
     return w / w.sum()
@@ -75,6 +82,7 @@ def generator_drift(
     lam: float,
     mu: np.ndarray,
     alpha: float,
+    mode: str = "sojourn",
 ) -> float:
     """
     Exact generator action  𝓛V(Q).
@@ -88,7 +96,7 @@ def generator_drift(
     """
     Q_f  = Q.astype(np.float64)
     mu_f = np.asarray(mu, dtype=np.float64)
-    p    = _softmax_probs(Q, alpha)
+    p    = _softmax_probs(Q, alpha, mu_f, mode=mode)
 
     arrival_term  = lam * np.dot(p, Q_f)            # λ ⟨p, Q⟩
     service_term  = np.dot(mu_f, Q_f)               # ⟨μ, Q⟩
@@ -144,9 +152,10 @@ def verify_single(
     lam: float,
     mu: np.ndarray,
     alpha: float,
+    mode: str = "raw",
 ) -> dict:
     """Compute all three quantities and check both bound inequalities."""
-    exact = generator_drift(Q, lam, mu, alpha)
+    exact = generator_drift(Q, lam, mu, alpha, mode=mode)
     ub    = upper_bound(Q, lam, mu, alpha)
     sb    = simplified_bound(Q, lam, mu, alpha)
     TOL   = 1e-12
@@ -183,21 +192,16 @@ class DriftResult:
 #  Vectorised grid evaluation
 # ──────────────────────────────────────────────────────────────
 
-def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray) -> np.ndarray:
+def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "raw") -> np.ndarray:
     """
-    Batch softmax over M states at once using expected sojourn time.
-
-    Parameters
-    ----------
-    Q_all : ndarray, shape (M, N)
-    alpha : float
-    mu : ndarray, shape (N,)
-
-    Returns
-    -------
-    probs : ndarray, shape (M, N)
+    Batch softmax over M states at once using selected feature mode.
     """
-    logits = -alpha * Q_all.astype(np.float64)                         # (M, N)
+    if mode == "sojourn":
+        feat = (Q_all.astype(np.float64) + 1.0) / mu
+    else:
+        feat = Q_all.astype(np.float64)
+
+    logits = -alpha * feat                             # (M, N)
     logits -= logits.max(axis=1, keepdims=True)        # shift per state
     w = np.exp(logits)
     return w / w.sum(axis=1, keepdims=True)
@@ -208,6 +212,7 @@ def _vectorised_drift(
     lam:   float,
     mu:    np.ndarray,
     alpha: float,
+    mode:  str = "raw",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Compute  exact_drifts,  upper_bounds,  simplified_bounds  for
@@ -221,7 +226,7 @@ def _vectorised_drift(
     cap = mu_f.sum()
 
     # ── Exact drift ───────────────────────────────────
-    p       = _vectorised_softmax(Q, alpha, mu_f)       # (M, N)
+    p       = _vectorised_softmax(Q, alpha, mu_f, mode=mode)       # (M, N)
     pQ      = (p * Q).sum(axis=1)                       # (M,)  ⟨p, Q⟩
     muQ     = Q @ mu_f                                  # (M,)  ⟨μ, Q⟩
     active  = (Q > 0).astype(np.float64)                # (M, N)
@@ -270,7 +275,7 @@ def evaluate_grid(
     mesh = np.meshgrid(*axes, indexing="ij")
     states = np.column_stack([g.ravel() for g in mesh])   # (M, N)
 
-    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha)
+    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode="raw")
 
     violations = int(np.count_nonzero(exact > ub + 1e-12))
 
@@ -360,7 +365,7 @@ def evaluate_trajectory(
     mu_f = np.asarray(mu, dtype=np.float64)
     states = np.asarray(states, dtype=np.int64)
 
-    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha)
+    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode="raw")
 
     violations = int(np.count_nonzero(exact > ub + 1e-12))
 

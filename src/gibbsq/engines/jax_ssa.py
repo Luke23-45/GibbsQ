@@ -18,10 +18,20 @@ Mathematical Equivalences Ensured:
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+import math
 import equinox as eqx
 from typing import NamedTuple, Dict
 
 from gibbsq.core.neural_policies import NeuralRouter
+
+
+def compute_poisson_max_steps(arrival_rate: float, service_rates: np.ndarray, sim_time: float, sigma: float = 6.0) -> int:
+    """Pure Python helper to safely calculate JAX unroll bounds without XLA tracer leaks."""
+    max_rate = float(arrival_rate) + float(np.sum(service_rates))
+    expected_events = max_rate * float(sim_time)
+    # 6-sigma captures 99.9999998% of the Poisson tail. +100 is an absolute safety floor.
+    return int(math.ceil(expected_events + sigma * math.sqrt(expected_events) + 100))
 
 
 class TrajectoryBatchResult(NamedTuple):
@@ -35,6 +45,7 @@ class TrajectoryBatchResult(NamedTuple):
     total_integrated_queue: jax.Array # [Batch] - True Reward for the whole trajectory
     arrival_count: jax.Array         # [Batch]
     departure_count: jax.Array       # [Batch]
+    is_truncated: jax.Array          # [Batch] - True if simulation was cut off by max_steps
 
 
 @jax.jit
@@ -120,16 +131,13 @@ def collect_trajectory_jax(
         rng_key, key_tau, key_event = jax.random.split(rng_key, 3)
         
         # --- 1. Routing Logits via Policy Net ---
-        # Feature formulation (Sojourn Time Proxy): s_i = (Q_i + 1) / mu_i
-        # FIX: The scan iterates single trajectories, so s is strictly 1D shape (N,).
+        # Encapsulated call: policy_net now handles (Q+1)/mu internally
         # We do NOT use vmap here, as policy_net expects 1D input for a single step.
-        s = (Q + 1.0) / service_rates
-        
-        # FIX SG#1: Dynamically compute and pass the domain-randomized rho
+        # Dynamically compute and pass the domain-randomized rho
         # to ensure the policy network can adapt across capacity regimes.
-        # SG#13: Also pass service_rates for heterogeneity-aware features.
+        # Also pass service_rates for heterogeneity-aware features.
         rho_val = arrival_rate / jnp.sum(service_rates)
-        logits = policy_net(s, mu=service_rates, rho=rho_val)
+        logits = policy_net(Q, mu=service_rates, rho=rho_val)
         
         # Log-sum-exp for numerical stability
         log_probs = jax.nn.log_softmax(logits, axis=-1)
@@ -221,6 +229,10 @@ def collect_trajectory_jax(
     
     total_integrated_queue = jnp.sum(q_integrals)
     
+    # Safety Check: If the absolute last step is still valid, we ran out of array 
+    # space before crossing the sim_time horizon (Right-Censoring occurred).
+    is_truncated = valid_mask[-1]
+    
     # --- 6. Apply Causal Return Tracking ---
     returns = compute_causal_returns_jax(q_integrals, is_arrival, valid_mask, gamma)
     
@@ -234,6 +246,7 @@ def collect_trajectory_jax(
         "total_integrated_queue": total_integrated_queue,
         "arrival_count": jnp.sum(is_arrival),
         "departure_count": jnp.sum(valid_mask & ~is_arrival),
+        "is_truncated": is_truncated,
     }
 
 
@@ -280,5 +293,6 @@ def vmap_collect_trajectories(
         valid_mask=batch_outputs["valid_mask"],
         total_integrated_queue=batch_outputs["total_integrated_queue"],
         arrival_count=batch_outputs["arrival_count"],
-        departure_count=batch_outputs["departure_count"]
+        departure_count=batch_outputs["departure_count"],
+        is_truncated=batch_outputs["is_truncated"]
     )

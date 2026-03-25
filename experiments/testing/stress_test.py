@@ -198,7 +198,8 @@ def main(raw_cfg: DictConfig) -> None:
             # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
             # Formula now matches critical_load.py exactly (SG-B consistency fix).
             _base_rho_crit = cfg.stress.critical_load_base_rho
-            _rho_factor_crit = max(1.0, (1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6))
+            # SG#5: Heavy-traffic mixing time scales quadratically O(1/(1-rho)^2)
+            _rho_factor_crit = max(1.0, ((1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6))**2)
             _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, cfg.stress.critical_load_max_sim_time)
             if _sim_time_crit >= cfg.stress.critical_load_max_sim_time:
                 log.warning(

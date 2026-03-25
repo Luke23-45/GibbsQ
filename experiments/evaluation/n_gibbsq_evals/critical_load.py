@@ -29,6 +29,7 @@ from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
+from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -100,7 +101,8 @@ class CriticalLoadTest:
             # The Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
             # the many-server asymptotic regime where both N and λ grow.
             _base_rho = self.cfg.stress.critical_load_base_rho
-            _rho_factor = max(1.0, (1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))
+            # SG#5: Heavy-traffic mixing time scales quadratically O(1/(1-rho)^2)
+            _rho_factor = max(1.0, ((1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))**2)
             _uncapped_sim_time = self.ssa_sim_time * _rho_factor
             _cap = float(self.cfg.stress.critical_load_max_sim_time)
             _rho_sim_time = min(_uncapped_sim_time, _cap)
@@ -145,7 +147,7 @@ class CriticalLoadTest:
 
             # Neural on true SSA
             _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
-            _max_ev = int((float(arrival_rate) + _mu_np.sum()) * _rho_sim_time * 1.5) + 1000
+            _max_ev = compute_poisson_max_steps(float(arrival_rate), _mu_np, _rho_sim_time)
             n_vals = []
             for _rep in range(num_reps):
                 _rng = np.random.default_rng(_rho_seed + _rep)

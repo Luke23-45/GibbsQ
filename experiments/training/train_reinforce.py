@@ -184,11 +184,11 @@ def compute_gae(
     
     # 3. Compute V(s) for all states using critic (Unsquashed)
     import jax.numpy as jnp
-    from gibbsq.core.features import sojourn_time_features
     
     states_arr = np.array(states)
-    s_feat = sojourn_time_features(jnp.asarray(states_arr), jnp.asarray(service_rates))
-    v_preds = np.array(jax.vmap(value_net)(s_feat, jnp.full(len(states), rho, dtype=jnp.float32)))
+    # Encapsulated call: ValueNetwork now handles (Q+1)/mu internally
+    # Broadcast mu across the batch using in_axes=(0, None, None)
+    v_preds = np.array(jax.vmap(value_net, in_axes=(0, None, None))(jnp.asarray(states_arr), jnp.asarray(service_rates), rho))
     
     # 4. Compute TD residuals with continuous-time discounting
     # δ_t = r_t + γ^(Δt) * V(s_{t+1}) - V(s_t)
@@ -328,18 +328,14 @@ def collect_trajectory_ssa(
             probs[chosen_srv] = 1.0
             logits = np.zeros(N) # Not used but avoids UnboundLocal
         else:
-            # 1. Compute routing probabilities using sojourn-time features
-            # Use fast NumPy forward pass
-            # PATCH P2: Pass service_rates for heterogeneity awareness
-            s = (Q + 1.0) / mu
-            logits = policy_net.numpy_forward(s, np_params, np_config, rho=rho, service_rates=mu)
+            # 1. Pass Raw-Q: Encapsulation handles Sojourn-Time internally
+            logits = policy_net.numpy_forward(Q, np_params, np_config, rho=rho, mu=mu)
             
-            # PATCH P4: Apply adaptive temperature scaling based on load factor
-            # Temperature interpretation: alpha -> 0 is greedy (JSQ-like), alpha -> inf is uniform
-            temperature = compute_adaptive_alpha(rho, base_alpha=1.0)
-            logits = logits / temperature
+            # FIX SG#5 & SG#6: Apply adaptive temperature and single stable Softmax
+            # This ensures forward sampling parity with the JAX backward gradient pass.
+            temp = float(compute_adaptive_alpha(rho)) 
+            logits = logits / temp
             
-            # Log-sum-exp for numerical stability
             logits = logits - np.max(logits)
             probs = np.exp(logits)
             probs = probs / probs.sum()
@@ -815,8 +811,8 @@ class ReinforceTrainer:
                     G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
                     
                     # Precompute Critic Baselines detachably (Rho-Aware)
-                    s_feat = sojourn_time_features(S_tensor, self.service_rates_jax)
-                    v_preds = jax.lax.stop_gradient(jax.vmap(value_net)(s_feat, rho_tensor))
+                    # Use Raw Q. broadcast mu using in_axes=(0, None, None)
+                    v_preds = jax.lax.stop_gradient(jax.vmap(value_net, in_axes=(0, None, 0))(S_tensor, self.service_rates_jax, rho_tensor))
 
                     if use_gae:
                         # SOTA PATCH: GAE directly provides the centered advantage and returns
@@ -837,8 +833,9 @@ class ReinforceTrainer:
                     norm_adv = advantage_norm_fn(raw_adv)
                     
                     # Acting (PI-V4.1: Include Entropy Bonus)
-                    def policy_loss_fn(model, s_feat, rho_feat, actions, advs, traj_indices, ent_coef):
-                        logits = jax.vmap(model)(s_feat, rho_feat)
+                    def policy_loss_fn(model, Q_feat, mu_feat, rho_feat, actions, advs, traj_indices, ent_coef):
+                        # Use Raw Q + mu. broadcast mu across batch of Qs
+                        logits = jax.vmap(model, in_axes=(0, None, 0))(Q_feat, mu_feat, rho_feat)
                         
                         # SG#9 PATCH: Recalibrate logits to exactly match the forward sampling pass
                         def compute_adaptive_alpha_jax(rho, base_alpha=1.0):
@@ -900,7 +897,7 @@ class ReinforceTrainer:
                         }
 
                     (policy_loss, policy_aux), policy_grads = eqx.filter_value_and_grad(policy_loss_fn, has_aux=True)(
-                        policy_net, s_feat, rho_tensor, A_tensor, norm_adv, idx_tensor, current_entropy_coef
+                        policy_net, S_tensor, self.service_rates_jax, rho_tensor, A_tensor, norm_adv, idx_tensor, current_entropy_coef
                     )
                     # Calculate Actor Gradient Norm
                     policy_grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree_util.tree_leaves(policy_grads) if g is not None))
@@ -912,12 +909,13 @@ class ReinforceTrainer:
                     
                     # 4. PURE VECTORIZED CRITIC GRAPH
                     # SOTA PATCH: Value Loss computes difference against G_scaled (Expected Return)
-                    def value_loss_fn(model, s_feat, rho_feat, g_targets):
-                        preds = jax.vmap(model)(s_feat, rho_feat)
+                    def value_loss_fn(model, Q_feat, mu_feat, rho_feat, g_targets):
+                        # Use Raw Q + mu. broadcast mu across batch of Qs
+                        preds = jax.vmap(model, in_axes=(0, None, 0))(Q_feat, mu_feat, rho_feat)
                         return jnp.mean((preds - g_targets) ** 2)
 
                     value_loss, value_grads = eqx.filter_value_and_grad(value_loss_fn)(
-                        value_net, s_feat, rho_tensor, critic_target
+                        value_net, S_tensor, self.service_rates_jax, rho_tensor, critic_target
                     )
                     
                     # Calculate Critic Gradient Norm
@@ -1126,18 +1124,12 @@ def main(raw_cfg: DictConfig):
 if __name__ == "__main__":
     import sys
     import hydra
-
     if len(sys.argv) > 1:
-        # Standard Hydra run
         hydra.main(version_base=None, config_path="../../configs", config_name="default")(main)()
     else:
-        # Notebook / Manual run
         from hydra import compose, initialize_config_dir
         import os
         config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "configs")
-        if os.path.exists(config_dir):
-            with initialize_config_dir(config_dir=config_dir, version_base=None):
-                raw_cfg = compose(config_name="default")
-                main(raw_cfg)
-        else:
-            print(f"Error: Config directory not found at {config_dir}")
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raw_cfg = compose(config_name="default")
+            main(raw_cfg)

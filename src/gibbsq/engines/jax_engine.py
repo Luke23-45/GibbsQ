@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 
 from gibbsq.core import constants
+from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
 RATE_EPSILON = constants.RATE_GUARD_EPSILON
 
@@ -336,9 +337,8 @@ def simulate_jax(
     )
     
     import numpy as np
-    # Calculate MaxEvents dynamically using the expanded configuration tunables
-    max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
-    max_events = int(max_theoretical_rate * sim_time * max_events_multiplier) + max_events_buffer
+    # Patch: Use Poisson 6-Sigma bound for absolute mathematical safety at high load
+    max_events = compute_poisson_max_steps(arrival_rate, np.array(service_rates), sim_time)
     
     times, states, counts, is_valid = _simulate_jax_impl(
         num_servers=num_servers,
@@ -431,11 +431,8 @@ def run_replications_jax(
     
     import numpy as np
     
-    # Calculate MaxEvents dynamically for mathematical safety
-    # The maximum theoretical event rate is the arrival rate plus the sum of all service rates
-    max_theoretical_rate = arrival_rate + float(np.sum(np.array(service_rates)))
-    # Apply the configurable multiplier and buffer to account for extreme stochasticity
-    max_events = int(max_theoretical_rate * sim_time * max_events_multiplier) + max_events_buffer
+    # Patch: Use Poisson 6-Sigma bound for absolute mathematical safety at high load
+    max_events = compute_poisson_max_steps(arrival_rate, np.array(service_rates), sim_time)
     
     times, states, counts, is_valid = _run_replications_jax_impl(
         num_replications=num_replications,

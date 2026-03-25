@@ -29,7 +29,7 @@ from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import sojourn_time_features
 from gibbsq.utils.logging import setup_wandb, get_run_config
-from gibbsq.engines.jax_ssa import vmap_collect_trajectories
+from gibbsq.engines.jax_ssa import vmap_collect_trajectories, compute_poisson_max_steps
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def compute_reinforce_gradient(
     n_samples: int,
     base_seed: int,
     cfg: Any, # Passed down for thresholds
-) -> tuple[np.ndarray, float, float]:
+) -> tuple[np.ndarray, float, float, np.ndarray]:
     """Optimized REINFORCE gradient using JAX Chunked Vectorized Execution."""
     from jax.flatten_util import ravel_pytree
     import jax
@@ -67,7 +67,8 @@ def compute_reinforce_gradient(
     
     # 1. Chunking configuration to prevent Out-Of-Memory (OOM)
     chunk_size = cfg.verification.gradient_check_chunk_size
-    max_steps = cfg.verification.gradient_check_max_steps
+    # Patch: Dynamically compute safe hardware bounds using 6-Sigma Poisson tail
+    max_steps = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
     
     keys = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
     service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
@@ -119,18 +120,15 @@ def compute_reinforce_gradient(
         def loss_fn(theta):
             # 2. DIFFERENTIATE: Score function term grad(log π(a|s))
             m = unravel(theta)
-            s_feat = (fixed_states + 1.0) / service_rates_jax
             
             # Application
-            # s_feat shape: (batch, step, N)
-            # m(Q, mu, rho) -> logits
             # We need to map over batch and step, but broadcast mu and rho
+            # SG#13 FIX: in_axes=(0, None, None) safely broadcasts mu and rho across the entire batch
             inner_vmap = jax.vmap(m, in_axes=(0, None, None))
             v_model = jax.vmap(inner_vmap, in_axes=(0, None, None))
             
-            # SG#13 FIX: Pass rho and mu to ensure consistency with JAX SSA engine
             rho_val = arrival_rate / jnp.sum(service_rates_jax)
-            logits = v_model(s_feat, service_rates_jax, rho_val)
+            logits = v_model(fixed_states, service_rates_jax, rho_val)
             log_probs = jax.nn.log_softmax(logits, axis=-1)
             
             # Gather log_prob(a_t | s_t)
@@ -239,7 +237,8 @@ def compute_finite_difference_gradient(
     
     # 1. Chunking config
     chunk_size = cfg.verification.gradient_check_chunk_size
-    max_steps = cfg.verification.gradient_check_max_steps
+    # Patch: Dynamically compute safe hardware bounds using 6-Sigma Poisson tail
+    max_steps = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
     
     # Pre-generate keys arrays to prevent variance drift across parameters
     # CRN: Use SAME keys for both perturbations
@@ -284,7 +283,8 @@ def compute_finite_difference_gradient(
         chunk_arr = np.array(chunk_sums)
         n_chunks = len(chunk_sums)
         if n_chunks > 1:
-            chunk_var = np.var(chunk_arr) / (float(chunk_size)**2 * n_chunks)
+            # NASA-Grade: Use ddof=1 for mathematically unbiased sample variance
+            chunk_var = np.var(chunk_arr, ddof=1) / (float(chunk_size)**2 * n_chunks)
         else:
             chunk_var = 0.0
         
@@ -310,9 +310,6 @@ def compute_finite_difference_gradient(
         # Since R+ and R- share keys, they are highly correlated (CRN).
         # We assume independent for a conservative (higher) variance estimate:
         fd_var[param_idx] = (var_plus + var_minus) / (4 * epsilon**2)
-        # For Z-score calculation, use unscaled variance (variance of mean return)
-        # The epsilon scaling is a numerical artifact, not statistical
-        fd_var_unscaled = (var_plus + var_minus) / 2.0
         
         computed_mask[param_idx] = True
         
@@ -323,17 +320,15 @@ def compute_finite_difference_gradient(
             rf_val = float(reinforce_grad[param_idx])
             fd_val = float(grad[param_idx])
             abs_diff = abs(rf_val - fd_val)
-            rel_err_p = abs_diff / max(1e-12, abs(fd_val))
             
-            # Running Aggregate Stats
-            mask = computed_mask
-            rf_sub = reinforce_grad[mask]
-            fd_sub = grad[mask]
+            # Compute running subset metrics
+            indices_done = selected_indices[:i+1]
+            rf_sub = reinforce_grad[indices_done]
+            fd_sub = grad[indices_done]
             
-            # Running L2 Relative Error
             diff_norm = np.linalg.norm(rf_sub - fd_sub)
             fd_norm_sub = np.linalg.norm(fd_sub)
-            running_rel_err = diff_norm / fd_norm_sub if fd_norm_sub > 1e-9 else 0.0
+            rel_err_p = diff_norm / fd_norm_sub if fd_norm_sub > 1e-9 else 0.0
             
             # Running Cosine Similarity
             rf_norm_sub = np.linalg.norm(rf_sub)
@@ -345,11 +340,11 @@ def compute_finite_difference_gradient(
             # Statistical Significance (Z-score)
             if reinforce_var is not None and reinforce_var[param_idx] > 1e-11:
                 # POOLED STANDARD ERROR: Accounting for BOTH REINFORCE and FD variance
+                # reinforce_var is single-sample variance -> divide by N
                 rf_std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
-                # FIX: Use unscaled variance for Z-score (not epsilon-scaled)
-                # The epsilon scaling is a numerical artifact; for statistical
-                # comparison we need the variance of the mean estimate
-                fd_std_err = np.sqrt(fd_var_unscaled)  # Use unscaled variance
+                
+                # fd_var is ALREADY the exact variance of the mean gradient estimate
+                fd_std_err = np.sqrt(fd_var[param_idx]) 
                 pooled_std_err = np.sqrt(rf_std_err**2 + fd_std_err**2)
                 
                 z_score = abs_diff / max(1e-12, pooled_std_err)
@@ -364,7 +359,7 @@ def compute_finite_difference_gradient(
             
             log.info(
                 f"  {status} Param {i+1:3}/{len(selected_indices):<3} (idx {param_idx:5}): "
-                f"RF={rf_val:10.6f} | FD={fd_val:10.6f} | diff={abs_diff:10.6f}{z_str} | RelErr={running_rel_err:7.4f} | CosSim={running_cos_sim:7.4f}"
+                f"RF={rf_val:10.6f} | FD={fd_val:10.6f} | diff={abs_diff:10.6f}{z_str} | RelErr={rel_err_p:7.4f} | CosSim={running_cos_sim:7.4f}"
             )
     
     
@@ -431,8 +426,10 @@ def run_gradient_check(
     z_base = stats.norm.ppf(1.0 - (alpha / (2.0 * base_test)))
     z_new = stats.norm.ppf(1.0 - (alpha / (2.0 * n_test)))
     
-    # Scale N proportional to the squared critical Z-score to maintain bounds
-    scaled_n_samples = base_samples * (z_new**2 / z_base**2)
+    # Scale N proportional to the squared critical Z-score to maintain FWER bounds.
+    # CRITICAL FIX: We must floor the scaling at 1.0 to preserve the absolute 
+    # geometric signal-to-noise ratio required for the Cosine Similarity check.
+    scaled_n_samples = base_samples * max(1.0, (z_new**2 / z_base**2))
     chunk_size = cfg.verification.gradient_check_chunk_size
     n_samples = int(np.ceil(scaled_n_samples / chunk_size) * chunk_size)
     
