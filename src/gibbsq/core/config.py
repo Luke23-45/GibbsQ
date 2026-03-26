@@ -57,6 +57,7 @@ class PolicyName(str, Enum):
     JSQ           = "jsq"
     POWER_OF_D    = "power_of_d"
     SOJOURN_SOFTMAX = "sojourn_softmax"
+    UAS           = "uas"
 
 
 # ──────────────────────────────────────────────────────────────
@@ -621,19 +622,28 @@ def drift_constant_R(cfg: ExperimentConfig) -> float:
     """
     R = (λ log N) / α  +  C₁
 
-    where  C₁ = (λ + Λ) / 2.    [proof, Step 4]
+    Standard:    C₁ = (λ + Λ) / 2
+    Archimedean: C₁ = λ/(2·min_μ) + N/2
     """
     s = cfg.system
-    C1 = (s.arrival_rate + total_capacity(cfg)) / 2.0
+    if cfg.policy.name == PolicyName.UAS.value:
+        min_mu = min(s.service_rates)
+        C1 = (s.arrival_rate / (2.0 * min_mu)) + (s.num_servers / 2.0)
+    else:
+        C1 = (s.arrival_rate + total_capacity(cfg)) / 2.0
     return (s.arrival_rate * math.log(s.num_servers)) / s.alpha + C1
 
 
 def drift_rate_epsilon(cfg: ExperimentConfig) -> float:
     """
     ε = min( (Λ − λ) / N,  min_i μ_i )   > 0    [proof, Step 5]
+
+    For UAS, the effective service rate in the weighted space is 1.0.
     """
     s = cfg.system
     cap = total_capacity(cfg)
+    if cfg.policy.name == PolicyName.UAS.value:
+        return (cap - s.arrival_rate) / cap  # Roughly matching service-rate of 1.0
     return min(
         (cap - s.arrival_rate) / s.num_servers,
         min(s.service_rates),

@@ -25,7 +25,7 @@ simulation:
     temperature: 0.5
 
 policy:
-  name: sojourn_softmax
+  name: uas
   d: 2
 
 drift:

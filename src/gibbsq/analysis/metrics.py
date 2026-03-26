@@ -179,9 +179,9 @@ def stationarity_diagnostic(
         }
 
     chunk_size = n // num_windows
-    # Truncate slight remainder
-    q_tot = q_tot[:chunk_size * num_windows]
-    windows = q_tot.reshape((num_windows, chunk_size))
+    # Truncate slight remainder - ensure integer type for slicing
+    q_tot = q_tot[:int(chunk_size * num_windows)]
+    windows = q_tot.reshape((int(num_windows), int(chunk_size)))
     means = windows.mean(axis=1)
 
     x = np.arange(num_windows)

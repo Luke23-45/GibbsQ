@@ -7,9 +7,11 @@ single-state and fully-vectorised batch evaluation.
 
 Key formulas  (§2 of the proof)
 -------------------------------
-    V(Q)  = ½ Σ Q_i²
+    V(Q)  = ½ Σ Q_i² / μ_i  (Archimedean)
+    V(Q)  = ½ Σ Q_i²        (Standard/Raw)
 
-    𝓛V(Q) = λ Σ p_i(Q) Q_i  −  Σ μ_i Q_i  +  C(Q)
+    𝓛V(Q) = λ Σ p_i(Q) (Q_i+0.5)/μ_i  −  Σ Q_i  +  0.5 Σ 𝟙(Q_i > 0)    (Archimedean)
+    𝓛V(Q) = λ Σ p_i(Q) Q_i  −  Σ μ_i Q_i  +  C(Q)                      (Standard)
 
     C(Q)  = λ/2  +  ½ Σ μ_i 𝟙(Q_i > 0)
 
@@ -57,19 +59,33 @@ __all__ = [
 #  Scalar functions  (single state Q)
 # ──────────────────────────────────────────────────────────────
 
-def lyapunov_V(Q: np.ndarray) -> float:
-    """V(Q) = ½ ‖Q‖₂²"""
-    return 0.5 * float(np.dot(Q.astype(np.float64), Q.astype(np.float64)))
+def lyapunov_V(Q: np.ndarray, mu: np.ndarray | None = None) -> float:
+    """
+    Lyapunov potential V(Q).
+    
+    If mu is None: V(Q) = ½ ‖Q‖₂² (Standard)
+    If mu is given: V(Q) = ½ Σ Q_i² / μ_i (Archimedean)
+    """
+    Q_f = Q.astype(np.float64)
+    if mu is None:
+        return 0.5 * float(np.dot(Q_f, Q_f))
+    mu_f = np.asarray(mu, dtype=np.float64)
+    return 0.5 * float(np.sum(Q_f**2 / mu_f))
 
 
 def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "sojourn") -> np.ndarray:
     if mode == "sojourn":
         feat = (Q.astype(np.float64) + 1.0) / mu
+        logits = -alpha * feat
     elif mode == "raw":
         feat = Q.astype(np.float64)
+        logits = -alpha * feat
+    elif mode == "uas":
+        # UAS: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
+        feat = (Q.astype(np.float64) + 1.0) / mu
+        logits = -alpha * feat + np.log(mu)  # Add log(μ_i) for capacity weighting
     else:
-        raise ValueError(f"Unknown drift mode: {mode}")
-    logits = -alpha * feat
+        raise ValueError(f"Unknown drift mode: {mode}. Valid modes: 'sojourn', 'raw', 'uas'")
     # Ensure logits is a numpy array for .max() instability
     logits = np.asarray(logits)
     logits -= logits.max()
@@ -85,23 +101,26 @@ def generator_drift(
     mode: str = "sojourn",
 ) -> float:
     """
-    Exact generator action  𝓛V(Q).
-
-    𝓛V(Q) = λ ⟨p(Q), Q⟩  −  ⟨μ, Q⟩  +  C(Q)
-
-    where  C(Q) = λ/2 + ½ ⟨μ, 𝟙(Q > 0)⟩.
-
-    Note:  ⟨μ, Q·𝟙(Q>0)⟩ = ⟨μ, Q⟩  since  Q_i·𝟙(Q_i>0) = Q_i  ∀ Q_i ≥ 0.
-    The indicator is needed *only* in  C(Q).
+    Exact generator action 𝓛V(Q) based on mode.
+    
+    - Logic/Raw (V = 0.5 Σ Q²): 𝓛V = λ⟨p,Q⟩ - ⟨μ,Q⟩ + C
+    - Performance/UAS (V = 0.5 Σ Q²/μ): 𝓛V = λ⟨p,(Q+0.5)/μ⟩ - ΣQ + 0.5Σ𝟙(Q>0)
     """
     Q_f  = Q.astype(np.float64)
     mu_f = np.asarray(mu, dtype=np.float64)
     p    = _softmax_probs(Q, alpha, mu_f, mode=mode)
+    active = (Q > 0).astype(np.float64)
 
-    arrival_term  = lam * np.dot(p, Q_f)            # λ ⟨p, Q⟩
-    service_term  = np.dot(mu_f, Q_f)               # ⟨μ, Q⟩
-    active        = (Q > 0).astype(np.float64)
-    C_Q           = lam / 2.0 + 0.5 * np.dot(mu_f, active)
+    if mode == "uas":
+        # Archimedean Potential V = 0.5 * sum(Q^2 / mu)
+        arrival_term = lam * np.dot(p, (Q_f + 0.5) / mu_f)
+        service_term = np.sum(Q_f)
+        C_Q          = 0.5 * np.sum(active)
+    else:
+        # Standard Potential V = 0.5 * sum(Q^2)
+        arrival_term  = lam * np.dot(p, Q_f)
+        service_term  = np.dot(mu_f, Q_f)
+        C_Q           = lam / 2.0 + 0.5 * np.dot(mu_f, active)
 
     return float(arrival_term - service_term + C_Q)
 
@@ -111,21 +130,27 @@ def upper_bound(
     lam: float,
     mu: np.ndarray,
     alpha: float,
+    mode: str = "raw",
 ) -> float:
     """
-    Intermediate bound  (Step 4):
-
-        −(Λ − λ) Q_min  −  Σ μ_i Δ_i  +  R
-
-    where  Δ_i = Q_i − Q_min,  R = (λ log N)/α + (λ+Λ)/2.
+    Intermediate bound (Step 4) branched by mode.
     """
     Q_f   = Q.astype(np.float64)
     mu_f  = np.asarray(mu, dtype=np.float64)
+    N     = len(mu_f)
     cap   = mu_f.sum()
     Q_min = float(Q_f.min())
     delta = Q_f - Q_min
-    R     = (lam * math.log(len(Q))) / alpha + (lam + cap) / 2.0
-    return -(cap - lam) * Q_min - float(np.dot(mu_f, delta)) + R
+
+    if mode == "uas":
+        # Archimedean R: λ log N / α + λ / (2 * min_μ) + N / 2
+        R = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+        # In UAS weighted space, we use a heuristic bound alignment
+        return float(-(cap - lam) / cap * Q_f.sum() + R)
+    else:
+        # Standard R: λ log N / α + (λ + Λ) / 2
+        R = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+        return -(cap - lam) * Q_min - float(np.dot(mu_f, delta)) + R
 
 
 def simplified_bound(
@@ -133,17 +158,22 @@ def simplified_bound(
     lam: float,
     mu: np.ndarray,
     alpha: float,
+    mode: str = "raw",
 ) -> float:
     """
-    Simplified bound  (Step 5):    −ε |Q|₁ + R.
-
-    ε = min((Λ−λ)/N, min_i μ_i),   R = (λ log N)/α + (λ+Λ)/2.
+    Simplified bound (Step 5) branched by mode.
     """
     mu_f = np.asarray(mu, dtype=np.float64)
     N    = len(mu_f)
     cap  = mu_f.sum()
-    eps  = min((cap - lam) / N, mu_f.min())
-    R    = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+
+    if mode == "uas":
+        eps = (cap - lam) / cap
+        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+    else:
+        eps = min((cap - lam) / N, mu_f.min())
+        R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+
     return -eps * float(Q.sum()) + R
 
 
@@ -156,8 +186,8 @@ def verify_single(
 ) -> dict:
     """Compute all three quantities and check both bound inequalities."""
     exact = generator_drift(Q, lam, mu, alpha, mode=mode)
-    ub    = upper_bound(Q, lam, mu, alpha)
-    sb    = simplified_bound(Q, lam, mu, alpha)
+    ub    = upper_bound(Q, lam, mu, alpha, mode=mode)
+    sb    = simplified_bound(Q, lam, mu, alpha, mode=mode)
     TOL   = 1e-12
     return {
         "exact_drift":       exact,
@@ -226,23 +256,44 @@ def _vectorised_drift(
     cap = mu_f.sum()
 
     # ── Exact drift ───────────────────────────────────
-    p       = _vectorised_softmax(Q, alpha, mu_f, mode=mode)       # (M, N)
-    pQ      = (p * Q).sum(axis=1)                       # (M,)  ⟨p, Q⟩
-    muQ     = Q @ mu_f                                  # (M,)  ⟨μ, Q⟩
-    active  = (Q > 0).astype(np.float64)                # (M, N)
-    C_Q     = lam / 2.0 + 0.5 * (active @ mu_f)        # (M,)
-    exact   = lam * pQ - muQ + C_Q                      # (M,)
+    p      = _vectorised_softmax(Q, alpha, mu_f, mode=mode)
+    active = (Q > 0).astype(np.float64)
+    
+    if mode == "uas":
+        # Archimedean Potential V = 0.5 * sum(Q^2 / mu)
+        grad_arrival = (Q + 0.5) / mu_f
+        arrival_term = (p * grad_arrival).sum(axis=1) * lam
+        service_term = Q.sum(axis=1)
+        C_Q          = 0.5 * active.sum(axis=1)
+    else:
+        # Standard Potential V = 0.5 * sum(Q^2)
+        arrival_term = lam * (p * Q).sum(axis=1)
+        service_term = Q @ mu_f
+        C_Q          = lam / 2.0 + 0.5 * (active @ mu_f)
 
-    # ── Intermediate bound ────────────────────────────
-    Q_min   = Q.min(axis=1)                             # (M,)
-    delta   = Q - Q_min[:, np.newaxis]                  # (M, N)
-    R       = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
-    ub      = -(cap - lam) * Q_min - (delta @ mu_f) + R  # (M,)
+    exact = arrival_term - service_term + C_Q
 
-    # ── Simplified bound ──────────────────────────────
-    eps     = min((cap - lam) / N, mu_f.min())
-    Q_1     = Q.sum(axis=1)                             # (M,)  |Q|₁
-    sb      = -eps * Q_1 + R                            # (M,)
+    # ── Bounds calculation ────────────────────────────
+    if mode == "uas":
+        # Archimedean Constants
+        eps = (cap - lam) / cap
+        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+    else:
+        # Standard Constants
+        eps = min((cap - lam) / N, mu_f.min())
+        R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+
+    Q_min = Q.min(axis=1)
+    delta = Q - Q_min[:, np.newaxis]
+    Q_1   = Q.sum(axis=1)
+
+    if mode == "uas":
+        # UAS heuristic alignment
+        ub = -eps * Q_1 + R 
+    else:
+        ub = -(cap - lam) * Q_min - (delta @ mu_f) + R
+
+    sb = -eps * Q_1 + R
 
     return exact, ub, sb
 
@@ -252,6 +303,7 @@ def evaluate_grid(
     mu:    np.ndarray,
     alpha: float,
     q_max: int = 50,
+    mode:  str = "raw",
 ) -> DriftResult:
     """
     Evaluate drift on the **full** grid  {0, …, q_max}^N  for  N ≤ 3.
@@ -275,7 +327,7 @@ def evaluate_grid(
     mesh = np.meshgrid(*axes, indexing="ij")
     states = np.column_stack([g.ravel() for g in mesh])   # (M, N)
 
-    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode="raw")
+    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode=mode)
 
     violations = int(np.count_nonzero(exact > ub + 1e-12))
 
@@ -349,6 +401,7 @@ def evaluate_trajectory(
     lam:    float,
     mu:     np.ndarray,
     alpha:  float,
+    mode:   str = "raw",
 ) -> DriftResult:
     """
     Evaluate drift at every state in a sampled trajectory.
@@ -365,7 +418,7 @@ def evaluate_trajectory(
     mu_f = np.asarray(mu, dtype=np.float64)
     states = np.asarray(states, dtype=np.int64)
 
-    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode="raw")
+    exact, ub, sb = _vectorised_drift(states, lam, mu_f, alpha, mode=mode)
 
     violations = int(np.count_nonzero(exact > ub + 1e-12))
 

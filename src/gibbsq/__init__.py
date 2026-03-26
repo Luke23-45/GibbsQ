@@ -18,7 +18,7 @@ __all__ = [
     "validate", "total_capacity", "load_factor", "drift_constant_R", "drift_rate_epsilon",
     "hydra_to_config",
     # Policies
-    "make_policy", "SoftmaxRouting", "UniformRouting", "ProportionalRouting", "JSQRouting", "PowerOfDRouting", "JSSQRouting", "SojournTimeSoftmaxRouting",
+    "make_policy", "SoftmaxRouting", "UniformRouting", "ProportionalRouting", "JSQRouting", "PowerOfDRouting", "JSSQRouting", "SojournTimeSoftmaxRouting", "UASRouting",
     # Simulator
     "simulate", "run_replications", "SimResult",
     "simulate_jax", "run_replications_jax",

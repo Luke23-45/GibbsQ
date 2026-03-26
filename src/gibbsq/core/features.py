@@ -192,6 +192,75 @@ def softmax_on_sojourn_numpy(
     return weights / np.sum(weights)
 
 
+def softmax_on_sojourn_uas(
+    Q: Float[Array, "..."],
+    mu: Float[Array, "..."],
+    alpha: float,
+) -> Float[Array, "..."]:
+    """
+    Compute UAS (Unified Archimedean Softmax) routing probabilities.
+    
+    This is the capacity-weighted GibbsQ policy for heterogeneous servers:
+    
+        p_i(Q) ∝ μ_i · exp(-α · s_i) = μ_i · exp(-α · (Q_i + 1) / μ_i)
+    
+    The μ_i weighting provides capacity-aware routing: faster servers
+    receive proportionally more traffic even when sojourn times are equal.
+    
+    Parameters
+    ----------
+    Q : Float[Array, "..."]
+        Queue length vector, shape (N,).
+    mu : Float[Array, "..."]
+        Service rate vector, shape (N,).
+    alpha : float
+        Inverse temperature parameter. Higher α means more aggressive
+        routing to the shortest-sojourn server.
+    
+    Returns
+    -------
+    Float[Array, "N"]
+        Routing probabilities that sum to 1.0.
+    
+    Examples
+    --------
+    >>> Q = np.array([5, 3, 0])
+    >>> mu = np.array([1.0, 2.0, 3.0])
+    >>> softmax_on_sojourn_uas(Q, mu, alpha=1.0)
+    array([...])  # Probability weighted by capacity
+    """
+    s = sojourn_time_features(Q, mu)
+    
+    # Log-sum-exp trick for numerical stability
+    # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
+    logits = -alpha * s + jnp.log(mu)
+    logits = logits - jnp.max(logits)  # shift for stability
+    weights = jnp.exp(logits)
+    
+    return weights / jnp.sum(weights)
+
+
+def softmax_on_sojourn_uas_numpy(
+    Q: np.ndarray,
+    mu: np.ndarray,
+    alpha: float,
+) -> np.ndarray:
+    """
+    NumPy-only version of softmax_on_sojourn_uas.
+    
+    See `softmax_on_sojourn_uas` for full documentation.
+    """
+    s = sojourn_time_features_numpy(Q, mu)
+    
+    # Log-sum-exp trick for numerical stability
+    # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
+    logits = -alpha * s + np.log(mu)
+    logits = logits - np.max(logits)
+    weights = np.exp(logits)
+    
+    return weights / np.sum(weights)
+
+
 def compute_advantage(
     Q: Float[Array, "N"],
     server_idx: int,
@@ -243,5 +312,7 @@ __all__ = [
     "sojourn_time_features_numpy",
     "softmax_on_sojourn",
     "softmax_on_sojourn_numpy",
+    "softmax_on_sojourn_uas",
+    "softmax_on_sojourn_uas_numpy",
     "compute_advantage",
 ]

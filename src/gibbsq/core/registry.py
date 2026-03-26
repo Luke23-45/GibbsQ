@@ -141,6 +141,10 @@ class ComponentRegistry:
             if mu is None:
                 raise ValueError("SojournTimeSoftmax routing requires 'mu'")
             return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
+        elif name == "uas":
+            if mu is None:
+                raise ValueError("UAS routing requires 'mu'")
+            return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
         else:
             # Generic fallback: try no-arg constructor
             return policy_cls()

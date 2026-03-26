@@ -42,8 +42,8 @@ def _validate_inputs(
         raise ValueError(f"sample_interval must be > 0, got {sample_interval}")
     if max_samples < 1:
         raise ValueError(f"max_samples must be >= 1, got {max_samples}")
-    if policy_type not in (0, 1, 2, 3, 4, 5):
-        raise ValueError(f"policy_type must be one of 0..5, got {policy_type}")
+    if policy_type not in (0, 1, 2, 3, 4, 5, 6):
+        raise ValueError(f"policy_type must be one of 0..6, got {policy_type}")
     if d < 1:
         raise ValueError(f"d must be >= 1, got {d}")
 
@@ -133,6 +133,17 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         # Previously used Q/mu which was inconsistent (shifted input domain).
         sojourn = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
         logits = -params.alpha * sojourn
+        max_logit = jnp.max(logits)
+        exp_logits = jnp.exp(logits - max_logit)
+        return exp_logits / jnp.sum(exp_logits)
+        
+    elif params.policy_type == 6:  # UAS (Unified Archimedean Softmax)
+        # UAS formula: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
+        # The μ_i weighting provides capacity-aware routing
+        sojourn = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
+        logits = -params.alpha * sojourn
+        # Add log(μ_i) to logits = μ_i * exp(...) in log space
+        logits = logits + jnp.log(params.service_rates)
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)

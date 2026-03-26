@@ -38,7 +38,7 @@ docs/logs
 .DS_Store
 Thumbs.db
 outputs
-# ledger
+ledger
 
 docs/PROPOSED
 UAS_FINAL_AUDIT_REPORT.md
