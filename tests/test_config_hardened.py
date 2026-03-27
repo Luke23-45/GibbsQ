@@ -598,3 +598,46 @@ class TestPolicyNameEnum:
         assert PolicyName("softmax") == PolicyName.SOFTMAX
         assert PolicyName("uniform") == PolicyName.UNIFORM
         assert PolicyName("jsq") == PolicyName.JSQ
+
+
+class TestSweepDomainGuards:
+    """Validation hardening for sweep/generalization/stress derived-load domains."""
+
+    def test_rejects_out_of_range_stability_rho(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.stability_sweep.rho_vals = [0.9, 1.0]
+        with pytest.raises(ValueError, match="stability_sweep.rho_vals\\[1\\]"):
+            validate(cfg)
+
+    def test_rejects_non_positive_sweep_alpha(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.stability_sweep.alpha_vals = [0.5, 0.0]
+        with pytest.raises(ValueError, match="stability_sweep.alpha_vals\\[1\\]"):
+            validate(cfg)
+
+    def test_rejects_out_of_range_generalization_rho(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.generalization.rho_grid_vals = [0.5, 1.2]
+        with pytest.raises(ValueError, match="generalization.rho_grid_vals\\[1\\]"):
+            validate(cfg)
