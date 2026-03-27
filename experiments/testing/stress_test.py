@@ -106,15 +106,15 @@ def main(raw_cfg: DictConfig) -> None:
     # TEST 1: MASSIVE-N SCALING
     # ─────────────────────────────────────────────────────────────────────────
     log.info("\n[TEST 1] Massive-N Scaling Analysis")
-    n_targets = [cfg.stress.n_values[0]] if raw_cfg.get("debug", False) else cfg.stress.n_values
+    n_targets = cfg.stress.n_values
 
     for N in n_targets:
         mu = jnp.ones(N) * 2.0          # normalised service rate
         lam = cfg.stress.massive_n_rho * float(jnp.sum(mu))
 
-        # PATCH SG1: Apply the documented reduction to 500 s (non-debug).
+        # PATCH SG1: Use config-defined sim_time for massive-N scaling.
         # cfg.simulation.ssa.sim_time (5000 s) causes O(N×T) OOM for N>=512.
-        _sim_time_t1 = 100.0 if raw_cfg.get("debug", False) else cfg.stress.massive_n_sim_time
+        _sim_time_t1 = cfg.stress.massive_n_sim_time
         max_samples_t1 = int(_sim_time_t1 / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating N={N} experts (rho={cfg.stress.massive_n_rho})...")
@@ -178,37 +178,28 @@ def main(raw_cfg: DictConfig) -> None:
     mu_fixed = jnp.ones(N_fixed)
     cap_fixed = float(jnp.sum(mu_fixed))
 
-    rho_targets = [cfg.stress.critical_rhos[0]] if raw_cfg.get("debug", False) else cfg.stress.critical_rhos
+    rho_targets = cfg.stress.critical_rhos
 
     for rho in rho_targets:
         lam = rho * cap_fixed
 
         # Near-critical systems need longer horizons to reach stationarity.
         # PATCH BUG-2: use _STRESS_SAMPLE_INTERVAL, not cfg.simulation.sample_interval.
-        # old:  max_samples = int(sim_time_critical / cfg.simulation.sample_interval) + 1
-        #       → up to 1 000 001 for rho > 0.99
-        # new:  max_samples = int(sim_time_critical / 1.0) + 1
-        #       → up to 50 001 for rho > 0.99
-        if raw_cfg.get("debug", False):
-            _sim_time_crit = 500.0
-        else:
-            # PATCH SG-B: linear mixing-time scaling O(1/(1-ρ)) for fixed-N
-            # birth-death chains (spectral gap γ = Θ(1-ρ) → τ_mix = O(1/(1-ρ))).
-            # The quadratic O(1/(1-ρ)²) is only valid in the Halfin-Whitt
-            # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
-            # Formula now matches critical_load.py exactly (SG-B consistency fix).
-            # Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
-            # the many-server asymptotic regime where both N and λ grow.
-            _base_rho_crit = cfg.stress.critical_load_base_rho
-            _rho_factor_crit = max(1.0, ((1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6)))
-            _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, cfg.stress.critical_load_max_sim_time)
-            if _sim_time_crit >= cfg.stress.critical_load_max_sim_time:
-                log.warning(
-                    f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
-                    f"(linear mixing time ~ {cfg.simulation.ssa.sim_time * _rho_factor_crit:.0f}s). "
-                    f"E[Q] near criticality may be underestimated. "
-                    f"Report only rho<=0.999 and add mixing-time caveat."
-                )
+        # PATCH SG-B: linear mixing-time scaling O(1/(1-ρ)) for fixed-N
+        # birth-death chains (spectral gap γ = Θ(1-ρ) → τ_mix = O(1/(1-ρ))).
+        # The quadratic O(1/(1-ρ)²) is only valid in the Halfin-Whitt
+        # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
+        # Formula now matches critical_load.py exactly (SG-B consistency fix).
+        _base_rho_crit = cfg.stress.critical_load_base_rho
+        _rho_factor_crit = max(1.0, ((1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6)))
+        _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, cfg.stress.critical_load_max_sim_time)
+        if _sim_time_crit >= cfg.stress.critical_load_max_sim_time:
+            log.warning(
+                f"  [!] rho={rho:.4f}: sim_time capped at 100,000s "
+                f"(linear mixing time ~ {cfg.simulation.ssa.sim_time * _rho_factor_crit:.0f}s). "
+                f"E[Q] near criticality may be underestimated. "
+                f"Report only rho<=0.999 and add mixing-time caveat."
+            )
 
         max_samples_crit = int(_sim_time_crit / cfg.stress.sample_interval) + 1
 
@@ -326,8 +317,8 @@ def main(raw_cfg: DictConfig) -> None:
     #       max_samples=int(10000.0 / cfg.simulation.sample_interval) + 1  ← hardcoded 10000!
     # new:  _sim_time_het = ... (same conditional)
     #       max_samples=int(_sim_time_het / _STRESS_SAMPLE_INTERVAL) + 1   ← consistent
-    # PATCH 2026-03-14: reduced from 10000→1000 (debug: 1000→500).
-    _sim_time_het = 500.0 if raw_cfg.get("debug", False) else cfg.stress.heterogeneity_sim_time
+    # PATCH 2026-03-14: reduced from 10000→1000.
+    _sim_time_het = cfg.stress.heterogeneity_sim_time
     max_samples_het = int(_sim_time_het / cfg.stress.sample_interval) + 1    # PATCH
 
     times, states, (arrs, deps) = sharded_replications(

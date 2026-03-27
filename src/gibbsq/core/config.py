@@ -181,7 +181,7 @@ class JAXEngineConfig:
     max_events_safety_multiplier: float = 1.5
     max_events_additive_buffer: int = 1000
     # 16 gives P(miss | a0=1.0, interval=1.0) = exp(-16) < 2e-7 per event —
-    # covers the worst-case debug configs while adding negligible no-op iterations.
+    # covers the worst-case quick validation configs while adding negligible no-op iterations.
     scan_sampling_chunk: int = 16
 
 @dataclass(frozen=True)
@@ -417,7 +417,6 @@ class ExperimentConfig:
     neural_training: NeuralTrainingConfig = field(default_factory=NeuralTrainingConfig)
     output_dir:   str              = "outputs"
     log_dir:      str              = "logs"
-    debug:        bool             = False
     train_epochs: int              = 30
     batch_size:   int              = 16
 
@@ -758,7 +757,6 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         neural_training=NeuralTrainingConfig(**d.get("neural_training", {})),
         output_dir=d.get("output_dir", "outputs"),
         log_dir=d.get("log_dir", "logs"),
-        debug=d.get("debug", False),
         train_epochs=d.get("train_epochs", 30),
         batch_size=d.get("batch_size", 16),
     )

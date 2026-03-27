@@ -1,4 +1,4 @@
-# Fast debug configuration - optimized for quick iteration
+# Fast validation configuration - optimized for quick iteration
 # Reduces sim_time and batch_size for speed while maintaining DR functionality
 
 system:

@@ -124,5 +124,4 @@ verification:
   gradient_shake_scale: 0.1
 
 # Verification flags
-debug: false
 train_epochs: 30

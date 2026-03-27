@@ -131,4 +131,3 @@ log_dir: ${output_dir}/logs
 
 train_epochs: 60
 batch_size: 32
-debug: false

@@ -149,15 +149,15 @@ class TestP3_DomainRandomization:
     """Tests for P3: Domain Randomization Upper Bound."""
     
     def test_rho_max_in_config(self):
-        """Test that rho_max is set to 0.98 in debug.yaml."""
+        """Test that rho_max is set to 0.85 in small.yaml."""
         import yaml
         
-        config_path = Path(__file__).parent.parent / "configs" / "debug.yaml"
+        config_path = Path(__file__).parent.parent / "configs" / "small.yaml"
         with open(config_path) as f:
             config = yaml.safe_load(f)
         
-        rho_max = config.get("domain_randomization", {}).get("rho_max", 0.95)
-        assert rho_max >= 0.98, f"rho_max should be >= 0.98 for heavy-traffic generalization, got {rho_max}"
+        rho_max = config.get("domain_randomization", {}).get("rho_max", 0.40)
+        assert rho_max >= 0.85, f"rho_max should be >= 0.85 for small validation, got {rho_max}"
 
 
 class TestP4_AdaptiveTemperature:
@@ -226,14 +226,14 @@ class TestP6_BatchSize:
     """Tests for P6: Batch Size."""
     
     def test_batch_size_in_config(self):
-        """Test that batch_size is set appropriately in debug.yaml."""
+        """Test that batch_size is set appropriately in small.yaml."""
         import yaml
         
-        config_path = Path(__file__).parent.parent / "configs" / "debug.yaml"
+        config_path = Path(__file__).parent.parent / "configs" / "small.yaml"
         with open(config_path) as f:
             config = yaml.safe_load(f)
         
-        batch_size = config.get("neural_training", {}).get("batch_size", 16)
+        batch_size = config.get("batch_size", 16)
         assert batch_size >= 32, f"batch_size should be >= 32 for stable training, got {batch_size}"
 
 

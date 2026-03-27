@@ -118,7 +118,7 @@ verification:
   confidence_interval: 0.95
   stationarity_threshold: 0.5
   parity_z_score: 1.96
-  gradient_check_chunk_size: 500  # Smaller chunks for fast debug
+  gradient_check_chunk_size: 500  # Smaller chunks for quick validation
   gradient_check_max_steps: 100
   gradient_check_n_test: 50
   gradient_check_sim_time: 10.0

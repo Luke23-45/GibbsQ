@@ -6,7 +6,7 @@ Empirical verification of the proof that softmax (Boltzmann) routing yields posi
 > **Hardware note:** The full default-config pipeline (especially the stress test with
 > `stress.n_values` containing N ≥ 128, and the bias verification at ρ > 0.95) requires
 > a CUDA-capable GPU (≥ 8 GB VRAM) for practical wall-clock runtime.
-> For CPU-only validation use `--config-name small` or `debug=true`, which completes
+> For CPU-only validation use `--config-name small`, which completes
 > in under 5 minutes.
 > The default config is calibrated for GPU execution and is required for paper results.
 

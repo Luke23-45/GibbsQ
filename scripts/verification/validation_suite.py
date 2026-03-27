@@ -40,9 +40,9 @@ def verify_standard(args):
     dry_run = args.dry_run
     
     # Logic mapping from the old PS script
-    # Defaults (debug)
+    # Defaults (quick validation)
     settings = {
-        "debug":   (500,   1, 0.1, 500,   1, 1),
+        "quick":   (500,   1, 0.1, 500,   1, 1),
         "trusted": (5000,  3, 0.2, 5000,  2, 5),
         "full":    (25000, 5, 0.2, 10000, 5, 30)
     }
@@ -80,11 +80,9 @@ def verify_standard(args):
     
     # Step 4: Stress Test
     print("\n[4/6] Running Step 4: Stress Test...")
-    debug_flag = "True" if level != "full" else "False"
     run_cmd([
         "stress", 
         f"simulation.num_replications={stress_reps}", 
-        f"debug={debug_flag}", 
         "jax.enabled=true"
     ], dry_run)
     
@@ -175,7 +173,7 @@ def main():
         parents=[parent_parser],
         help="Implementation verification (Stability, Drift, Stress, Training)"
     )
-    parser_std.add_argument("--level", choices=["debug", "trusted", "full"], default="debug", 
+    parser_std.add_argument("--level", choices=["quick", "trusted", "full"], default="quick", 
                             help="Rigor level determining simulation time and metrics precision")
     
     # 'phase_iv' subcommand
