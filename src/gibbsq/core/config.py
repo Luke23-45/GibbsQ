@@ -450,6 +450,21 @@ def _validate_jax_config(jax_cfg: JAXConfig) -> None:
             f"jax.precision must be one of {sorted(valid_precisions)}, got '{jax_cfg.precision}'"
         )
 
+
+def _validate_rho_list(name: str, values: Sequence[float]) -> None:
+    """Validate that every configured load factor is strictly within (0, 1)."""
+    for i, rho in enumerate(values):
+        if not (0.0 < float(rho) < 1.0):
+            raise ValueError(f"{name}[{i}] must be in (0, 1), got {rho}")
+
+
+def _validate_positive_list(name: str, values: Sequence[float]) -> None:
+    """Validate that every configured scalar is strictly positive."""
+    for i, x in enumerate(values):
+        if not (float(x) > 0.0):
+            raise ValueError(f"{name}[{i}] must be > 0, got {x}")
+
+
 def validate(cfg: ExperimentConfig) -> None:
     """
     Validate every constraint on *cfg* and raise ``ValueError`` with a
@@ -600,6 +615,19 @@ def validate(cfg: ExperimentConfig) -> None:
                 raise ValueError(f"DR phase {i} has invalid rho range [{phase.rho_min}, {phase.rho_max}]")
             if phase.epochs < 1:
                 raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
+
+    # ── Sweep/generalization/stress domain guards ─────────────
+    # These values are transformed into λ = ρ·Λ in experiment loops,
+    # so invalid ρ would bypass the strict capacity condition (Λ > λ).
+    _validate_rho_list("stability_sweep.rho_vals", cfg.stability_sweep.rho_vals)
+    _validate_positive_list("stability_sweep.alpha_vals", cfg.stability_sweep.alpha_vals)
+    _validate_rho_list("generalization.rho_grid_vals", cfg.generalization.rho_grid_vals)
+    _validate_rho_list("generalization.rho_boundary_vals", cfg.generalization.rho_boundary_vals)
+    _validate_rho_list("stress.critical_rhos", cfg.stress.critical_rhos)
+    if not (0.0 < float(cfg.stress.massive_n_rho) < 1.0):
+        raise ValueError(f"stress.massive_n_rho must be in (0, 1), got {cfg.stress.massive_n_rho}")
+    if not (0.0 < float(cfg.stress.heterogeneity_rho) < 1.0):
+        raise ValueError(f"stress.heterogeneity_rho must be in (0, 1), got {cfg.stress.heterogeneity_rho}")
 
     _validate_jax_config(cfg.jax)
 

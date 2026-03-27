@@ -25,6 +25,7 @@ def _validate_inputs(
     num_servers: int,
     arrival_rate: float,
     service_rates: jnp.ndarray,
+    alpha: float,
     sim_time: float,
     sample_interval: float,
     max_samples: int,
@@ -40,6 +41,8 @@ def _validate_inputs(
         raise ValueError(f"sim_time must be >= 0, got {sim_time}")
     if sample_interval <= 0:
         raise ValueError(f"sample_interval must be > 0, got {sample_interval}")
+    if alpha <= 0:
+        raise ValueError(f"alpha must be > 0, got {alpha}")
     if max_samples < 1:
         raise ValueError(f"max_samples must be >= 1, got {max_samples}")
     if policy_type not in (0, 1, 2, 3, 4, 5, 6):
@@ -340,6 +343,7 @@ def simulate_jax(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
         service_rates=service_rates,
+        alpha=alpha,
         sim_time=sim_time,
         sample_interval=sample_interval,
         max_samples=max_samples,
@@ -433,6 +437,7 @@ def run_replications_jax(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
         service_rates=service_rates,
+        alpha=alpha,
         sim_time=sim_time,
         sample_interval=sample_interval,
         max_samples=max_samples,
@@ -468,4 +473,3 @@ def run_replications_jax(
         warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the multiplier (current={max_events_multiplier}x).", RuntimeWarning, stacklevel=2)
         
     return times, states, counts
-
