@@ -72,8 +72,13 @@ def main():
     
     # Set PYTHONPATH
     env = os.environ.copy()
-    # Include both project root (for experiments) and src (for gibbsq package)
-    env["PYTHONPATH"] = os.pathsep.join([str(project_root), str(project_root / "src")])
+    # Include both project root (for experiments) and src (for gibbsq package).
+    # Preserve any existing PYTHONPATH entries to avoid shadowing user env setup.
+    existing_pythonpath = env.get("PYTHONPATH")
+    path_parts = [str(project_root), str(project_root / "src")]
+    if existing_pythonpath:
+        path_parts.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(path_parts)
     
     python_script = EXPERIMENTS[experiment]
     
@@ -85,7 +90,7 @@ def main():
     # Change to project root and run
     os.chdir(project_root)
     
-    cmd = ["python", "-m", python_script] + hydra_overrides
+    cmd = [sys.executable, "-m", python_script] + hydra_overrides
     
     try:
         result = subprocess.run(cmd, env=env)

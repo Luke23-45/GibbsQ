@@ -9,6 +9,7 @@ It is mapped to 'dr_train' and 'bc_train' in the experiment runner.
 import logging
 from pathlib import Path
 import jax
+import numpy as np
 from omegaconf import DictConfig
 
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
@@ -41,7 +42,7 @@ def main(raw_cfg: DictConfig):
     # Execute robust training
     policy_net = train_robust_bc_policy(
         policy_net=policy_net,
-        service_rates=cfg.system.service_rates,
+        service_rates=np.asarray(cfg.system.service_rates, dtype=np.float32),
         key=key,
         num_steps=cfg.neural_training.bc_num_steps,
         lr=cfg.neural_training.bc_lr,
