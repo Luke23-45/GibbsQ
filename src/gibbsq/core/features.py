@@ -5,8 +5,8 @@ This module provides feature transformations for routing policies,
 with a focus on heterogeneity-aware representations that correctly
 handle systems with non-identical service rates.
 
-The primary export is `sojourn_time_features`, which computes the
-expected sojourn time representation that is mathematically correct
+The primary export is `look_ahead_potential`, which computes the
+expected look-ahead potential representation that is mathematically correct
 for heterogeneous M/M/N queues.
 """
 
@@ -15,15 +15,15 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 
-def sojourn_time_features(
+def look_ahead_potential(
     Q: Float[Array, "..."],
     mu: Float[Array, "..."],
 ) -> Float[Array, "..."]:
     """
-    Compute expected sojourn time representation for routing decisions.
+    Compute expected look-ahead potential representation for routing decisions.
     
     For a heterogeneous M/M/N queue, the correct state representation
-    is the expected sojourn time a newly arriving job would experience
+    is the expected look-ahead potential a newly arriving job would experience
     at each server:
     
         s_i = (Q_i + 1) / μ_i
@@ -34,8 +34,8 @@ def sojourn_time_features(
     **Why this representation is correct:**
     
     1. **Scale-invariant**: A server with μ=10 and Q=9 has the same
-       sojourn time as a server with μ=1 and Q=0. Raw queue lengths
-       cannot distinguish these states; sojourn time correctly equates them.
+       look-ahead potential as a server with μ=1 and Q=0. Raw queue lengths
+       cannot distinguish these states; potential correctly equates them.
     
     2. **Heterogeneity-aware**: Natively encodes capacity mismatch
        between servers, eliminating the "Heterogeneity Trap" where
@@ -46,7 +46,7 @@ def sojourn_time_features(
        sojourn time (Halfin-Whitt, 1981; Atar, Mandelbaum & Reiman, 2004).
     
     4. **Little's Law consistency**: By Little's Law, E[W_i] = E[Q_i]/λ_i.
-       The sojourn time representation uses the quantity that Little's
+       The potential representation uses the quantity that Little's
        Law connects to system performance.
     
     Parameters
@@ -61,7 +61,7 @@ def sojourn_time_features(
     Returns
     -------
     Float[Array, "..."]
-        Sojourn time features s_i = (Q_i + 1) / μ_i.
+        Look-ahead potential features s_i = (Q_i + 1) / μ_i.
         Same shape as input Q.
     
     Examples
@@ -69,12 +69,12 @@ def sojourn_time_features(
     >>> import numpy as np
     >>> Q = np.array([5, 3, 0])  # Queue lengths
     >>> mu = np.array([1.0, 2.0, 3.0])  # Service rates
-    >>> sojourn_time_features(Q, mu)
+    >>> look_ahead_potential(Q, mu)
     array([6.        , 2.        , 0.33333333])
     
-    The first server has Q=5 and μ=1, so expected sojourn is (5+1)/1 = 6.
-    The third server has Q=0 and μ=3, so expected sojourn is (0+1)/3 ≈ 0.33.
-    A job should route to server 3 (lowest sojourn time), not server 2
+    The first server has Q=5 and μ=1, so expected potential is (5+1)/1 = 6.
+    The third server has Q=0 and μ=3, so expected potential is (0+1)/3 ≈ 0.33.
+    A job should route to server 3 (lowest potential), not server 2
     (lowest queue length), demonstrating why raw Q is wrong for heterogeneous systems.
     
     Notes
@@ -94,20 +94,20 @@ def sojourn_time_features(
     Q_arr = jnp.asarray(Q)
     mu_arr = jnp.asarray(mu)
     
-    # Compute sojourn time: (Q_i + 1) / μ_i
+    # Compute look-ahead potential: (Q_i + 1) / μ_i
     # The +1 accounts for the arriving job's own service time
     return (Q_arr + 1.0) / mu_arr
 
 
-def sojourn_time_features_numpy(
+def look_ahead_potential_numpy(
     Q: np.ndarray,
     mu: np.ndarray,
 ) -> np.ndarray:
     """
-    NumPy-only version of sojourn_time_features.
+    NumPy-only version of look_ahead_potential.
     
     Provided for compatibility with pure NumPy code paths.
-    See `sojourn_time_features` for full documentation.
+    See `look_ahead_potential` for full documentation.
     
     Parameters
     ----------
@@ -119,18 +119,18 @@ def sojourn_time_features_numpy(
     Returns
     -------
     np.ndarray
-        Sojourn time features, same shape as Q.
+        Look-ahead potential features, same shape as Q.
     """
     return (Q.astype(np.float64) + 1.0) / mu.astype(np.float64)
 
 
-def softmax_on_sojourn(
+def softmax_on_potential(
     Q: Float[Array, "..."],
     mu: Float[Array, "..."],
     alpha: float,
 ) -> Float[Array, "..."]:
     """
-    Compute GibbsQ routing probabilities using sojourn-time representation.
+    Compute GibbsQ routing probabilities using look-ahead potential representation.
     
     This is the corrected GibbsQ policy for heterogeneous servers:
     
@@ -148,7 +148,7 @@ def softmax_on_sojourn(
         Service rate vector, shape (N,).
     alpha : float
         Inverse temperature parameter. Higher α means more aggressive
-        routing to the shortest-sojourn server.
+        routing to the shortest-potential server.
     
     Returns
     -------
@@ -159,10 +159,10 @@ def softmax_on_sojourn(
     --------
     >>> Q = np.array([5, 3, 0])
     >>> mu = np.array([1.0, 2.0, 3.0])
-    >>> softmax_on_sojourn(Q, mu, alpha=1.0)
+    >>> softmax_on_potential(Q, mu, alpha=1.0)
     array([0.0024...])  # Probability heavily weighted to server 3
     """
-    s = sojourn_time_features(Q, mu)
+    s = look_ahead_potential(Q, mu)
     
     # Log-sum-exp trick for numerical stability
     logits = -alpha * s
@@ -172,17 +172,17 @@ def softmax_on_sojourn(
     return weights / jnp.sum(weights)
 
 
-def softmax_on_sojourn_numpy(
+def softmax_on_potential_numpy(
     Q: np.ndarray,
     mu: np.ndarray,
     alpha: float,
 ) -> np.ndarray:
     """
-    NumPy-only version of softmax_on_sojourn.
+    NumPy-only version of softmax_on_potential.
     
-    See `softmax_on_sojourn` for full documentation.
+    See `softmax_on_potential` for full documentation.
     """
-    s = sojourn_time_features_numpy(Q, mu)
+    s = look_ahead_potential_numpy(Q, mu)
     
     # Log-sum-exp trick for numerical stability
     logits = -alpha * s
@@ -192,7 +192,7 @@ def softmax_on_sojourn_numpy(
     return weights / np.sum(weights)
 
 
-def softmax_on_sojourn_uas(
+def softmax_on_potential_uas(
     Q: Float[Array, "..."],
     mu: Float[Array, "..."],
     alpha: float,
@@ -205,7 +205,7 @@ def softmax_on_sojourn_uas(
         p_i(Q) ∝ μ_i · exp(-α · s_i) = μ_i · exp(-α · (Q_i + 1) / μ_i)
     
     The μ_i weighting provides capacity-aware routing: faster servers
-    receive proportionally more traffic even when sojourn times are equal.
+    receive proportionally more traffic even when look-ahead potentials are equal.
     
     Parameters
     ----------
@@ -215,7 +215,7 @@ def softmax_on_sojourn_uas(
         Service rate vector, shape (N,).
     alpha : float
         Inverse temperature parameter. Higher α means more aggressive
-        routing to the shortest-sojourn server.
+        routing to the shortest-potential server.
     
     Returns
     -------
@@ -226,10 +226,10 @@ def softmax_on_sojourn_uas(
     --------
     >>> Q = np.array([5, 3, 0])
     >>> mu = np.array([1.0, 2.0, 3.0])
-    >>> softmax_on_sojourn_uas(Q, mu, alpha=1.0)
+    >>> softmax_on_potential_uas(Q, mu, alpha=1.0)
     array([...])  # Probability weighted by capacity
     """
-    s = sojourn_time_features(Q, mu)
+    s = look_ahead_potential(Q, mu)
     
     # Log-sum-exp trick for numerical stability
     # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
@@ -240,17 +240,17 @@ def softmax_on_sojourn_uas(
     return weights / jnp.sum(weights)
 
 
-def softmax_on_sojourn_uas_numpy(
+def softmax_on_potential_uas_numpy(
     Q: np.ndarray,
     mu: np.ndarray,
     alpha: float,
 ) -> np.ndarray:
     """
-    NumPy-only version of softmax_on_sojourn_uas.
+    NumPy-only version of softmax_on_potential_uas.
     
-    See `softmax_on_sojourn_uas` for full documentation.
+    See `softmax_on_potential_uas` for full documentation.
     """
-    s = sojourn_time_features_numpy(Q, mu)
+    s = look_ahead_potential_numpy(Q, mu)
     
     # Log-sum-exp trick for numerical stability
     # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
@@ -275,10 +275,10 @@ def compute_advantage(
     
         A(Q, i) = -s_i + V(Q)
     
-    where s_i = (Q_i + 1) / μ_i is the expected sojourn time at server i,
+    where s_i = (Q_i + 1) / μ_i is the expected look-ahead potential at server i,
     and V(Q) is the value function estimate of expected future queue length.
     
-    The negative sign on s_i reflects that lower sojourn time is better
+    The negative sign on s_i reflects that lower potential is better
     (we want to minimize expected queue length).
     
     Parameters
@@ -297,7 +297,7 @@ def compute_advantage(
     float
         Advantage estimate for this routing decision.
     """
-    s = sojourn_time_features(Q, mu)
+    s = look_ahead_potential(Q, mu)
     # Negative because we want to minimize sojourn time
     immediate_cost = -s[server_idx]
     return immediate_cost + value_estimate
@@ -308,11 +308,11 @@ def compute_advantage(
 # ─────────────────────────────────────────────────────────────────────────────
 
 __all__ = [
-    "sojourn_time_features",
-    "sojourn_time_features_numpy",
-    "softmax_on_sojourn",
-    "softmax_on_sojourn_numpy",
-    "softmax_on_sojourn_uas",
-    "softmax_on_sojourn_uas_numpy",
+    "look_ahead_potential",
+    "look_ahead_potential_numpy",
+    "softmax_on_potential",
+    "softmax_on_potential_numpy",
+    "softmax_on_potential_uas",
+    "softmax_on_potential_uas_numpy",
     "compute_advantage",
 ]

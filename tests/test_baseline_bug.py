@@ -82,7 +82,7 @@ def compute_random_baseline_with_policy(policy_net: NeuralRouter,
     If policy_net is already bootstrapped to JSQ, this will return
     a JSQ-like value, not random!
     """
-    from gibbsq.core.features import sojourn_time_features
+    from gibbsq.core.features import look_ahead_potential
     
     rng = np.random.default_rng(seed)
     service_rates_jax = jnp.array(service_rates)
@@ -114,7 +114,7 @@ def compute_random_baseline_with_policy(policy_net: NeuralRouter,
         # Event type
         if rng.random() < arrival_rate_total / total_rate:
             # Arrival - route using policy
-            s_feat = sojourn_time_features(Q, service_rates_jax)
+            s_feat = look_ahead_potential(Q, service_rates_jax)
             logits = np.array(policy_net._single_forward(s_feat, rho))
             probs = jax.nn.softmax(logits)
             action = rng.choice(num_servers, p=np.array(probs))

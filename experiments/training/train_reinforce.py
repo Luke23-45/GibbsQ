@@ -33,7 +33,7 @@ from omegaconf import DictConfig
 
 from gibbsq.core.config import ExperimentConfig, NeuralConfig, hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork, compute_adaptive_alpha
-from gibbsq.core.features import sojourn_time_features
+from gibbsq.core.features import look_ahead_potential
 from gibbsq.core.policies import JSQRouting, JSSQRouting
 from gibbsq.core import constants
 # Local simulate not needed if defined/used via engines.numpy_engine directly if ever needed,
@@ -179,7 +179,9 @@ def compute_gae(
     # Thus r_t = (1 - gamma^dt) * V_target(s_t).
     
     G_idx = 100.0 * (random_limit - q_totals) / denom
-    G_scaled = squash_scale * np.tanh(G_idx / squash_threshold)
+    # SG#4 FIX: Remove tanh squashing to preserve drift pressure at high Q
+    # Previously: G_scaled = squash_scale * np.tanh(G_idx / squash_threshold)
+    G_scaled = G_idx 
     rewards = (1.0 - (gamma ** dt)) * G_scaled
     
     # 3. Compute V(s) for all states using critic (Unsquashed)
@@ -808,7 +810,9 @@ class ReinforceTrainer:
                     idx_tensor = jnp.asarray(batch_traj_indices, dtype=jnp.int32)
                     
                     # Target Tanh-Squashing: Prevent exploding V-loss from extreme episodes
-                    G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
+                    # SG#4 FIX: Remove tanh squashing for training targets
+                    # Previously: G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
+                    G_scaled = G_tensor
                     
                     # Precompute Critic Baselines detachably (Rho-Aware)
                     # Use Raw Q. broadcast mu using in_axes=(0, None, None)

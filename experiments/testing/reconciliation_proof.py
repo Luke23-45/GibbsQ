@@ -1,6 +1,6 @@
 
 import numpy as np
-from gibbsq.core.policies import SoftmaxRouting, SojournTimeSoftmaxRouting
+from gibbsq.core.policies import SoftmaxRouting, UASRouting
 from gibbsq.engines.numpy_engine import simulate
 import logging
 
@@ -25,9 +25,9 @@ def run_reconciliation_benchmark():
     # Stable? Yes. Efficient? No.
     policy_raw = SoftmaxRouting(alpha=alpha)
     
-    # 3. Policy B: Sojourn Time (The "Neural" Policy)
+    # 3. Policy B: UAS (The "Neural" Policy - with capacity weighting)
     # Stable? Empirical. Efficient? Yes.
-    policy_sojourn = SojournTimeSoftmaxRouting(mu=mu, alpha=alpha)
+    policy_uas = UASRouting(mu=mu, alpha=alpha)
     
     # 4. Run Simulations
     res_raw = simulate(
@@ -39,11 +39,11 @@ def run_reconciliation_benchmark():
         rng=np.random.default_rng(42)
     )
     
-    res_sojourn = simulate(
+    res_uas = simulate(
         num_servers=2,
         arrival_rate=lam,
         service_rates=mu,
-        policy=policy_sojourn,
+        policy=policy_uas,
         sim_time=sim_time,
         rng=np.random.default_rng(42)
     )
@@ -51,23 +51,22 @@ def run_reconciliation_benchmark():
     # 5. Measure "Mean Wait" (Little's Law: E[W] = E[Q] / lambda)
     # This is the metric the Professor and the User care about.
     q_raw = np.mean(res_raw.states.sum(axis=1))
-    q_sojourn = np.mean(res_sojourn.states.sum(axis=1))
-    
+    q_uas = np.mean(res_uas.states.sum(axis=1))
     wait_raw = q_raw / lam
-    wait_sojourn = q_sojourn / lam
+    wait_uas = q_uas / lam
     
     log.info("\n" + "="*40)
     log.info("  RECONCILIATION BENCHMARK")
     log.info("="*40)
     log.info(f"Raw-Queue Lens (Stable): E[W] = {wait_raw*1000:.2f} ms")
-    log.info(f"Sojourn Lens (Neural):   E[W] = {wait_sojourn*1000:.2f} ms")
-    log.info(f"Performance Gap:         {wait_raw/wait_sojourn:.1f}x slower with Raw!")
+    log.info(f"UAS Lens (Neural):        E[W] = {wait_uas*1000:.2f} ms")
+    log.info(f"Performance Gap:          {wait_raw/wait_uas:.1f}x slower with Raw!")
     log.info("="*40)
     
     log.info("\nWhy? Look at the Queue Distribution:")
     log.info(f"Raw Lens Distribution (Mean Q):     {np.mean(res_raw.states, axis=0)}")
-    log.info(f"Sojourn Lens Distribution (Mean Q): {np.mean(res_sojourn.states, axis=0)}")
-    log.info("\nSojourn lens correctly stacks ~100x more jobs on the 100x faster server.")
+    log.info(f"UAS Lens Distribution (Mean Q):      {np.mean(res_uas.states, axis=0)}")
+    log.info("\nUAS lens correctly stacks ~100x more jobs on the 100x faster server.")
     log.info("Raw lens tries to keep queue indices equal, which is catastrophic for delay.")
 
 if __name__ == "__main__":

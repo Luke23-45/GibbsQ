@@ -27,7 +27,7 @@ from omegaconf import DictConfig
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
-from gibbsq.core.features import sojourn_time_features
+from gibbsq.core.features import look_ahead_potential
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.engines.jax_ssa import vmap_collect_trajectories, compute_poisson_max_steps
 

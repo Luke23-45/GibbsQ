@@ -53,9 +53,9 @@ def main():
     max_samples = int(sim_time / sample_interval) + 1
 
     variants = {
-        "Raw Queues (Paper)": 6, # We will patch jax_engine.py temporarily to support these
-        "Sojourn Time (drift.py)": 7,
-        "Normalized Q (jax_engine.py)": 5 
+        "Raw Queues (Standard Softmax)": 3,
+        "Sojourn Time (Look-Ahead Potential)": 5,
+        "UAS (Full Archimedean)": 6
     }
 
     log.info(f"Heterogeneous Cluster Eval: N={num_servers}, Capacity={total_capacity:.1f}, Load={rho}")

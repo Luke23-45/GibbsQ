@@ -103,7 +103,7 @@ class TestP2_HeterogeneityAwareRouting:
         cfg = base_config.neural
         num_servers = base_config.system.num_servers
         
-        # Expected: num_servers (sojourn) + num_servers (mu_normalized) + 1 (rho)
+        # Expected: num_servers (potential) + num_servers (mu_normalized) + 1 (rho)
         expected_dim = num_servers * 2 + 1 if cfg.use_rho else num_servers * 2
         
         router = NeuralRouter(

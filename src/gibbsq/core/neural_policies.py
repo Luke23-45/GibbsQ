@@ -102,9 +102,9 @@ class NeuralRouter(eqx.Module):
     
     def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
-        # Standardize state features (Sojourn Time proxy)
+        # Standardize state features (Look-Ahead Potential)
         effective_mu = mu if mu is not None else self.service_rates
-        # SOTA: Always use Sojourn-Time features for neural policies
+        # SOTA: Always use Look-Ahead Potential features for neural policies
         s_feat = (Q + 1.0) / effective_mu
         
         # Preprocessing selection based on config
@@ -171,7 +171,7 @@ class NeuralRouter(eqx.Module):
     def numpy_forward(Q, params, config, mu=None, rho=None, service_rates=None, **kwargs):
         """Pure NumPy implementation of the forward pass for extreme speed in SSA loops.
         
-        Encapsulated: Automatically converts Q to Sojourn-Time features (Q+1)/mu.
+        Encapsulated: Automatically converts Q to Look-Ahead Potential features (Q+1)/mu.
         """
         import numpy as np
         
@@ -181,7 +181,7 @@ class NeuralRouter(eqx.Module):
         effective_mu = mu if mu is not None else (service_rates if service_rates is not None else np.ones(num_servers) / num_servers)
         effective_mu = np.asarray(effective_mu, dtype=np.float64)
         
-        # 1. Base Feature Representation (Sojourn Time Proxy)
+        # 1. Base Feature Representation (Look-Ahead Potential)
         s_feat = (Q + 1.0) / effective_mu
 
         # 2. Preprocessing
@@ -291,7 +291,7 @@ class ValueNetwork(eqx.Module):
     
     def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
-        # 1. Base Feature Representation (Sojourn Time Proxy)
+        # 1. Base Feature Representation (Look-Ahead Potential)
         # S_i = (Q_i + 1) / mu_i
         # mu is required for ValueNetwork consistency
         effective_mu = mu if mu is not None else jnp.ones_like(Q)

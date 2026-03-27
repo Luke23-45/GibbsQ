@@ -23,6 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
+from gibbsq.core.neural_policies import compute_adaptive_alpha
 log = logging.getLogger(__name__)
 
 
@@ -247,14 +248,19 @@ class NeuralSSAPolicy:
             r_tensor = jnp.array(rho_val, dtype=jnp.float32)
             
             # FIX SG#4 & SG#7: Pass raw Q and operating mu. 
-            # Encapsulation in NeuralRouter handles Sojourn math natively.
+            # Encapsulation in NeuralRouter handles Look-Ahead Potential math natively.
             logits = self._forward(self._model, q_arr, r_tensor, mu_val=self.mu)
             
-            # Apply numerically stable softmax to the returned logits
+            # Application of numerically stable softmax
             import numpy as np
             logits_np = np.array(logits, dtype=np.float64)
-            logits_np = logits_np - np.max(logits_np)
-            probs_np = np.exp(logits_np)
+            
+            # FIX SG#5: Apply adaptive temperature to align with training
+            temp = float(compute_adaptive_alpha(rho_val))
+            logits_scaled = logits_np / temp
+            
+            logits_sh = logits_scaled - np.max(logits_scaled)
+            probs_np = np.exp(logits_sh)
             return probs_np / probs_np.sum()
 
         self._get_probs = _get_probs
@@ -313,6 +319,11 @@ class StochasticNeuralPolicy:
         # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
         mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
         logits = self._net.numpy_forward(Q, self._np_params, self._np_config, rho=self._rho, mu=mu_val)
+        
+        # FIX SG#5: Apply adaptive temperature to align with training
+        temp = float(compute_adaptive_alpha(self._rho))
+        logits = logits / temp
+        
         logits = logits - np.max(logits)
         probs = np.exp(logits)
         return probs / probs.sum()

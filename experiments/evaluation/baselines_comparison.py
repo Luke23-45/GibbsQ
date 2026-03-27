@@ -8,8 +8,8 @@ Smoking Gun #4 (Parity Benchmark Is Self-Referential).
 The corrected baseline hierarchy:
 - Tier 1: Blind policies (Uniform, Proportional)
 - Tier 2: Queue-length-based (JSQ, Power-of-d)
-- Tier 3: Sojourn-time-based (JSSQ, SojournTimeSoftmax)
-- Tier 4: Optimized analytical (GibbsQ-Sojourn with tuned α)
+- Tier 3: Sojourn-time-based (JSSQ, UAS)
+- Tier 4: Optimized analytical (UAS with tuned α)
 - Tier 5: Neural (N-GibbsQ trained with REINFORCE)
 
 The parity criterion is now: N-GibbsQ must match or beat Tier 3 (JSSQ),
@@ -56,9 +56,9 @@ CORRECTED_POLICIES = [
     {"tier": 2, "name": "jssq", "label": "JSSQ (Min Sojourn)", "requires_mu": True},
     
     # Tier 3: Softmax/Gibbs Policies (Provably Stable Smooth Approximations)
-    {"tier": 3, "name": "sojourn_softmax", "label": "GibbsQ-Sojourn (alpha=1.0)", "requires_mu": True, "alpha": 1.0},
-    {"tier": 3, "name": "sojourn_softmax", "label": "GibbsQ-Sojourn (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
-    {"tier": 3, "name": "sojourn_softmax", "label": "GibbsQ-Sojourn (alpha=opt)", "requires_mu": True, "alpha": 5.0},
+    {"tier": 3, "name": "uas", "label": "UAS (alpha=1.0)", "requires_mu": True, "alpha": 1.0},
+    {"tier": 3, "name": "uas", "label": "UAS (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
+    {"tier": 3, "name": "uas", "label": "UAS (alpha=opt)", "requires_mu": True, "alpha": 5.0},
     
     # Tier 4: Fixed-Weight Baselines (Blind Policies)
     {"tier": 4, "name": "proportional", "label": "Proportional (mu/Lambda)", "requires_mu": True},
@@ -234,7 +234,7 @@ def run_corrected_comparison(
     # FAILED: N-GibbsQ E[Q] > Proportional E[Q]
     
     jssq_result = results.get("JSSQ (Min Sojourn)")
-    sojourn_result = results.get("GibbsQ-Sojourn (alpha=1.0)")
+    sojourn_result = results.get("UAS (alpha=1.0)")
     proportional_result = results.get("Proportional (mu/Lambda)")
     
     neural_result = results.get("N-GibbsQ (Platinum)")

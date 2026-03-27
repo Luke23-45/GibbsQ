@@ -56,7 +56,7 @@ class PolicyName(str, Enum):
     PROPORTIONAL  = "proportional"
     JSQ           = "jsq"
     POWER_OF_D    = "power_of_d"
-    SOJOURN_SOFTMAX = "sojourn_softmax"
+    JSSQ          = "jssq"
     UAS           = "uas"
 
 

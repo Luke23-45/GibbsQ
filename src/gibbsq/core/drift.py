@@ -73,8 +73,8 @@ def lyapunov_V(Q: np.ndarray, mu: np.ndarray | None = None) -> float:
     return 0.5 * float(np.sum(Q_f**2 / mu_f))
 
 
-def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "sojourn") -> np.ndarray:
-    if mode == "sojourn":
+def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "potential") -> np.ndarray:
+    if mode == "potential":
         feat = (Q.astype(np.float64) + 1.0) / mu
         logits = -alpha * feat
     elif mode == "raw":
@@ -85,7 +85,7 @@ def _softmax_probs(Q: np.ndarray, alpha: float, mu: np.ndarray, mode: str = "soj
         feat = (Q.astype(np.float64) + 1.0) / mu
         logits = -alpha * feat + np.log(mu)  # Add log(μ_i) for capacity weighting
     else:
-        raise ValueError(f"Unknown drift mode: {mode}. Valid modes: 'sojourn', 'raw', 'uas'")
+        raise ValueError(f"Unknown drift mode: {mode}. Valid modes: 'potential', 'raw', 'uas'")
     # Ensure logits is a numpy array for .max() instability
     logits = np.asarray(logits)
     logits -= logits.max()
@@ -98,7 +98,7 @@ def generator_drift(
     lam: float,
     mu: np.ndarray,
     alpha: float,
-    mode: str = "sojourn",
+    mode: str = "potential",
 ) -> float:
     """
     Exact generator action 𝓛V(Q) based on mode.
@@ -226,7 +226,7 @@ def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray, mode: s
     """
     Batch softmax over M states at once using selected feature mode.
     """
-    if mode == "sojourn":
+    if mode == "potential":
         feat = (Q_all.astype(np.float64) + 1.0) / mu
     else:
         feat = Q_all.astype(np.float64)
@@ -346,12 +346,13 @@ def compute_adaptive_q_max(
     mu: np.ndarray,
     alpha: float,
     safety_factor: float = 2.0,
+    mode: str = "raw",
 ) -> int:
     """
     Compute adaptive q_max based on theoretical compact radius.
 
-    SOTA Enhancement: Ensures grid depth covers the compact set from
-    the Foster-Lyapunov proof (docs/gibbsq.md).
+    SOTA Enhancement: Ensures grid depth covers the compact set  C 
+    defined by  𝓛V(Q) ≤ −1  for  Q ∉ C.
 
     Parameters
     ----------
@@ -363,6 +364,8 @@ def compute_adaptive_q_max(
         Inverse temperature α.
     safety_factor : float
         Multiplier for compact radius (default 2.0).
+    mode : str
+        Drift mode: 'raw' (Standard potential) or 'uas' (Archimedean potential).
 
     Returns
     -------
@@ -371,24 +374,32 @@ def compute_adaptive_q_max(
 
     Notes
     -----
-    From the proof:
-        ε = min((Λ−λ)/N, min μ_i)
-        R = (λ log N)/α + (λ+Λ)/2
-        compact_radius = (R+1)/ε
+    Archimedean Constants (for UAS):
+        ε = (Λ − λ) / Λ
+        R = (λ log N) / α + λ / (2 * min_μ) + N / 2
 
-    The grid must cover states with |Q|₁ ≤ compact_radius * N.
+    Standard Constants (for Raw Softmax):
+        ε = min((Λ − λ) / N, min_i μ_i)
+        R = (λ log N) / α + (λ + Λ) / 2
+
+    Compact radius L₁ threshold: radius = (R + 1) / ε.
     """
     mu_f = np.asarray(mu, dtype=np.float64)
-    N = len(mu_f)
-    cap = mu_f.sum()
+    N    = len(mu_f)
+    cap  = mu_f.sum()
 
-    # Compute theoretical constants
-    eps = min((cap - lam) / N, mu_f.min())
+    # Branch constants by mode (Foster-Lyapunov Proof alignment)
+    if mode == "uas":
+        eps = (cap - lam) / cap
+        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+    else:
+        eps = min((cap - lam) / N, mu_f.min())
+        R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
+
     if eps <= 0:
-        # Capacity condition violated - return large default
+        # Capacity condition violated - return large default for diagnostic depth
         return 500
 
-    R = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
     compact_radius = (R + 1.0) / eps
 
     # q_max should cover compact set with safety margin

@@ -94,9 +94,9 @@ class ComponentRegistry:
         name : str
             Registered policy name.
         alpha : float
-            Inverse temperature (softmax, sojourn_softmax).
+            Inverse temperature (softmax, uas).
         mu : ndarray, optional
-            Service rates (proportional, jssq, sojourn_softmax).
+            Service rates (proportional, jssq, uas).
         d : int
             Number of choices (power_of_d).
 
@@ -137,10 +137,6 @@ class ComponentRegistry:
             if mu is None:
                 raise ValueError("JSSQ routing requires 'mu'")
             return policy_cls(np.asarray(mu, dtype=np.float64))
-        elif name == "sojourn_softmax":
-            if mu is None:
-                raise ValueError("SojournTimeSoftmax routing requires 'mu'")
-            return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
         elif name == "uas":
             if mu is None:
                 raise ValueError("UAS routing requires 'mu'")

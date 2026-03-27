@@ -22,8 +22,8 @@ from jaxtyping import PRNGKeyArray
 
 from gibbsq.core.config import ExperimentConfig
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
-from gibbsq.core.features import sojourn_time_features
-from gibbsq.core.policies import SojournTimeSoftmaxRouting
+from gibbsq.core.features import look_ahead_potential
+from gibbsq.core.policies import UASRouting
 from gibbsq.engines.numpy_engine import simulate
 
 log = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ def collect_robust_expert_data(
     
     for mu_scale in mu_scales:
         scaled_service_rates = service_rates * mu_scale
-        expert = SojournTimeSoftmaxRouting(scaled_service_rates, alpha=1.0)
+        expert = UASRouting(scaled_service_rates, alpha=1.0)
         total_capacity = np.sum(scaled_service_rates)
         
         for rho in rhos:
@@ -185,10 +185,19 @@ def train_robust_bc_value(
     # This precisely aligns the Critic initialization with the RL advantage target.
     # SG#3: Sample-specific M/M/1 limit for cross-regime Domain Randomization
     # CRITICAL: Added jnp.maximum to prevent division by zero NaN explosions at rho=1.0
-    G_rand = jax.vmap(lambda r, m: (r / jnp.maximum(1.0 - r, 1e-6)) * (jnp.sum(m) / jnp.mean(m)))(R, MU)
+    # SG#3 & SG#4 FIX: Use heterogeneous M/M/1 sum to match train_reinforce.py
+    # G_rand = Σ (λ_i) / (μ_i - λ_i) where λ_i = (ρ * Σμ) / N
+    def _heterogeneous_random_limit(rho_val, mu_vec):
+        lam_i = rho_val * jnp.sum(mu_vec) / num_servers
+        return jnp.sum(lam_i / jnp.maximum(mu_vec - lam_i, 1e-6))
+    
+    G_rand = jax.vmap(_heterogeneous_random_limit)(R, MU)
     G_den  = jnp.maximum(jax.vmap(lambda m: jnp.sum(m))(MU), 1e-6)
     G_idx  = 100.0 * (G_rand - G) / G_den
-    G_scaled = squash_scale * jnp.tanh(G_idx / squash_threshold)
+    
+    # Use linear targets. The RL trainer uses linear normalized returns, so the 
+    # Critic must be pretrained on the same linear scale to prevent divergence.
+    G_scaled = G_idx
 
     @eqx.filter_jit
     def loss_fn(model, x, r, g, mu_batch):

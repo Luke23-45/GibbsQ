@@ -3,7 +3,7 @@
 from gibbsq.core.config import ExperimentConfig, SystemConfig, SimulationConfig, PolicyConfig, DriftConfig
 from gibbsq.core.config import validate, total_capacity, load_factor, drift_constant_R, drift_rate_epsilon
 from gibbsq.core.config import hydra_to_config
-from gibbsq.core.policies import make_policy, SoftmaxRouting, UniformRouting, ProportionalRouting, JSQRouting, PowerOfDRouting, JSSQRouting, SojournTimeSoftmaxRouting
+from gibbsq.core.policies import make_policy, SoftmaxRouting, UniformRouting, ProportionalRouting, JSQRouting, PowerOfDRouting, JSSQRouting, UASRouting
 from gibbsq.engines.numpy_engine import simulate, run_replications, SimResult
 from gibbsq.engines.jax_engine import simulate_jax, run_replications_jax
 from gibbsq.core.drift import generator_drift, upper_bound, simplified_bound, verify_single
@@ -18,7 +18,7 @@ __all__ = [
     "validate", "total_capacity", "load_factor", "drift_constant_R", "drift_rate_epsilon",
     "hydra_to_config",
     # Policies
-    "make_policy", "SoftmaxRouting", "UniformRouting", "ProportionalRouting", "JSQRouting", "PowerOfDRouting", "JSSQRouting", "SojournTimeSoftmaxRouting", "UASRouting",
+    "make_policy", "SoftmaxRouting", "UniformRouting", "ProportionalRouting", "JSQRouting", "PowerOfDRouting", "JSSQRouting", "UASRouting",
     # Simulator
     "simulate", "run_replications", "SimResult",
     "simulate_jax", "run_replications_jax",

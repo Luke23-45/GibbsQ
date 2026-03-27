@@ -65,7 +65,11 @@ def main(raw_cfg: DictConfig) -> None:
 
     if N <= 3 and cfg.drift.use_grid:
         log.info(f"--- Grid Evaluation (q_max={cfg.drift.q_max}) ---")
-        res = evaluate_grid(lam, mu, alpha, q_max=cfg.drift.q_max)
+        # SG#1 FIX: Map policy name to correct drift verification mode
+        mode_map = {"uas": "uas", "softmax": "raw", "jsq": "raw", "uniform": "raw"}
+        drift_mode = mode_map.get(cfg.policy.name, "raw")
+        
+        res = evaluate_grid(lam, mu, alpha, q_max=cfg.drift.q_max, mode=drift_mode)
         
         log.info(f"States evaluated: {len(res.states):,}")
         log.info(f"Bound violations: {res.violations:,}")
@@ -112,7 +116,7 @@ def main(raw_cfg: DictConfig) -> None:
 
     else:
         log.info("--- Trajectory Evaluation ---")
-        policy = build_policy_by_name("sojourn_softmax", alpha=alpha, mu=np.asarray(mu, dtype=np.float64))
+        policy = build_policy_by_name(cfg.policy.name, alpha=alpha, mu=np.asarray(mu, dtype=np.float64))
         
         sim_res = simulate(
             num_servers=N,
@@ -126,7 +130,11 @@ def main(raw_cfg: DictConfig) -> None:
         )
         log.info(f"Simulation done: {sim_res.arrival_count:,} arrivals.")
 
-        res = evaluate_trajectory(sim_res.states, lam, mu, alpha)
+        # SG#1 FIX: Map policy name to correct drift verification mode
+        mode_map = {"uas": "uas", "softmax": "raw", "jsq": "raw", "uniform": "raw"}
+        drift_mode = mode_map.get(cfg.policy.name, "raw")
+        
+        res = evaluate_trajectory(sim_res.states, lam, mu, alpha, mode=drift_mode)
         log.info(f"States evaluated: {len(res.states):,}")
         log.info(f"Bound violations: {res.violations:,}")
 

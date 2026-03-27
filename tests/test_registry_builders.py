@@ -45,7 +45,7 @@ class TestRegistryImportOrder:
         
         expected_policies = [
             "softmax", "uniform", "proportional", 
-            "jsq", "power_of_d", "jssq", "sojourn_softmax"
+            "jsq", "power_of_d", "jssq", "uas"
         ]
         
         for policy_name in expected_policies:
@@ -269,22 +269,24 @@ class TestBuildPolicyByName:
         
         assert isinstance(policy, JSSQRouting)
 
-    def test_build_sojourn_softmax_requires_mu(self):
-        """Test that sojourn_softmax policy requires mu parameter."""
+    def test_build_unweighted_potential_softmax_raises_error(self):
+        """Test that legacy unweighted softmax calculation is no longer available by the old name."""
         from gibbsq.core.builders import build_policy_by_name
         
-        with pytest.raises(ValueError, match="requires.*mu"):
-            build_policy_by_name("sojourn_softmax")
+        # sojourn_softmax has been removed - should raise KeyError
+        mu = np.array([1.0, 2.0])
+        with pytest.raises(KeyError, match="Unknown policy.*sojourn_softmax"):
+            build_policy_by_name("sojourn_softmax", mu=mu, alpha=5.0)
 
-    def test_build_sojourn_softmax_with_mu(self):
-        """Test building sojourn_softmax policy with mu."""
+    def test_build_uas_with_mu(self):
+        """Test building uas policy with mu (replacement for legacy unweighted nomenclature)."""
         from gibbsq.core.builders import build_policy_by_name
-        from gibbsq.core.policies import SojournTimeSoftmaxRouting
+        from gibbsq.core.policies import UASRouting
         
         mu = np.array([1.0, 2.0])
-        policy = build_policy_by_name("sojourn_softmax", mu=mu, alpha=5.0)
+        policy = build_policy_by_name("uas", mu=mu, alpha=5.0)
         
-        assert isinstance(policy, SojournTimeSoftmaxRouting)
+        assert isinstance(policy, UASRouting)
         assert policy.alpha == 5.0
 
 
@@ -346,7 +348,7 @@ class TestMakePolicyBackwardCompat:
         p6 = make_policy("jssq", mu=np.array([1.0, 2.0]))
         assert p6 is not None
         
-        p7 = make_policy("sojourn_softmax", mu=np.array([1.0, 2.0]), alpha=1.0)
+        p7 = make_policy("uas", mu=np.array([1.0, 2.0]), alpha=1.0)
         assert p7 is not None
 
 

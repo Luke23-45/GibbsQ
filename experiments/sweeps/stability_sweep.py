@@ -49,9 +49,9 @@ def main(raw_cfg: DictConfig) -> None:
     (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
 
     # SG#16 FIX: Replace bare assert with if/raise to survive python -O.
-    if cfg.policy.name not in ["softmax", "sojourn_softmax"]:
+    if cfg.policy.name not in ["softmax", "uas"]:
         raise ValueError(
-            f"Stability sweep requires policy.name == 'sojourn_softmax', "
+            f"Stability sweep requires policy.name == 'softmax' or 'uas', "
             f"but config has '{cfg.policy.name}'."
         )
 
@@ -94,7 +94,7 @@ def main(raw_cfg: DictConfig) -> None:
                 _sim_time = cfg.simulation.ssa.sim_time
                 _sample_interval = cfg.simulation.ssa.sample_interval
                 max_samples = int(_sim_time / _sample_interval) + 1
-                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
                 times, states, (arrs, deps) = run_replications_jax(
                     num_replications=cfg.simulation.num_replications,
                     num_servers=N,

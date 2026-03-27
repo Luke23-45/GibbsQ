@@ -187,12 +187,12 @@ def stationarity_diagnostic(
     x = np.arange(num_windows)
     res = stats.linregress(x, means)
 
-    # We only care about explosive trends (slope > 0). If slope is negative,
-    # it's just settling down (still converging), but bounded.
-    explosive = (res.slope > 0) and (res.pvalue < p_value_threshold)
+    # A p-value below the threshold indicates we can reject the null hypothesis 
+    # that the slope is zero. This signifies a non-stationary trend.
+    is_non_stationary = (res.pvalue < p_value_threshold)
 
     return {
-        "is_stationary": not explosive,
+        "is_stationary": not is_non_stationary,
         "slope":         float(res.slope),
         "p_value":       float(res.pvalue),
         "means":         means.tolist(),

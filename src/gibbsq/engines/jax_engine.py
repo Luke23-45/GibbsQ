@@ -127,12 +127,12 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         winner = candidates[winner_local]
         return jnp.zeros(N).at[winner].set(1.0)
         
-    elif params.policy_type == 5:  # Sojourn-Time Softmax (heterogeneity-aware)
+    elif params.policy_type == 5:  # Look-Ahead Potential Softmax (heterogeneity-aware)
         # SG#7 FIX: Use (Q+1)/mu to match policies.py, drift.py, and
-        # the sojourn_time_features used during neural network training.
+        # the look_ahead_potential used during neural network training.
         # Previously used Q/mu which was inconsistent (shifted input domain).
-        sojourn = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
-        logits = -params.alpha * sojourn
+        potential = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
+        logits = -params.alpha * potential
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)
@@ -140,8 +140,8 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
     elif params.policy_type == 6:  # UAS (Unified Archimedean Softmax)
         # UAS formula: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
         # The μ_i weighting provides capacity-aware routing
-        sojourn = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
-        logits = -params.alpha * sojourn
+        potential = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
+        logits = -params.alpha * potential
         # Add log(μ_i) to logits = μ_i * exp(...) in log space
         logits = logits + jnp.log(params.service_rates)
         max_logit = jnp.max(logits)

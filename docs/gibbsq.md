@@ -154,13 +154,27 @@ Therefore, our drift inequality simplifies to:
 
 Let $C$ be the finite (and thus compact) set of states where $\varepsilon |Q|_1 \le R + 1$. Outside of $C$, we have $\mathcal{L}V(Q) \le -1$. By the continuous-time Foster-Lyapunov criteria (Theorem 4.2 in Meyn \& Tweedie, 1993), the existence of this norm-like Lyapunov function with strict negative drift outside a compact set guarantees that $Q(t)$ is positive Harris recurrent and possesses a unique stationary distribution.
 
-\section{Note on Deep Learning Implementation}
-
-While Section 1 establishes the Raw-Queue Softmax ($p_i \propto \exp(-\alpha Q_i)$) as the theoretically stable baseline, our empirical evaluations provide a critical insight for deep learning implementations. 
-
-For neural-policy initialization via Behavioral Cloning (BC) or REINFORCE warm-starting, the \textbf{Sojourn-Time} formulation ($\exp(-\alpha \frac{Q_i+1}{\mu_i})$) proves more efficient. Although the analytical Raw-Queue expert is stronger (yielding lower total queue length), the Sojourn-Time distribution is better aligned with the heterogeneity-aware input features $(\frac{Q+1}{\mu})$ seen by the neural network. This allows the gradient optimizer to converge faster and more accurately to the target, resulting in superior neural-policy performance compared to clones derived from raw queue states.
-
 \end{proof}
+
+\section{The Dual-Policy Architecture: Theory vs. Application}
+
+The GibbsQ framework maintains a dual-policy architecture to balance theoretical rigor and applied deep learning performance:
+
+\textbf{1. The Theoretical Baseline: Raw-Queue Softmax}
+
+Section 1 establishes the Raw-Queue Softmax ($p_i \propto \exp(-\alpha Q_i)$) as the mathematically proven, absolutely stable baseline. We utilize this formulation primarily for handling basic homogeneous servers and for establishing strict analytical Foster-Lyapunov drift bounds across the state space.
+
+\textbf{2. The Applied Standard: Unified Archimedean Softmax (UAS)}
+
+For advanced deep learning implementations and empirical analysis of heterogeneous server configurations, we employ the Unified Archimedean Softmax (UAS) policy. The UAS provides a capacity-weighted pre-multiplier:
+
+\begin{equation}
+p_i(Q,\mu) = \frac{\mu_i \exp\left(-\alpha \frac{Q_i+1}{\mu_i}\right)}{\sum_{j=1}^N \mu_j \exp\left(-\alpha \frac{Q_j+1}{\mu_j}\right)}.
+\end{equation}
+
+For neural-policy initialization via Behavioral Cloning (BC) or REINFORCE warm-starting, the UAS formulation is profoundly superior because its "look-ahead potential" $(Q_i+1)/\mu_i$ aligns perfectly with the heterogeneity-aware input features ingested by the neural network. Furthermore, the $\mu_i$ multiplier natively routes traffic to faster servers at the idle state ($p_i \propto \mu_i \exp(-\alpha/\mu_i)$).
+
+By retaining both formulations, the project can seamlessly traverse between asserting absolute analytic guarantees (via Raw-Queue bounds) and optimizing real-world heterogeneous routing models (via UAS neural gradients).
 
 \end{document}
 

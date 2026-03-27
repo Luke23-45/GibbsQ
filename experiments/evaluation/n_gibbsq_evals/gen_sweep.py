@@ -133,7 +133,7 @@ class GeneralizationSweeper:
 
                 # Neural on true SSA
                 _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
-                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
                 times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
                     num_replications=_cell_reps,
                     num_servers=self.cfg.system.num_servers,

@@ -101,8 +101,8 @@ class CriticalLoadTest:
             # The Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
             # the many-server asymptotic regime where both N and λ grow.
             _base_rho = self.cfg.stress.critical_load_base_rho
-            # SG#5: Heavy-traffic mixing time scales quadratically O(1/(1-rho)^2)
-            _rho_factor = max(1.0, ((1.0 - _base_rho) / max(1.0 - float(rho), 1e-6))**2)
+            # SG#5: Heavy-traffic mixing time scales as O(1/(1-rho)) per Goldberg & Li 2022
+            _rho_factor = max(1.0, ((1.0 - _base_rho) / max(1.0 - float(rho), 1e-6)))
             _uncapped_sim_time = self.ssa_sim_time * _rho_factor
             _cap = float(self.cfg.stress.critical_load_max_sim_time)
             _rho_sim_time = min(_uncapped_sim_time, _cap)
@@ -118,7 +118,7 @@ class CriticalLoadTest:
             _rho_seed = self.cfg.simulation.seed + idx * 1000
 
             # GibbsQ on true SSA
-            _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+            _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
             times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
                 num_replications=num_reps, num_servers=self.num_servers,
                 arrival_rate=float(arrival_rate), service_rates=jnp.array(_mu_np),

@@ -98,7 +98,7 @@ class StatsBenchmark:
         _mu_np = np.array(self.service_rates, dtype=np.float64)
 
         log.info(f"Running {self.num_samples} GibbsQ SSA simulations...")
-        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
         times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
             num_replications=self.num_samples,
             num_servers=self.num_servers,

@@ -118,7 +118,7 @@ def main(raw_cfg: DictConfig) -> None:
         max_samples_t1 = int(_sim_time_t1 / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating N={N} experts (rho={cfg.stress.massive_n_rho})...")
-        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
 
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
@@ -197,9 +197,10 @@ def main(raw_cfg: DictConfig) -> None:
             # The quadratic O(1/(1-ρ)²) is only valid in the Halfin-Whitt
             # many-server regime (N→∞ simultaneously) — not this fixed-N setting.
             # Formula now matches critical_load.py exactly (SG-B consistency fix).
+            # Halfin-Whitt quadratic scaling O(1/(1-ρ)²) applies only to
+            # the many-server asymptotic regime where both N and λ grow.
             _base_rho_crit = cfg.stress.critical_load_base_rho
-            # SG#5: Heavy-traffic mixing time scales quadratically O(1/(1-rho)^2)
-            _rho_factor_crit = max(1.0, ((1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6))**2)
+            _rho_factor_crit = max(1.0, ((1.0 - _base_rho_crit) / max(1.0 - rho, 1e-6)))
             _sim_time_crit = min(cfg.simulation.ssa.sim_time * _rho_factor_crit, cfg.stress.critical_load_max_sim_time)
             if _sim_time_crit >= cfg.stress.critical_load_max_sim_time:
                 log.warning(
@@ -212,7 +213,7 @@ def main(raw_cfg: DictConfig) -> None:
         max_samples_crit = int(_sim_time_crit / cfg.stress.sample_interval) + 1
 
         log.info(f"  Simulating rho={rho:.3f} (T={_sim_time_crit})...")
-        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "sojourn_softmax": 5}
+        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
 
         times, states, (arrs, deps) = sharded_replications(
             num_replications=cfg.simulation.num_replications,
@@ -339,7 +340,7 @@ def main(raw_cfg: DictConfig) -> None:
         sample_interval=cfg.stress.sample_interval,    # PATCH: was cfg.simulation.sample_interval
         base_seed=cfg.simulation.seed,
         max_samples=max_samples_het,               # PATCH: consistent with _sim_time_het
-        policy_type=5  # PATCH P2: Use sojourn-time softmax for heterogeneity-aware routing
+        policy_type=6  # Use UAS for heterogeneity-aware routing
     )
 
     work_dist = []
