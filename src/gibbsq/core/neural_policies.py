@@ -270,7 +270,8 @@ class ValueNetwork(eqx.Module):
         self, 
         Q: Float[Array, "dim"], 
         mu: Float[Array, "dim"] = None,
-        rho: Float[Array, ""] = None
+        rho: Float[Array, ""] = None,
+        **kwargs
     ) -> Float[Array, ""]:
         """Forward pass. Returns scalar value estimate V(s, rho).
         
@@ -279,6 +280,11 @@ class ValueNetwork(eqx.Module):
         Batched input: s shape (batch, N), rho shape (batch,) or scalar
         Equinox Linear layers require single inputs, so batched calls use internal vmap.
         """
+        # 1. Feature Representation (Sojourn Time Proxy)
+        # Safely resolve mu during JAX tracing
+        effective_mu = mu if mu is not None else getattr(self, 'service_rates', 1.0)
+        s = (Q + 1.0) / effective_mu
+        
         is_batched = s.ndim > 1
         
         if is_batched:

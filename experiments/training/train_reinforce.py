@@ -330,17 +330,17 @@ def collect_trajectory_ssa(
             probs[chosen_srv] = 1.0
             logits = np.zeros(N) # Not used but avoids UnboundLocal
         else:
-            # 1. Pass Raw-Q: Encapsulation handles Sojourn-Time internally
+            # 1. Pass Raw-Q and mu: Encapsulation handles Sojourn-Time internally
             logits = policy_net.numpy_forward(Q, np_params, np_config, rho=rho, mu=mu)
             
-            # FIX SG#5 & SG#6: Apply adaptive temperature and single stable Softmax
-            # This ensures forward sampling parity with the JAX backward gradient pass.
-            temp = float(compute_adaptive_alpha(rho)) 
-            logits = logits / temp
+            # 2. Strict Parity Enforcement: Cast to float64 for stable softmax
+            logits_np = np.asarray(logits, dtype=np.float64)
             
-            logits = logits - np.max(logits)
-            probs = np.exp(logits)
-            probs = probs / probs.sum()
+            # CRITICAL: No temperature scaling allowed! We must sample from the 
+            # exact raw logit distribution that JAX differentiates in the backward pass.
+            logits_np = logits_np - np.max(logits_np)
+            probs = np.exp(logits_np)
+            probs = probs / np.sum(probs)
             
             if deterministic:
                 # Greedy selection for evaluation
