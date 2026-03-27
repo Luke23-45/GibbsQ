@@ -9,7 +9,13 @@ import os
 import subprocess
 from pathlib import Path
 
-def run_experiment(experiment, hydra_args=None):
+def _has_override(args: list[str], key: str) -> bool:
+    """Return True if Hydra override list already contains key=..."""
+    key_prefixes = (f"{key}=", f"+{key}=", f"++{key}=")
+    return any(a.startswith(key_prefixes) for a in args)
+
+
+def run_experiment(experiment, hydra_args=None, dry_run: bool = False):
     """Run a single experiment using the unified experiment_runner.py script."""
     if hydra_args is None:
         hydra_args = []
@@ -17,7 +23,10 @@ def run_experiment(experiment, hydra_args=None):
     script_dir = Path(__file__).parent
     run_script = script_dir / "experiment_runner.py"
     
-    cmd = ["python", str(run_script), experiment] + hydra_args
+    cmd = [sys.executable, str(run_script), experiment] + hydra_args
+    if dry_run:
+        print(f"[DRY-RUN] {' '.join(cmd)}")
+        return 0
     
     try:
         result = subprocess.run(cmd, check=True)
@@ -34,6 +43,7 @@ def main():
         description="Cross-platform master execution pipeline for GibbsQ research paper"
     )
     parser.add_argument("--start-from", type=str, default=None, help="Experiment alias to start the pipeline from (e.g. 'drift', 'policy')")
+    parser.add_argument("--dry-run", action="store_true", help="Print the resolved experiment commands without executing them")
     
     args, hydra_args = parser.parse_known_args()
     
@@ -87,7 +97,9 @@ def main():
     
     # Special arguments for specific experiments
     special_args = {
+        # Keep sweep profile explicit unless caller already pinned experiment group.
         "sweep": ["+experiment=stability_sweep"],
+        # stress_test requires cfg.jax.enabled=True; inject only if caller did not set it.
         "stress": ["++jax.enabled=True"],
     }
     
@@ -99,10 +111,18 @@ def main():
         if description:
             print(f"\n{description}")
         
-        current_hydra_args = global_hydra_args + special_args.get(experiment, [])
+        auto_args = []
+        for arg in special_args.get(experiment, []):
+            if arg.startswith("+experiment=") and _has_override(global_hydra_args, "experiment"):
+                continue
+            if "jax.enabled=" in arg and _has_override(global_hydra_args, "jax.enabled"):
+                continue
+            auto_args.append(arg)
+
+        current_hydra_args = global_hydra_args + auto_args
         
         print(f"Running: {experiment}")
-        result = run_experiment(experiment, current_hydra_args)
+        result = run_experiment(experiment, current_hydra_args, dry_run=args.dry_run)
         
         if result != 0:
             print(f"Experiment '{experiment}' failed with exit code {result}")

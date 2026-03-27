@@ -532,7 +532,7 @@ def run_gradient_check(
     )
 
 
-def main(raw_cfg: DictConfig):
+def main(raw_cfg: DictConfig) -> None:
     """Main entry point for gradient validation."""
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
@@ -592,15 +592,18 @@ def main(raw_cfg: DictConfig):
     
     if not result.passed:
         log.warning("GRADIENT CHECK FAILED - REINFORCE estimator may be biased")
+        raise SystemExit(1)
     else:
         log.info("GRADIENT CHECK PASSED - REINFORCE estimator is valid")
+        return
 
 
 if __name__ == "__main__":
     import sys
     import hydra
     if len(sys.argv) > 1:
-        hydra.main(version_base=None, config_path="../../configs", config_name="default")(main)()
+        _wrapped = hydra.main(version_base=None, config_path="../../configs", config_name="default")(main)
+        _wrapped()
     else:
         from hydra import compose, initialize_config_dir
         import os
