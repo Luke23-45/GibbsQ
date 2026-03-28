@@ -3,9 +3,11 @@ N-GibbsQ generalization sweep.
 
 Tests N-GibbsQ generalization to unseen configurations at FIXED server count.
 
-PREREQUISITE (SG#8): This sweep evaluates a model trained with the SAME
-config that is active when this script runs. Train first:
-  python -m experiments.n_gibbsq.train --config-name <your-config>
+PREREQUISITE: This sweep evaluates a model trained with the SAME
+config that is active when this script runs. Train first via one of the
+public entry points:
+  python scripts/execution/experiment_runner.py bc_train --config-name <your-config>
+  python scripts/execution/experiment_runner.py reinforce_train --config-name <your-config>
 The model architecture (num_servers, hidden_size) must match the active config.
 The SG#16 check (model.layers[0].weight.shape[1] == num_servers) enforces this.
 
@@ -38,13 +40,14 @@ from gibbsq.core import constants
 
 from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter
-from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
-from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer
+from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
+from gibbsq.utils.progress import create_progress, iter_progress
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -52,6 +55,7 @@ from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
+NEURAL_EVAL_MODE = "deterministic"
 
 
 # _resolve_model_pointer moved to gibbsq.utils.model_io.resolve_model_pointer
@@ -81,7 +85,7 @@ class GeneralizationSweeper:
         # 1. Load trained model
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
-        model_path = resolve_model_pointer(_PROJECT_ROOT, output_root)
+        model_path = resolve_model_pointer(_PROJECT_ROOT, output_root, allow_bc=False, allow_legacy=False)
         
         # SG#8 FIX: Removed stale comment referencing "[100,1,1,1]" training
         # config (not part of this codebase). The sweep design is:
@@ -107,8 +111,7 @@ class GeneralizationSweeper:
         try:
             validate_neural_model_shape(model, self.cfg.neural, self.cfg.system.num_servers)
         except ValueError as e:
-            log.error(f"Model shape mismatch! {e}")
-            return
+            raise RuntimeError(f"Model shape mismatch: {e}") from e
         
         # SG-4 FIX: Replace single-sample DGA calls with replicated SSA.
         _cell_reps   = int(self.cfg.simulation.num_replications)
@@ -121,71 +124,87 @@ class GeneralizationSweeper:
         log.info("Evaluating N-GibbsQ improvement ratio (GibbsQ / Neural) on 5x5 Grid...")
         
         cell_idx = 0
-        for i, scale in enumerate(scale_vals):
-            mu = base_rates * scale  # Scale the rates but keep structure
-            total_cap = jnp.sum(mu)
-            for j, rho in enumerate(rho_vals):
-                lambda_rate = float(rho * total_cap)
-                
-                _cell_seed = int(jax.random.bits(jax.random.fold_in(cell_keys[cell_idx], 0))) & 0x7FFFFFFF
-                cell_idx += 1
-                _mu_np = np.array(mu, dtype=np.float64)
+        baseline_policy_name = self.cfg.policy.name
+        baseline_policy_type = policy_name_to_type(baseline_policy_name)
 
-                # Neural on true SSA
-                _neural_ssa = NeuralSSAPolicy(model, mu=_mu_np, rho=rho)
-                _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
-                times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
-                    num_replications=_cell_reps,
-                    num_servers=self.cfg.system.num_servers,
-                    arrival_rate=lambda_rate,
-                    service_rates=jnp.array(_mu_np),
-                    alpha=float(self.cfg.system.alpha),
-                    sim_time=self.ssa_sim_time,
-                    sample_interval=self.ssa_sample_interval,
-                    base_seed=_cell_seed,
-                    max_samples=_max_s_cell,
-                    policy_type=_pmap.get(self.cfg.policy.name, 3),
-                )
-                g_vals = []
-                for _r in range(_cell_reps):
-                    _np_times = np.array(times_g[_r])
-                    _np_states = np.array(states_g[_r])
-                    _valid_mask = _np_times > 0
-                    _valid_mask[0] = True
-                    _vl = int(np.sum(_valid_mask))
-                    _np_times = _np_times[:_vl]
-                    _np_states = _np_states[:_vl]
-                        
-                    _res = SimResult(
-                        times=_np_times, states=_np_states,
-                        arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
-                        final_time=float(times_g[_r][-1]),
-                        num_servers=self.cfg.system.num_servers,
+        with create_progress(total=total_cells, desc="generalize", unit="cell") as cell_bar:
+            for i, scale in enumerate(scale_vals):
+                mu = base_rates * scale  # Scale the rates but keep structure
+                total_cap = jnp.sum(mu)
+                for j, rho in enumerate(rho_vals):
+                    cell_bar.set_postfix(
+                        {"scale": f"{scale:.2f}x", "rho": f"{rho:.2f}"},
+                        refresh=False,
                     )
-                    g_vals.append(float(time_averaged_queue_lengths(
-                        _res, self.cfg.simulation.burn_in_fraction).sum()))
-                g_loss = float(np.mean(g_vals))
+                    lambda_rate = float(rho * total_cap)
 
-                # Neural on true SSA
-                _max_ev = compute_poisson_max_steps(lambda_rate, _mu_np, self.ssa_sim_time)
-                n_vals = []
-                for _rep in range(_cell_reps):
-                    _rng = np.random.default_rng(_cell_seed + _rep)
-                    _res_n = simulate(
+                    _cell_seed = int(jax.random.bits(jax.random.fold_in(cell_keys[cell_idx], 0))) & 0x7FFFFFFF
+                    cell_idx += 1
+                    _mu_np = np.array(mu, dtype=np.float64)
+
+                    _neural_ssa = build_neural_eval_policy(
+                        model,
+                        mu=_mu_np,
+                        rho=rho,
+                        mode=NEURAL_EVAL_MODE,
+                    )
+                    times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                        num_replications=_cell_reps,
                         num_servers=self.cfg.system.num_servers,
-                        arrival_rate=lambda_rate, service_rates=_mu_np,
-                        policy=_neural_ssa, sim_time=self.ssa_sim_time,
+                        arrival_rate=lambda_rate,
+                        service_rates=jnp.array(_mu_np),
+                        alpha=float(self.cfg.system.alpha),
+                        sim_time=self.ssa_sim_time,
                         sample_interval=self.ssa_sample_interval,
-                        rng=_rng, max_events=_max_ev,
+                        base_seed=_cell_seed,
+                        max_samples=_max_s_cell,
+                        policy_type=baseline_policy_type,
                     )
-                    n_vals.append(float(time_averaged_queue_lengths(
-                        _res_n, self.cfg.simulation.burn_in_fraction).sum()))
-                n_loss = float(np.mean(n_vals))
-                
-                # Ratio: GibbsQ / Neural. > 1.0 means Neural is better.
-                ratio = float(g_loss / max(n_loss, constants.NUMERICAL_STABILITY_EPSILON))
-                grid[i, j] = ratio
-                log.info(f"   Scale={scale:5.1f}x | rho={rho:.2f} | Improvement={ratio:.2f}x")
+                    g_vals = []
+                    for _r in range(_cell_reps):
+                        _np_times = np.array(times_g[_r])
+                        _np_states = np.array(states_g[_r])
+                        _valid_mask = _np_times > 0
+                        _valid_mask[0] = True
+                        _vl = int(np.sum(_valid_mask))
+                        _np_times = _np_times[:_vl]
+                        _np_states = _np_states[:_vl]
+
+                        _res = SimResult(
+                            times=_np_times, states=_np_states,
+                            arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
+                            final_time=float(_np_times[-1]),
+                            num_servers=self.cfg.system.num_servers,
+                        )
+                        g_vals.append(float(time_averaged_queue_lengths(
+                            _res, self.cfg.simulation.burn_in_fraction).sum()))
+                    g_loss = float(np.mean(g_vals))
+
+                    _max_ev = compute_poisson_max_steps(lambda_rate, _mu_np, self.ssa_sim_time)
+                    n_vals = []
+                    for _rep in iter_progress(
+                        range(_cell_reps),
+                        total=_cell_reps,
+                        desc=f"generalize reps scale={scale:.2f} rho={rho:.2f}",
+                        unit="rep",
+                        leave=False,
+                    ):
+                        _rng = np.random.default_rng(_cell_seed + _rep)
+                        _res_n = simulate(
+                            num_servers=self.cfg.system.num_servers,
+                            arrival_rate=lambda_rate, service_rates=_mu_np,
+                            policy=_neural_ssa, sim_time=self.ssa_sim_time,
+                            sample_interval=self.ssa_sample_interval,
+                            rng=_rng, max_events=_max_ev,
+                        )
+                        n_vals.append(float(time_averaged_queue_lengths(
+                            _res_n, self.cfg.simulation.burn_in_fraction).sum()))
+                    n_loss = float(np.mean(n_vals))
+
+                    ratio = float(g_loss / max(n_loss, constants.NUMERICAL_STABILITY_EPSILON))
+                    grid[i, j] = ratio
+                    log.info(f"   Scale={scale:5.1f}x | rho={rho:.2f} | Improvement={ratio:.2f}x")
+                    cell_bar.update(1)
 
         self._plot_heatmap(grid, scale_vals, rho_vals)
 
@@ -227,7 +246,7 @@ def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
 
-    run_dir, run_id = get_run_config(cfg, "generalization_sweep", raw_cfg)
+    run_dir, run_id = get_run_config(cfg, "generalize", raw_cfg)
     run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
 
     log.info("=" * 60)

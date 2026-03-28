@@ -14,6 +14,7 @@ The validation ensures:
 import logging
 from pathlib import Path
 from typing import NamedTuple
+from dataclasses import replace
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +30,7 @@ from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import look_ahead_potential
 from gibbsq.utils.logging import setup_wandb, get_run_config
+from gibbsq.utils.progress import create_progress, iter_progress
 from gibbsq.engines.jax_ssa import vmap_collect_trajectories, compute_poisson_max_steps
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -46,6 +48,11 @@ class GradientCheckResult(NamedTuple):
     reinforce_var_vector: np.ndarray 
     fd_var_vector: np.ndarray # NEW: Per-parameter FD variance
     passed: bool
+
+
+def _sum_masked_action_interval_returns(batch) -> jax.Array:
+    mask = batch.is_action_mask & batch.valid_mask
+    return jnp.sum(jnp.where(mask, batch.returns, 0.0))
 
 def compute_reinforce_gradient(
     policy_net: NeuralRouter,
@@ -137,13 +144,11 @@ def compute_reinforce_gradient(
             step_idx = jnp.arange(max_steps)[None, :]
             chosen_log_probs = log_probs[batch_idx, step_idx, safe_a]
             
-            # Temporal Credit Assignment correction (SG #1)
-            action_idx = jnp.cumsum(fixed_mask.astype(jnp.float32), axis=1) - 1.0
-            gamma_factors = cfg.neural_training.gamma ** action_idx
-            
-            # Loss = - E[ gamma^t * Advantage * log_prob ] for maximization
+            # batch.returns already contains the discounted return aligned to each action.
+            # Reapplying gamma here changes the objective and breaks the estimator check.
+            # Loss = - E[ Advantage * log_prob ] for maximization
             # We return negative sum because jax.grad minimizes by default
-            return -jnp.sum(gamma_factors * fixed_mask * adv * chosen_log_probs)
+            return -jnp.sum(fixed_mask * adv * chosen_log_probs)
 
         # Differentiate with respect to the flat parameters
         return jax.grad(loss_fn)(flat_theta)
@@ -152,7 +157,14 @@ def compute_reinforce_gradient(
     grad_list = []
     samples_per_chunk = []  # Track actual samples per chunk for proper variance scaling
     
-    for i in range(0, n_samples, chunk_size):
+    chunk_starts = range(0, n_samples, chunk_size)
+    for i in iter_progress(
+        chunk_starts,
+        total=len(range(0, n_samples, chunk_size)),
+        desc="reinforce_check: REINFORCE chunks",
+        unit="chunk",
+        leave=False,
+    ):
         chunk_keys = keys[i:i+chunk_size]
         actual_chunk_size = chunk_keys.shape[0]
         grad_list.append(compute_chunk_grad(init_flat_params, chunk_keys))
@@ -257,21 +269,19 @@ def compute_finite_difference_gradient(
             max_steps=max_steps,
             gamma=cfg.neural_training.gamma
         )
-        
-        first_action_idx = jnp.argmax(batch.is_action_mask, axis=1)
-        has_action = jnp.max(batch.is_action_mask, axis=1)
-        
-        safe_idx = jnp.expand_dims(first_action_idx, -1)
-        first_returns = jnp.take_along_axis(batch.returns, safe_idx, axis=-1).squeeze(-1)
-        
-        G_0 = jnp.where(has_action, first_returns, 0.0)
-        return jnp.sum(G_0)
+        return _sum_masked_action_interval_returns(batch)
 
     def get_expected_return(flat_theta, all_keys):
         total_sum = 0.0
         chunk_sums = []
         # Sequential python loop over chunks maintains flat memory ceiling
-        for i in range(0, n_samples, chunk_size):
+        for i in iter_progress(
+            range(0, n_samples, chunk_size),
+            total=len(range(0, n_samples, chunk_size)),
+            desc="reinforce_check: FD chunks",
+            unit="chunk",
+            leave=False,
+        ):
             chunk_keys = all_keys[i:i+chunk_size]
             # Cast to Python float64 immediately to prevent float32 catastrophic cancellation
             val = float(get_chunk_sum_return(flat_theta, chunk_keys))
@@ -294,7 +304,12 @@ def compute_finite_difference_gradient(
     computed_mask = np.zeros(n_params, dtype=bool)
     fd_var = np.zeros(n_params)
     
-    for i, param_idx in enumerate(selected_indices):
+    for i, param_idx in enumerate(iter_progress(
+        selected_indices,
+        total=len(selected_indices),
+        desc="reinforce_check: FD params",
+        unit="param",
+    )):
         # ---- PLUS PERTURBATION ----
         params_plus = flat_params.at[param_idx].add(epsilon)
         return_plus, var_plus = get_expected_return(params_plus, keys_shared)
@@ -359,7 +374,8 @@ def compute_finite_difference_gradient(
             
             log.info(
                 f"  {status} Param {i+1:3}/{len(selected_indices):<3} (idx {param_idx:5}): "
-                f"RF={rf_val:10.6f} | FD={fd_val:10.6f} | diff={abs_diff:10.6f}{z_str} | RelErr={rel_err_p:7.4f} | CosSim={running_cos_sim:7.4f}"
+                f"RF={rf_val:10.6f} | FD={fd_val:10.6f} | diff={abs_diff:10.6f}{z_str} | "
+                f"RunningRelErr={rel_err_p:7.4f} | RunningCosSim={running_cos_sim:7.4f}"
             )
     
     
@@ -398,9 +414,16 @@ def run_gradient_check(
         
     # Initialize policy
     key, policy_key = jax.random.split(key)
+    gradient_hidden_size = (
+        cfg.verification.gradient_check_hidden_size
+        if cfg.verification.gradient_check_hidden_size is not None
+        else cfg.neural.hidden_size
+    )
+    gradient_neural_cfg = replace(cfg.neural, hidden_size=gradient_hidden_size)
+
     policy_net = NeuralRouter(
         num_servers=cfg.system.num_servers,
-        config=cfg.neural,
+        config=gradient_neural_cfg,
         service_rates=cfg.system.service_rates,
         key=policy_key,
     )
@@ -537,7 +560,7 @@ def main(raw_cfg: DictConfig) -> None:
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
     
-    run_dir, run_id = get_run_config(cfg, "gradient_check", raw_cfg)
+    run_dir, run_id = get_run_config(cfg, "reinforce_check", raw_cfg)
     run_logger = setup_wandb(cfg, raw_cfg, default_group="gradient_check",
                             run_id=run_id, run_dir=run_dir)
     

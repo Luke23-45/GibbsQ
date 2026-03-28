@@ -19,8 +19,8 @@ import shutil
 class TestResolveModelPointer:
     """Tests for resolve_model_pointer function."""
 
-    def test_resolve_dr_pointer_first(self, tmp_path):
-        """Test that DR pointer is resolved first."""
+    def test_resolve_reinforce_pointer_first(self, tmp_path):
+        """Test that REINFORCE pointer is resolved first."""
         from gibbsq.utils.model_io import resolve_model_pointer
         
         # Create mock project structure
@@ -35,23 +35,20 @@ class TestResolveModelPointer:
         model_file = model_dir / "weights.eqx"
         model_file.write_text("mock weights")
         
-        # Create all three pointer files
+        # Create both primary pointer files
         (output_root / "latest_domain_randomized_weights.txt").write_text(
-            str(model_file.relative_to(project_root))
-        )
-        (output_root / "latest_reinforce_weights.txt").write_text(
             "nonexistent_path"
         )
-        (output_root / "latest_weights.txt").write_text(
-            "nonexistent_path2"
+        (output_root / "latest_reinforce_weights.txt").write_text(
+            str(model_file.relative_to(project_root))
         )
         
-        # Should resolve to DR pointer first
+        # Should resolve to REINFORCE pointer first
         result = resolve_model_pointer(project_root, output_root)
         assert result == model_file
 
-    def test_resolve_reinforce_pointer_second(self, tmp_path):
-        """Test that REINFORCE pointer is resolved second."""
+    def test_resolve_dr_pointer_second(self, tmp_path):
+        """Test that DR pointer is resolved second when REINFORCE is absent."""
         from gibbsq.utils.model_io import resolve_model_pointer
         
         project_root = tmp_path / "project"
@@ -64,8 +61,8 @@ class TestResolveModelPointer:
         model_file = model_dir / "weights.eqx"
         model_file.write_text("mock weights")
         
-        # Only create reinforce pointer (no DR)
-        (output_root / "latest_reinforce_weights.txt").write_text(
+        # Only create DR pointer (no REINFORCE)
+        (output_root / "latest_domain_randomized_weights.txt").write_text(
             str(model_file.relative_to(project_root))
         )
         
@@ -149,6 +146,95 @@ class TestResolveModelPointer:
         
         with pytest.raises(FileNotFoundError, match="No valid model pointer"):
             resolve_model_pointer(project_root, output_root)
+
+    def test_missing_pointer_message_mentions_public_training_commands(self, tmp_path):
+        """Test that remediation text points to public training commands only."""
+        from gibbsq.utils.model_io import resolve_model_pointer
+
+        project_root = tmp_path / "project"
+        output_root = tmp_path / "outputs"
+        project_root.mkdir()
+        output_root.mkdir()
+
+        with pytest.raises(FileNotFoundError) as exc_info:
+            resolve_model_pointer(project_root, output_root)
+
+        message = str(exc_info.value)
+        assert "reinforce_train" in message
+        assert "bc_train" in message
+        assert "Track 1/3" not in message
+        assert "MoEQ" not in message
+        assert "dr_train" not in message
+
+    def test_strict_public_eval_rejects_bc_pointer(self, tmp_path):
+        """Public eval paths must not silently treat BC warm-start weights as final models."""
+        from gibbsq.utils.model_io import resolve_model_pointer
+
+        project_root = tmp_path / "project"
+        output_root = tmp_path / "outputs"
+        project_root.mkdir()
+        output_root.mkdir()
+
+        model_dir = project_root / "models"
+        model_dir.mkdir()
+        model_file = model_dir / "weights.eqx"
+        model_file.write_text("mock weights")
+        (output_root / "latest_bc_weights.txt").write_text(str(model_file.relative_to(project_root)))
+
+        with pytest.raises(FileNotFoundError, match="BC warm-start only"):
+            resolve_model_pointer(
+                project_root,
+                output_root,
+                allow_bc=False,
+                allow_legacy=False,
+            )
+
+    def test_strict_public_eval_optional_lookup_returns_none_for_bc_only(self, tmp_path):
+        """Optional public eval lookup should skip BC-only artifacts rather than mislabel them."""
+        from gibbsq.utils.model_io import resolve_model_pointer_or_none
+
+        project_root = tmp_path / "project"
+        output_root = tmp_path / "outputs"
+        project_root.mkdir()
+        output_root.mkdir()
+
+        model_dir = project_root / "models"
+        model_dir.mkdir()
+        model_file = model_dir / "weights.eqx"
+        model_file.write_text("mock weights")
+        (output_root / "latest_bc_weights.txt").write_text(str(model_file.relative_to(project_root)))
+
+        result = resolve_model_pointer_or_none(
+            project_root,
+            output_root,
+            allow_bc=False,
+            allow_legacy=False,
+        )
+        assert result is None
+
+    def test_legacy_pointer_warning_mentions_public_pointer_names(self, tmp_path, caplog):
+        """Test that legacy pointer warning points to current public pointer files."""
+        from gibbsq.utils.model_io import resolve_model_pointer
+
+        project_root = tmp_path / "project"
+        output_root = tmp_path / "outputs"
+        project_root.mkdir()
+        output_root.mkdir()
+
+        model_dir = project_root / "models"
+        model_dir.mkdir()
+        model_file = model_dir / "weights.eqx"
+        model_file.write_text("mock weights")
+        (output_root / "latest_weights.txt").write_text(str(model_file.relative_to(project_root)))
+
+        with caplog.at_level("WARNING"):
+            result = resolve_model_pointer(project_root, output_root)
+
+        assert result == model_file
+        warning_text = "\n".join(record.getMessage() for record in caplog.records)
+        assert "latest_reinforce_weights.txt" in warning_text
+        assert "latest_bc_weights.txt" in warning_text
+        assert "prefer REINFORCE pointers" not in warning_text
 
 
 class TestSaveModelPointer:
@@ -243,7 +329,7 @@ class TestDeterministicNeuralPolicy:
                     (np.eye(3), np.zeros(3)),  # layer 3: identity
                 ]
             
-            def numpy_forward(self, x, params, config):
+            def numpy_forward(self, x, params, config, **kwargs):
                 # Simple forward: just return x
                 return x
             
@@ -270,7 +356,7 @@ class TestDeterministicNeuralPolicy:
             def get_numpy_params(self):
                 return [(np.eye(2), np.zeros(2))]
             
-            def numpy_forward(self, x, params, config):
+            def numpy_forward(self, x, params, config, **kwargs):
                 return x
             
             config = type('Config', (), {'preprocessing': 'none', 'use_rho': False})()
@@ -298,7 +384,7 @@ class TestStochasticNeuralPolicy:
             def get_numpy_params(self):
                 return [(np.eye(3), np.zeros(3))]
             
-            def numpy_forward(self, x, params, config):
+            def numpy_forward(self, x, params, config, **kwargs):
                 return x
             
             config = type('Config', (), {'preprocessing': 'none', 'use_rho': False})()
@@ -323,7 +409,7 @@ class TestStochasticNeuralPolicy:
             def get_numpy_params(self):
                 return [(np.eye(2), np.zeros(2))]
             
-            def numpy_forward(self, x, params, config):
+            def numpy_forward(self, x, params, config, **kwargs):
                 # Return large values to test stability
                 return x
             
@@ -342,6 +428,58 @@ class TestStochasticNeuralPolicy:
         assert not np.any(np.isnan(probs))
         assert not np.any(np.isinf(probs))
         assert np.isclose(np.sum(probs), 1.0)
+
+
+class TestBuildNeuralEvalPolicy:
+    """Tests for explicit evaluation policy selection."""
+
+    def test_build_deterministic_policy(self):
+        from gibbsq.utils.model_io import DeterministicNeuralPolicy, build_neural_eval_policy
+
+        class MockNet:
+            def get_numpy_params(self):
+                return [(np.eye(2), np.zeros(2))]
+
+            def numpy_forward(self, x, params, config, **kwargs):
+                return x
+
+            config = type('Config', (), {'preprocessing': 'none', 'use_rho': False})()
+
+        policy = build_neural_eval_policy(MockNet(), np.array([1.0, 1.0]), mode="deterministic")
+        assert isinstance(policy, DeterministicNeuralPolicy)
+
+    def test_build_stochastic_policy(self):
+        pytest.importorskip("jax")
+        pytest.importorskip("equinox")
+        from gibbsq.utils.model_io import NeuralSSAPolicy, build_neural_eval_policy
+        import jax
+        import jax.numpy as jnp
+        import equinox as eqx
+
+        class SimpleModel(eqx.Module):
+            weight: jnp.ndarray
+
+            def __init__(self, key):
+                self.weight = jax.random.normal(key, (2,))
+
+            def __call__(self, x, rho=None, mu=None):
+                return self.weight * x
+
+        policy = build_neural_eval_policy(
+            SimpleModel(jax.random.PRNGKey(0)),
+            np.array([1.0, 1.0]),
+            mode="stochastic",
+        )
+        assert isinstance(policy, NeuralSSAPolicy)
+
+    def test_build_invalid_mode_raises(self):
+        from gibbsq.utils.model_io import build_neural_eval_policy
+
+        class MockNet:
+            config = type('Config', (), {'preprocessing': 'none', 'use_rho': False})()
+
+        with pytest.raises(ValueError, match="Unknown neural evaluation mode"):
+            build_neural_eval_policy(MockNet(), np.array([1.0]), mode="bad-mode")
 
 
 class TestNeuralSSAPolicyCache:
@@ -364,7 +502,7 @@ class TestNeuralSSAPolicyCache:
             def __init__(self, key):
                 self.weight = jax.random.normal(key, (3,))
             
-            def __call__(self, x):
+            def __call__(self, x, rho=None, mu=None):
                 return self.weight * x
         
         key = jax.random.PRNGKey(42)
@@ -398,7 +536,7 @@ class TestNeuralSSAPolicyCache:
             def __init__(self, key):
                 self.weight = jax.random.normal(key, (3,))
             
-            def __call__(self, x):
+            def __call__(self, x, rho=None, mu=None):
                 return self.weight * x
         
         key = jax.random.PRNGKey(42)

@@ -27,7 +27,7 @@ simulation:
     temperature: 0.5
 
 policy:
-  name: uas
+  name: softmax
   d: 2
 
 drift:
@@ -78,7 +78,7 @@ neural:
   use_rho: true
   rho_input_scale: 10.0
   entropy_bonus: 0.01
-  grad_clip: 0.5
+  clip_global_norm: 0.5
   actor_lr: 0.0003
   critic_lr: 0.003
   weight_decay: 0.0001

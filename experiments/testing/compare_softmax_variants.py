@@ -96,7 +96,7 @@ def main():
                 states=_np_states,
                 arrival_count=int(arrs[r]),
                 departure_count=int(deps[r]),
-                final_time=float(times[r][-1]),
+                final_time=float(_np_times[-1]),
                 num_servers=num_servers
             )
             q_avg = time_averaged_queue_lengths(res, 0.2) # drops first 20%

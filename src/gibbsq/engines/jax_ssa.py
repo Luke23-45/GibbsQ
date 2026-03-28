@@ -24,6 +24,7 @@ import equinox as eqx
 from typing import NamedTuple, Dict
 
 from gibbsq.core.neural_policies import NeuralRouter
+from gibbsq.core.reinforce_objective import compute_action_interval_returns_jax
 
 
 def compute_poisson_max_steps(arrival_rate: float, service_rates: np.ndarray, sim_time: float, sigma: float = 6.0) -> int:
@@ -50,17 +51,14 @@ class TrajectoryBatchResult(NamedTuple):
 
 @jax.jit
 def compute_causal_returns_jax(
-    q_integrals: jax.Array, 
-    is_arrival: jax.Array, 
-    valid_mask: jax.Array, 
+    q_integrals: jax.Array,
+    dt: jax.Array,
+    is_arrival: jax.Array,
+    valid_mask: jax.Array,
     gamma: float = 0.99
 ) -> jax.Array:
     """
-    Computes Discounted Causal Returns using a vectorized reverse-scan.
-    
-    This matches the Python logic exactly:
-    1. It sums immediate Q-area costs between actions.
-    2. It discounts backward ONLY at action boundaries.
+    Computes the canonical continuous-time discounted returns over action intervals.
     
     Parameters
     ----------
@@ -79,32 +77,14 @@ def compute_causal_returns_jax(
         Array of returns aligned with action steps. Non-action steps are zeroed.
     """
     
-    def backward_step(carry, inputs):
-        R = carry
-        c_k, is_act, _ = inputs
-        
-        # Correct SMDP discounting:
-        # At step i_k, the return for this action is R + c_k
-        action_return = R + c_k
-        
-        # If this step is an action, the return passed to earlier steps 
-        # (which operate from action k-1 to k) must be discounted by gamma.
-        # If not, we just accumulate the interval costs without discounting.
-        next_R = jnp.where(is_act, action_return * gamma, action_return)
-        
-        return next_R, action_return
-
-    # reverse=True iterates from the end of the trajectory to the beginning
-    _, returns = jax.lax.scan(
-        backward_step,
-        0.0,
-        (q_integrals, is_arrival, valid_mask),
-        reverse=True
+    returns = compute_action_interval_returns_jax(
+        q_integrals=q_integrals,
+        dt=dt,
+        is_action=is_arrival,
+        valid_mask=valid_mask,
+        gamma=gamma,
     )
-    
-    # Mask out values at non-action steps to preserve padding invariants
-    action_returns = jnp.where(is_arrival & valid_mask, returns, 0.0)
-    return action_returns
+    return jnp.where(is_arrival & valid_mask, returns, 0.0)
 
 
 @eqx.filter_jit
@@ -234,7 +214,7 @@ def collect_trajectory_jax(
     is_truncated = valid_mask[-1]
     
     # --- 6. Apply Causal Return Tracking ---
-    returns = compute_causal_returns_jax(q_integrals, is_arrival, valid_mask, gamma)
+    returns = compute_causal_returns_jax(q_integrals, dt, is_arrival, valid_mask, gamma)
     
     return {
         "states": pre_states,

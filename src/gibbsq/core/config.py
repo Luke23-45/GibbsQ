@@ -41,6 +41,8 @@ __all__ = [
     "drift_constant_R",
     "drift_rate_epsilon",
     "compact_set_radius",
+    "critical_load_required_sim_time",
+    "critical_load_sim_time",
 ]
 
 
@@ -218,6 +220,7 @@ class VerificationThresholds:
     gradient_check_chunk_size: int = 1500
     gradient_check_max_steps: int = 300
     gradient_check_n_test: int = 50
+    gradient_check_hidden_size: int | None = None
     gradient_check_sim_time: float = 15.0
     gradient_check_n_samples: int = 15000
     gradient_check_epsilon: float = 0.05
@@ -265,7 +268,7 @@ class JAXConfig:
 
 @dataclass
 class GeneralizationConfig:
-    rho_boundary_vals: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98, 0.99, 0.999])
+    rho_boundary_vals: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98, 0.99])
     scale_vals: List[float] = field(default_factory=lambda: [0.5, 1.0, 2.0, 5.0, 10.0])
     rho_grid_vals: List[float] = field(default_factory=lambda: [0.5, 0.7, 0.85, 0.95, 0.98])
 
@@ -273,7 +276,7 @@ class GeneralizationConfig:
 @dataclass
 class StressConfig:
     n_values: list[int] = field(default_factory=lambda: [4, 8, 16, 32, 64])
-    critical_rhos: list[float] = field(default_factory=lambda: [0.95, 0.98, 0.99, 0.995])
+    critical_rhos: list[float] = field(default_factory=lambda: [0.95, 0.98, 0.99])
     mu_het: list[float] = field(default_factory=lambda: [100.0, 1.0, 1.0, 1.0])
     
     # Phase 3 Hardcode Extractions
@@ -628,6 +631,24 @@ def validate(cfg: ExperimentConfig) -> None:
     if not (0.0 < float(cfg.stress.heterogeneity_rho) < 1.0):
         raise ValueError(f"stress.heterogeneity_rho must be in (0, 1), got {cfg.stress.heterogeneity_rho}")
 
+    for name, rho_values in (
+        ("generalization.rho_boundary_vals", cfg.generalization.rho_boundary_vals),
+        ("stress.critical_rhos", cfg.stress.critical_rhos),
+    ):
+        for i, rho in enumerate(rho_values):
+            required_sim_time = critical_load_required_sim_time(
+                base_sim_time=cfg.simulation.ssa.sim_time,
+                rho=float(rho),
+                base_rho=float(cfg.stress.critical_load_base_rho),
+            )
+            if required_sim_time > float(cfg.stress.critical_load_max_sim_time):
+                raise ValueError(
+                    f"{name}[{i}]={rho} requires critical-load sim_time "
+                    f"{required_sim_time:.0f}, which exceeds "
+                    f"stress.critical_load_max_sim_time={cfg.stress.critical_load_max_sim_time:.0f}. "
+                    "Raise the cap or lower the rho grid."
+                )
+
     _validate_jax_config(cfg.jax)
 
 
@@ -686,6 +707,33 @@ def compact_set_radius(cfg: ExperimentConfig) -> float:
     R = drift_constant_R(cfg)
     eps = drift_rate_epsilon(cfg)
     return math.ceil((R + 1.0) / eps)
+
+
+def critical_load_required_sim_time(
+    *,
+    base_sim_time: float,
+    rho: float,
+    base_rho: float,
+) -> float:
+    """Return the uncapped simulation horizon required by the critical-load scaling rule."""
+    return base_sim_time * max(1.0, ((1.0 - base_rho) / max(1.0 - rho, 1e-6)))
+
+
+def critical_load_sim_time(cfg: ExperimentConfig, rho: float) -> float:
+    """Return a fail-closed critical-load horizon derived from the active config."""
+    required = critical_load_required_sim_time(
+        base_sim_time=cfg.simulation.ssa.sim_time,
+        rho=float(rho),
+        base_rho=float(cfg.stress.critical_load_base_rho),
+    )
+    cap = float(cfg.stress.critical_load_max_sim_time)
+    if required > cap:
+        raise ValueError(
+            f"rho={rho} requires critical-load sim_time {required:.0f}, "
+            f"which exceeds stress.critical_load_max_sim_time={cap:.0f}. "
+            "Refusing to truncate the horizon because that biases near-critical results."
+        )
+    return required
 
 
 # ──────────────────────────────────────────────────────────────

@@ -188,6 +188,43 @@ class TestSimulateJaxCorrectness:
         
         np.testing.assert_array_equal(states[0], [0, 0])
 
+    def test_final_sample_reaches_sim_time(self):
+        """Valid samples should include the terminal sampling point."""
+        sim_time = 10.0
+        times, states, counts = simulate_jax(
+            num_servers=2,
+            arrival_rate=1.0,
+            service_rates=jnp.array([2.0, 2.0]),
+            alpha=1.0,
+            sim_time=sim_time,
+            sample_interval=1.0,
+            key=jax.random.PRNGKey(42),
+            max_samples=20,
+        )
+
+        valid_mask = np.asarray(times) > 0
+        valid_mask[0] = True
+        valid_times = np.asarray(times)[valid_mask]
+        assert valid_times[-1] == pytest.approx(sim_time)
+
+    def test_terminal_sample_matches_event_counts(self):
+        """The final valid sample should satisfy queue conservation exactly."""
+        times, states, (arrivals, departures) = simulate_jax(
+            num_servers=2,
+            arrival_rate=1.5,
+            service_rates=jnp.array([2.0, 2.0]),
+            alpha=1.0,
+            sim_time=25.0,
+            sample_interval=1.0,
+            key=jax.random.PRNGKey(7),
+            max_samples=40,
+        )
+
+        valid_mask = np.asarray(times) > 0
+        valid_mask[0] = True
+        final_state = np.asarray(states)[valid_mask][-1]
+        assert final_state.sum() == int(arrivals) - int(departures)
+
 
 class TestRunReplicationsJaxCorrectness:
     """Verify multi-replication driver."""
@@ -505,6 +542,101 @@ class TestJaxSimulationRegressions:
         
         # Different keys should produce different results
         assert not jnp.array_equal(states1, states2)
+
+    def test_simulate_jax_rejects_invalid_service_rate_shape(self):
+        with pytest.raises(ValueError, match="service_rates must have shape"):
+            simulate_jax(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=jnp.array([1.0]),
+                alpha=1.0,
+                sim_time=10.0,
+                sample_interval=1.0,
+                key=jax.random.PRNGKey(0),
+                max_samples=20,
+            )
+
+    def test_simulate_jax_rejects_invalid_policy_type(self):
+        with pytest.raises(ValueError, match="policy_type must be one of 0..6"):
+            simulate_jax(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=jnp.array([1.0, 1.0]),
+                alpha=1.0,
+                sim_time=10.0,
+                sample_interval=1.0,
+                key=jax.random.PRNGKey(0),
+                max_samples=20,
+                policy_type=99,
+            )
+
+    def test_simulate_jax_rejects_non_positive_alpha(self):
+        with pytest.raises(ValueError, match="alpha must be > 0"):
+            simulate_jax(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=jnp.array([1.0, 1.0]),
+                alpha=0.0,
+                sim_time=10.0,
+                sample_interval=1.0,
+                key=jax.random.PRNGKey(0),
+                max_samples=20,
+            )
+
+    def test_run_replications_jax_rejects_non_positive_replications(self):
+        with pytest.raises(ValueError, match="num_replications must be >= 1"):
+            run_replications_jax(
+                num_replications=0,
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=jnp.array([1.0, 1.0]),
+                alpha=1.0,
+                sim_time=10.0,
+                sample_interval=1.0,
+                base_seed=0,
+                max_samples=20,
+            )
+
+    def test_vmap_replications_match_lax_map_reference(self):
+        from gibbsq.engines.jax_engine import _run_replications_jax_impl, _simulate_jax_impl
+
+        args = dict(
+            num_replications=3,
+            num_servers=2,
+            arrival_rate=1.0,
+            service_rates=jnp.array([1.0, 1.5], dtype=jnp.float32),
+            alpha=1.0,
+            sim_time=5.0,
+            sample_interval=0.5,
+            base_seed=123,
+            max_samples=11,
+            max_events=1000,
+            policy_type=0,
+            d=2,
+        )
+
+        keys = jax.random.split(jax.random.PRNGKey(args["base_seed"]), args["num_replications"])
+
+        def v_sim(k):
+            return _simulate_jax_impl(
+                num_servers=args["num_servers"],
+                arrival_rate=args["arrival_rate"],
+                service_rates=args["service_rates"],
+                alpha=args["alpha"],
+                sim_time=args["sim_time"],
+                sample_interval=args["sample_interval"],
+                key=k,
+                max_samples=args["max_samples"],
+                max_events=args["max_events"],
+                policy_type=args["policy_type"],
+                d=args["d"],
+            )
+
+        out_vmap = _run_replications_jax_impl(**args)
+        out_ref = jax.lax.map(v_sim, keys)
+
+        for a, b in zip(out_vmap, out_ref):
+            assert jnp.array_equal(a, b)
 
 
 # ============================================================

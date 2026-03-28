@@ -17,10 +17,11 @@ from hypothesis import given, strategies as st, assume, settings
 from hypothesis.extra.numpy import arrays
 
 from gibbsq.core.config import (
-    SystemConfig, SimulationConfig, PolicyConfig, DriftConfig,
+    SystemConfig, SSAConfig, SimulationConfig, PolicyConfig, DriftConfig,
     ExperimentConfig, WandbConfig, JAXConfig,
     validate, total_capacity, load_factor, drift_constant_R, 
     drift_rate_epsilon, compact_set_radius, hydra_to_config, PolicyName,
+    critical_load_required_sim_time, critical_load_sim_time,
 )
 from omegaconf import DictConfig, OmegaConf
 
@@ -396,7 +397,7 @@ class TestConfigEdgeCases:
                 service_rates=[1.0, 1.0],
                 alpha=1.0,
             ),
-            simulation=SimulationConfig(sim_time=0.0),
+            simulation=SimulationConfig(ssa=SSAConfig(sim_time=0.0)),
         )
         with pytest.raises(ValueError, match="sim_time.*must be > 0"):
             validate(cfg)
@@ -410,7 +411,7 @@ class TestConfigEdgeCases:
                 service_rates=[1.0, 1.0],
                 alpha=1.0,
             ),
-            simulation=SimulationConfig(sim_time=-100.0),
+            simulation=SimulationConfig(ssa=SSAConfig(sim_time=-100.0)),
         )
         with pytest.raises(ValueError, match="sim_time.*must be > 0"):
             validate(cfg)
@@ -546,8 +547,10 @@ class TestHydraConversion:
                 "alpha": 1.0,
             },
             "simulation": {
-                "sim_time": 1000.0,
-                "sample_interval": 0.5,
+                "ssa": {
+                    "sim_time": 1000.0,
+                    "sample_interval": 0.5,
+                },
             },
             "policy": {"name": "softmax"},
             "drift": {"q_max": 50},
@@ -568,8 +571,38 @@ class TestHydraConversion:
             },
         })
         cfg = hydra_to_config(raw)
-        assert cfg.simulation.sim_time == 1e4  # Default
+        assert cfg.simulation.ssa.sim_time == 5000.0  # Default
         assert cfg.policy.name == "softmax"  # Default
+
+    def test_hydra_single_service_rate_expands_for_large_n(self):
+        raw = OmegaConf.create({
+            "system": {
+                "num_servers": 4,
+                "arrival_rate": 2.0,
+                "service_rates": [1.0],
+                "alpha": 1.0,
+            },
+            "simulation": {},
+            "policy": {},
+            "drift": {},
+            "wandb": {},
+            "jax": {},
+        })
+        cfg = hydra_to_config(raw)
+        assert cfg.system.service_rates == [1.0, 1.0, 1.0, 1.0]
+        validate(cfg)
+
+    def test_cuda_alias_is_accepted_in_jax_config(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.5],
+                alpha=1.0,
+            ),
+            jax=JAXConfig(enabled=True, platform="cuda", precision="float32", fallback_to_cpu=True),
+        )
+        validate(cfg)
 
 
 # ============================================================
@@ -640,4 +673,47 @@ class TestSweepDomainGuards:
         )
         cfg.generalization.rho_grid_vals = [0.5, 1.2]
         with pytest.raises(ValueError, match="generalization.rho_grid_vals\\[1\\]"):
+            validate(cfg)
+
+
+class TestCriticalLoadGuards:
+    def test_required_sim_time_matches_scaling_formula(self):
+        required = critical_load_required_sim_time(
+            base_sim_time=5000.0,
+            rho=0.99,
+            base_rho=0.8,
+        )
+        assert required == pytest.approx(100000.0)
+
+    def test_critical_load_sim_time_fails_closed_when_cap_too_small(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.simulation.ssa.sim_time = 5000.0
+        cfg.stress.critical_load_base_rho = 0.8
+        cfg.stress.critical_load_max_sim_time = 100000.0
+
+        with pytest.raises(ValueError, match="Refusing to truncate the horizon"):
+            critical_load_sim_time(cfg, 0.999)
+
+    def test_validate_rejects_critical_load_grid_that_exceeds_cap(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.generalization.rho_boundary_vals = [0.99, 0.999]
+        cfg.simulation.ssa.sim_time = 5000.0
+        cfg.stress.critical_load_base_rho = 0.8
+        cfg.stress.critical_load_max_sim_time = 100000.0
+
+        with pytest.raises(ValueError, match=r"generalization\.rho_boundary_vals\[1\]=0.999"):
             validate(cfg)

@@ -132,7 +132,7 @@ class TestCrossEngineConsistency:
         )
         
         # JAX - run with very small sample interval to capture final state accurately
-        _, jax_states, (jax_arr, jax_dep) = simulate_jax(
+        jax_times, jax_states, (jax_arr, jax_dep) = simulate_jax(
             num_servers=num_servers,
             arrival_rate=arrival_rate,
             service_rates=jnp.array(service_rates),
@@ -142,19 +142,18 @@ class TestCrossEngineConsistency:
             key=jax.random.PRNGKey(seed),
             max_samples=1500,
         )
+        valid_mask = np.asarray(jax_times) > 0
+        valid_mask[0] = True
+        jax_final_q = np.asarray(jax_states)[valid_mask][-1].sum()
         
         # NumPy conservation: final_queue = arrivals - departures
         np_final_q = np_result.states[-1].sum()
         np_conservation = np_result.arrival_count - np_result.departure_count - np_final_q
         assert abs(np_conservation) == 0, f"NumPy conservation violated: {np_conservation}"
         
-        # JAX conservation: The snapshot buffer may not capture exact final state
-        # So we check: arrivals - departures should equal the last recorded queue state
-        # (within the granularity of sample_interval)
-        jax_final_q = jax_states[-1].sum()
+        # JAX conservation should hold exactly on the valid sampled tail.
         jax_conservation = int(jax_arr) - int(jax_dep) - int(jax_final_q)
-        # Allow small tolerance due to sampling granularity
-        assert abs(jax_conservation) <= 5, f"JAX conservation violated: {jax_conservation}"
+        assert abs(jax_conservation) == 0, f"JAX conservation violated: {jax_conservation}"
 
 
 class TestJAXNumericalStability:

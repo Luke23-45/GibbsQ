@@ -59,7 +59,7 @@ class TestGeneratorDriftCorrectness:
         mu = np.array([1.0, 1.0])
         alpha = 1.0
         
-        exact = generator_drift(Q, lam, mu, alpha)
+        exact = generator_drift(Q, lam, mu, alpha, mode="raw")
         # 𝓛V(0) = λ/2 = 1.0
         assert exact == pytest.approx(1.0)
     
@@ -70,7 +70,7 @@ class TestGeneratorDriftCorrectness:
         mu = np.array([1.0, 2.0, 3.0])
         alpha = 0.5
         
-        exact = generator_drift(Q, lam, mu, alpha)
+        exact = generator_drift(Q, lam, mu, alpha, mode="raw")
         # 𝓛V(0) = λ/2 + 0 = 1.5
         assert exact == pytest.approx(1.5)
     
@@ -81,7 +81,7 @@ class TestGeneratorDriftCorrectness:
         mu = np.array([2.0, 3.0])
         alpha = 1.0
         
-        exact = generator_drift(Q, lam, mu, alpha)
+        exact = generator_drift(Q, lam, mu, alpha, mode="raw")
         
         # Manual calculation:
         # p = softmax: logits = [-10, -20], shifted to [0, -10]
@@ -186,7 +186,7 @@ class TestDriftInvariants:
         N = len(Q)
         mu = np.full(N, (lam + 1.0) / N + 0.1)
         
-        exact = generator_drift(Q, lam, mu, alpha)
+        exact = generator_drift(Q, lam, mu, alpha, mode="raw")
         assert np.isfinite(exact)
     
     @given(
@@ -205,7 +205,7 @@ class TestDriftInvariants:
         N = len(Q)
         mu = np.full(N, (lam + 1.0) / N + 0.5)
         
-        exact = generator_drift(Q, lam, mu, alpha)
+        exact = generator_drift(Q, lam, mu, alpha, mode="raw")
         ub = upper_bound(Q, lam, mu, alpha)
         
         # Allow tiny tolerance for floating point

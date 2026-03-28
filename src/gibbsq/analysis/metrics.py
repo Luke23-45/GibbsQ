@@ -16,15 +16,29 @@ from gibbsq.engines.numpy_engine import SimResult
 
 __all__ = [
     "time_averaged_queue_lengths",
+    "time_averaged_queue_lengths_from_index",
     "total_queue_trajectory",
     "running_average",
     "queue_length_stats",
     "gini_coefficient",
     "sojourn_time_estimate",
     "stationarity_diagnostic",
+    "stationarity_diagnostic_from_index",
     "mser5_truncation",
     "gelman_rubin_diagnostic",
 ]
+
+
+def _clamp_start_idx(length: int, start_idx: int) -> int:
+    if length <= 0:
+        return 0
+    return min(max(0, int(start_idx)), length - 1)
+
+
+def _trim_burn_in_index(result: SimResult, start_idx: int) -> np.ndarray:
+    """Return the states array with samples before `start_idx` discarded."""
+    start_idx = _clamp_start_idx(len(result.states), start_idx)
+    return result.states[start_idx:]
 
 
 def _trim_burn_in(result: SimResult, fraction: float) -> np.ndarray:
@@ -32,9 +46,7 @@ def _trim_burn_in(result: SimResult, fraction: float) -> np.ndarray:
     if not 0.0 <= fraction < 1.0:
         raise ValueError(f"burn_in_fraction must be in [0, 1), got {fraction}")
     start_idx = int(len(result.states) * fraction)
-    if start_idx >= len(result.states):
-        start_idx = max(0, len(result.states) - 1)
-    return result.states[start_idx:]
+    return _trim_burn_in_index(result, start_idx)
 
 
 def time_averaged_queue_lengths(
@@ -50,6 +62,15 @@ def time_averaged_queue_lengths(
         Time-averaged queue lengths.
     """
     states = _trim_burn_in(result, burn_in_fraction)
+    return states.mean(axis=0, dtype=np.float64)
+
+
+def time_averaged_queue_lengths_from_index(
+    result: SimResult,
+    start_idx: int = 0,
+) -> np.ndarray:
+    """Compute E[Q_i] using an exact burn-in sample index."""
+    states = _trim_burn_in_index(result, start_idx)
     return states.mean(axis=0, dtype=np.float64)
 
 
@@ -167,6 +188,35 @@ def stationarity_diagnostic(
     """
     states = _trim_burn_in(result, burn_in_fraction)
     q_tot = states.sum(axis=1)
+    return _stationarity_diagnostic_from_states(
+        q_tot,
+        num_windows=num_windows,
+        p_value_threshold=p_value_threshold,
+    )
+
+
+def stationarity_diagnostic_from_index(
+    result: SimResult,
+    start_idx: int = 0,
+    num_windows: int = 10,
+    p_value_threshold: float = 0.05,
+) -> dict:
+    """Test stationarity using an exact burn-in sample index."""
+    states = _trim_burn_in_index(result, start_idx)
+    q_tot = states.sum(axis=1)
+    return _stationarity_diagnostic_from_states(
+        q_tot,
+        num_windows=num_windows,
+        p_value_threshold=p_value_threshold,
+    )
+
+
+def _stationarity_diagnostic_from_states(
+    q_tot: np.ndarray,
+    num_windows: int,
+    p_value_threshold: float,
+) -> dict:
+    q_tot = np.asarray(q_tot)
 
     n = len(q_tot)
     if n < num_windows:
@@ -187,9 +237,9 @@ def stationarity_diagnostic(
     x = np.arange(num_windows)
     res = stats.linregress(x, means)
 
-    # A p-value below the threshold indicates we can reject the null hypothesis 
-    # that the slope is zero. This signifies a non-stationary trend.
-    is_non_stationary = (res.pvalue < p_value_threshold)
+    # Only a statistically significant positive slope indicates explosive drift.
+    # Significant negative slopes reflect decay toward equilibrium, not instability.
+    is_non_stationary = (res.slope > 0.0) and (res.pvalue < p_value_threshold)
 
     return {
         "is_stationary": not is_non_stationary,

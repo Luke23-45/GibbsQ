@@ -10,6 +10,16 @@ import subprocess
 import argparse
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+SRC_ROOT = PROJECT_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from gibbsq.utils.progress import configure_progress_mode
+
 # Experiment mappings
 EXPERIMENTS = {
     # Phase 0: Validation & Pre-flight Sanity
@@ -33,9 +43,37 @@ EXPERIMENTS = {
     "critical": "experiments.evaluation.n_gibbsq_evals.critical_load",
 }
 
+
+def _has_override(args: list[str], key: str) -> bool:
+    """Return True when Hydra overrides already pin ``key``."""
+    key_prefixes = (f"{key}=", f"+{key}=", f"++{key}=")
+    return any(arg.startswith(key_prefixes) for arg in args)
+
+
+def default_hydra_overrides_for_experiment(
+    experiment: str,
+    existing_overrides: list[str] | None = None,
+) -> list[str]:
+    """Return publication-safe default Hydra overrides for public experiments."""
+    existing = list(existing_overrides or [])
+    defaults: list[str] = []
+
+    if experiment in {"sweep", "stats", "policy"} and not _has_override(existing, "experiment"):
+        experiment_profiles = {
+            "sweep": "stability_sweep",
+            "stats": "stats_bench",
+            "policy": "policy_comparison",
+        }
+        defaults.append(f"+experiment={experiment_profiles[experiment]}")
+
+    if experiment == "stress" and not _has_override(existing, "jax.enabled"):
+        defaults.append("++jax.enabled=True")
+
+    return defaults
+
 def print_usage():
     """Print usage information."""
-    print("Usage: python experiment_runner.py <experiment> [hydra_args...]")
+    print("Usage: python experiment_runner.py [--progress auto|on|off] <experiment> [hydra_args...]")
     print("")
     print("Available experiments:")
     for exp in EXPERIMENTS:
@@ -52,6 +90,12 @@ def main():
         add_help=False
     )
     parser.add_argument("experiment", nargs="?", help="Experiment name to run")
+    parser.add_argument(
+        "--progress",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="Progress bar mode for child experiments (default: auto)",
+    )
     
     args, hydra_overrides = parser.parse_known_args()
     
@@ -79,18 +123,24 @@ def main():
     if existing_pythonpath:
         path_parts.append(existing_pythonpath)
     env["PYTHONPATH"] = os.pathsep.join(path_parts)
+    configure_progress_mode(args.progress, env=env)
     
     python_script = EXPERIMENTS[experiment]
+    resolved_hydra_overrides = hydra_overrides + default_hydra_overrides_for_experiment(
+        experiment,
+        hydra_overrides,
+    )
     
     print("=" * 58)
     print(f" Starting Experiment: {experiment}")
-    print(f" Remaining Args (Hydra Overrides): {' '.join(hydra_overrides)}")
+    print(f" Progress Mode: {args.progress}")
+    print(f" Remaining Args (Hydra Overrides): {' '.join(resolved_hydra_overrides)}")
     print("=" * 58)
     
     # Change to project root and run
     os.chdir(project_root)
     
-    cmd = [sys.executable, "-m", python_script] + hydra_overrides
+    cmd = [sys.executable, "-m", python_script] + resolved_hydra_overrides
     
     try:
         result = subprocess.run(cmd, env=env)

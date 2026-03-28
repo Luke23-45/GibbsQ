@@ -608,22 +608,24 @@ def plot_training_dashboard(
         spec.subplot_layout[0], spec.subplot_layout[1],
         figsize=spec.figsize,
     )
-    epochs = metrics.get("epoch", list(range(len(metrics.get("performance_index", [])))))
+    perf_key = "base_regime_index" if "base_regime_index" in metrics else "performance_index"
+    perf_ema_key = "base_regime_index_ema" if "base_regime_index_ema" in metrics else "performance_index_ema"
+    epochs = metrics.get("epoch", list(range(len(metrics.get(perf_key, [])))))
 
-    # Panel A: Performance Index (%)
+    # Panel A: Base-regime performance proxy (%)
     ax_a = axes[0, 0]
-    if "performance_index" in metrics:
-        ax_a.plot(epochs, metrics["performance_index"],
-                  alpha=0.35, linewidth=0.8, color=TRAINING_PRIMARY, label="Raw PI")
-    if "performance_index_ema" in metrics:
-        ax_a.plot(epochs, metrics["performance_index_ema"],
-                  linewidth=spec.line_width, color=TRAINING_PRIMARY, label="EMA PI")
+    if perf_key in metrics:
+        ax_a.plot(epochs, metrics[perf_key],
+                  alpha=0.35, linewidth=0.8, color=TRAINING_PRIMARY, label="Raw Base-Regime PI")
+    if perf_ema_key in metrics:
+        ax_a.plot(epochs, metrics[perf_ema_key],
+                  linewidth=spec.line_width, color=TRAINING_PRIMARY, label="EMA Base-Regime PI")
     if jsq_baseline is not None:
         ax_a.axhline(jsq_baseline, color=contour, linestyle="--", alpha=0.4, label="JSQ (100%)")
     if random_baseline is not None:
         ax_a.axhline(random_baseline, color="#999999", linestyle=":", alpha=0.4, label="Random (0%)")
-    ax_a.set_ylabel("Performance Index (%)")
-    ax_a.set_title("(a) Reward Trajectory")
+    ax_a.set_ylabel("Base-Regime PI Proxy (%)")
+    ax_a.set_title("(a) Base-Regime Diagnostic")
     ax_a.legend(loc="lower right", fontsize=7)
     ax_a.grid(True, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
@@ -661,10 +663,10 @@ def plot_training_dashboard(
     ax_d = axes[1, 1]
     if "policy_grad_norm" in metrics:
         ax_d.plot(epochs, metrics["policy_grad_norm"], linewidth=spec.line_width,
-                  color=TRAINING_GRADIENT, label="Policy ∇ norm")
+                  color=TRAINING_GRADIENT, label="Policy grad norm")
     if "value_grad_norm" in metrics:
         ax_d.plot(epochs, metrics["value_grad_norm"], linewidth=spec.line_width,
-                  color=TRAINING_CRITIC, alpha=0.8, label="Value ∇ norm")
+                  color=TRAINING_CRITIC, alpha=0.8, label="Value grad norm")
     ax_d.set_ylabel("Gradient Norm")
     if "entropy" in metrics:
         ax_d2 = ax_d.twinx()

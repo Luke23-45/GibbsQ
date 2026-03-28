@@ -10,6 +10,11 @@ import subprocess
 import argparse
 from pathlib import Path
 
+
+def _format_validation_step(step_idx: int, total_steps: int, label: str) -> str:
+    return f"[{step_idx}/{total_steps}] {label}"
+
+
 def run_cmd(args, dry_run=False):
     """Run a command using the project's run_experiment.py script."""
     script_dir = Path(__file__).parent
@@ -51,16 +56,18 @@ def verify_standard(args):
     
     print(f"\n>>> INITIATING STANDARD VERIFICATION (Level: {level.upper()}) <<<\n")
     
-    # Step 0: Pre-flight Configuration Check
-    print("[0/6] Running Step 0: Pre-flight configuration check...")
+    total_steps = 6
+
+    # Step 1: Pre-flight Configuration Check
+    print(_format_validation_step(1, total_steps, "Running pre-flight configuration check..."))
     run_cmd(["check_configs"], dry_run)
     
-    # Step 1: Theoretical Drift
-    print("\n[1/6] Running Step 1: Theoretical Drift Verification...")
+    # Step 2: Theoretical Drift
+    print(f"\n{_format_validation_step(2, total_steps, 'Running theoretical drift verification...')}")
     run_cmd(["drift", "system.num_servers=2", "system.arrival_rate=2.0"], dry_run)
     
-    # Step 2: Stability Sweep
-    print("\n[2/6] Running Step 2: Stability Sweep...")
+    # Step 3: Stability Sweep
+    print(f"\n{_format_validation_step(3, total_steps, 'Running stability sweep...')}")
     run_cmd([
         "sweep", 
         f"simulation.ssa.sim_time={sim_time}", 
@@ -68,8 +75,8 @@ def verify_standard(args):
         f"simulation.burn_in_fraction={burn_in}"
     ], dry_run)
     
-    # Step 3: Policy Comparison
-    print("\n[3/6] Running Step 3: Policy Comparison (Heterogeneous)...")
+    # Step 4: Policy Comparison
+    print(f"\n{_format_validation_step(4, total_steps, 'Running policy comparison (heterogeneous)...')}")
     run_cmd([
         "policy", 
         "system.num_servers=4", 
@@ -78,16 +85,16 @@ def verify_standard(args):
         f"simulation.num_replications={reps}"
     ], dry_run)
     
-    # Step 4: Stress Test
-    print("\n[4/6] Running Step 4: Stress Test...")
+    # Step 5: Stress Test
+    print(f"\n{_format_validation_step(5, total_steps, 'Running stress test...')}")
     run_cmd([
         "stress", 
         f"simulation.num_replications={stress_reps}", 
         "jax.enabled=true"
     ], dry_run)
     
-    # Step 5: Training (Phase 2: Neural Learning Pipeline)
-    print("\n[5/6] Running Step 5: REINFORCE Training...")
+    # Step 6: Training (Phase 2: Neural Learning Pipeline)
+    print(f"\n{_format_validation_step(6, total_steps, 'Running REINFORCE training...')}")
     run_cmd(["reinforce_train", f"train_epochs={train_epochs}"], dry_run)
 
 def verify_phase_iv(args):
@@ -101,24 +108,26 @@ def verify_phase_iv(args):
     
     common = [f"--config-name={config}"] + hydra_args
     
-    # Pre-flight: Configuration Check
-    print("[0/4] Pre-flight Check: Validating configuration...")
+    total_steps = 5
+
+    # Step 1: Pre-flight: Configuration Check
+    print(_format_validation_step(1, total_steps, "Pre-flight check: validating configuration..."))
     run_cmd(["check_configs"] + common, dry_run)
     
-    # Track 5: Gradient Estimator Validation
-    print("\n[1/4] Track 5: Validating Gradient Estimator...")
+    # Step 2: Gradient Estimator Validation
+    print(f"\n{_format_validation_step(2, total_steps, 'Validating REINFORCE gradient estimator...')}")
     run_cmd(["reinforce_check"] + common, dry_run)
     
-    # Track 1: REINFORCE SSA Training
-    print("\n[2/4] Track 1: Training REINFORCE Agent (True SSA)...")
+    # Step 3: REINFORCE SSA Training
+    print(f"\n{_format_validation_step(3, total_steps, 'Training REINFORCE agent (true SSA)...')}")
     run_cmd(["reinforce_train"] + common, dry_run)
     
-    # Track 3: Platinum BC Pretraining
-    print("\n[3/4] Track 2/3: Platinum Behavior Cloning Pretraining (Robust)...")
+    # Step 4: Platinum BC Pretraining
+    print(f"\n{_format_validation_step(4, total_steps, 'Running platinum behavior cloning pretraining...')}")
     run_cmd(["bc_train"] + common, dry_run)
     
-    # Track 4: Platinum Benchmark
-    print("\n[4/4] Track 4: Running Platinum Parity Benchmark (Corrected Grid)...")
+    # Step 5: Platinum Benchmark
+    print(f"\n{_format_validation_step(5, total_steps, 'Running platinum parity benchmark...')}")
     run_cmd(["policy"] + common, dry_run)
 
 def verify_full_paper(args):

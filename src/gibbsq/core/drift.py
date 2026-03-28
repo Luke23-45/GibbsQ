@@ -228,10 +228,16 @@ def _vectorised_softmax(Q_all: np.ndarray, alpha: float, mu: np.ndarray, mode: s
     """
     if mode == "potential":
         feat = (Q_all.astype(np.float64) + 1.0) / mu
-    else:
+        logits = -alpha * feat
+    elif mode == "raw":
         feat = Q_all.astype(np.float64)
+        logits = -alpha * feat
+    elif mode == "uas":
+        feat = (Q_all.astype(np.float64) + 1.0) / mu
+        logits = -alpha * feat + np.log(mu)
+    else:
+        raise ValueError(f"Unknown drift mode: {mode}. Valid modes: 'potential', 'raw', 'uas'")
 
-    logits = -alpha * feat                             # (M, N)
     logits -= logits.max(axis=1, keepdims=True)        # shift per state
     w = np.exp(logits)
     return w / w.sum(axis=1, keepdims=True)

@@ -21,12 +21,13 @@ import functools
 
 from gibbsq.core.config import hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter
-from gibbsq.engines.jax_engine import run_replications_jax
+from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.numpy_engine import simulate, SimResult
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
-from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer_or_none
+from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
+from gibbsq.utils.progress import create_progress, iter_progress
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -34,6 +35,7 @@ from gibbsq.utils.model_io import NeuralSSAPolicy, resolve_model_pointer_or_none
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
+NEURAL_EVAL_MODE = "deterministic"
 
 
 # _resolve_model_pointer moved to gibbsq.utils.model_io.resolve_model_pointer
@@ -41,6 +43,13 @@ log = logging.getLogger(__name__)
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
     """Pure functional bridge."""
     return model(Q)
+
+
+def _load_trained_model_or_fail(cfg, num_servers: int, service_rates, load_key, project_root: Path, output_root: Path):
+    model_path = resolve_model_pointer(project_root, output_root, allow_bc=False, allow_legacy=False)
+    skeleton = NeuralRouter(num_servers=num_servers, config=cfg.neural, service_rates=service_rates, key=load_key)
+    model = eqx.tree_deserialise_leaves(model_path, skeleton)
+    return model, model_path
 
 class StatsBenchmark:
     """Statistical benchmark for N-GibbsQ."""
@@ -68,28 +77,22 @@ class StatsBenchmark:
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         
-        # PATCH H#3: Graceful fallback for missing pointers
-        model_path = resolve_model_pointer_or_none(_PROJECT_ROOT, output_root)
-        skeleton = NeuralRouter(num_servers=self.num_servers, config=self.cfg.neural, service_rates=self.service_rates, key=k_load)
-        
-        if model_path is None:
-            log.warning("No trained model found. Creating fresh JSQ-initialized model for evaluation.")
-            # Create a fresh model and bootstrap it to JSQ behavior
-            from gibbsq.core.pretraining import train_robust_bc_policy
-            model = train_robust_bc_policy(
-                skeleton, np.array(self.service_rates), k_load, num_steps=500
-            )
-            log.info("Fresh JSQ-initialized model created successfully.")
-        else:
-            model = eqx.tree_deserialise_leaves(model_path, skeleton)
+        model, model_path = _load_trained_model_or_fail(
+            self.cfg,
+            self.num_servers,
+            self.service_rates,
+            k_load,
+            _PROJECT_ROOT,
+            output_root,
+        )
+        log.info(f"Loaded trained model from {model_path}")
         
         # SG#16 Fix: Validate that the loaded model matches the current config
         from gibbsq.utils.model_io import validate_neural_model_shape
         try:
             validate_neural_model_shape(model, self.cfg.neural, self.num_servers)
         except ValueError as e:
-            log.error(f"Model shape mismatch! {e}")
-            return
+            raise RuntimeError(f"Model shape mismatch: {e}") from e
         
         # --- 2. Benchmark on True Gillespie SSA ---
         _sc  = self.cfg.simulation
@@ -97,56 +100,82 @@ class StatsBenchmark:
         _max_samples = int(_ssa.sim_time / _ssa.sample_interval) + 1
         _mu_np = np.array(self.service_rates, dtype=np.float64)
 
-        log.info(f"Running {self.num_samples} GibbsQ SSA simulations...")
-        _pmap = {"uniform": 0, "proportional": 1, "jsq": 2, "softmax": 3, "power_of_d": 4, "uas": 6}
-        times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
-            num_replications=self.num_samples,
-            num_servers=self.num_servers,
-            arrival_rate=self.arrival_rate,
-            service_rates=jnp.array(_mu_np),
-            alpha=float(self.cfg.system.alpha),
-            sim_time=_ssa.sim_time,
-            sample_interval=_ssa.sample_interval,
-            base_seed=_sc.seed,
-            max_samples=_max_samples,
-            policy_type=_pmap.get(self.cfg.policy.name, 3),
-        )
-        gibbs_list = []
-        for _r in range(self.num_samples):
-            _np_times = np.array(times_g[_r])
-            _np_states = np.array(states_g[_r])
-            _valid_mask = _np_times > 0
-            _valid_mask[0] = True
-            _vl = int(np.sum(_valid_mask))
-            _np_times = _np_times[:_vl]
-            _np_states = _np_states[:_vl]
+        baseline_policy_name = self.cfg.policy.name
+        baseline_policy_type = policy_name_to_type(baseline_policy_name)
 
-            _res = SimResult(
-                times=_np_times, states=_np_states,
-                arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
-                final_time=float(times_g[_r][-1]), num_servers=self.num_servers,
+        with create_progress(total=2, desc="stats", unit="stage") as stage_bar:
+            log.info(
+                f"Running {self.num_samples} GibbsQ SSA simulations "
+                f"with policy='{baseline_policy_name}'..."
             )
-            gibbs_list.append(float(
-                time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
-        gibbs_data = np.array(gibbs_list)
+            times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                num_replications=self.num_samples,
+                num_servers=self.num_servers,
+                arrival_rate=self.arrival_rate,
+                service_rates=jnp.array(_mu_np),
+                alpha=float(self.cfg.system.alpha),
+                sim_time=_ssa.sim_time,
+                sample_interval=_ssa.sample_interval,
+                base_seed=_sc.seed,
+                max_samples=_max_samples,
+                policy_type=baseline_policy_type,
+            )
+            gibbs_list = []
+            for _r in iter_progress(
+                range(self.num_samples),
+                total=self.num_samples,
+                desc="stats: GibbsQ reps",
+                unit="rep",
+                leave=False,
+            ):
+                _np_times = np.array(times_g[_r])
+                _np_states = np.array(states_g[_r])
+                _valid_mask = _np_times > 0
+                _valid_mask[0] = True
+                _vl = int(np.sum(_valid_mask))
+                _np_times = _np_times[:_vl]
+                _np_states = _np_states[:_vl]
 
-        log.info(f"Running {self.num_samples} Neural SSA simulations...")
-        _neural_policy = NeuralSSAPolicy(model, mu=_mu_np, rho=self.arrival_rate / float(_mu_np.sum()))
-        _np_max_ev = int(
-            (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
-        ) + 1000
-        neural_list = []
-        for _rep in range(self.num_samples):
-            _rng = np.random.default_rng(_sc.seed + _rep)
-            _res = simulate(
-                num_servers=self.num_servers, arrival_rate=self.arrival_rate,
-                service_rates=_mu_np, policy=_neural_policy,
-                sim_time=_ssa.sim_time, sample_interval=_ssa.sample_interval,
-                rng=_rng, max_events=_np_max_ev,
+                _res = SimResult(
+                    times=_np_times, states=_np_states,
+                    arrival_count=int(arrs_g[_r]), departure_count=int(deps_g[_r]),
+                    final_time=float(_np_times[-1]), num_servers=self.num_servers,
+                )
+                gibbs_list.append(float(
+                    time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+            gibbs_data = np.array(gibbs_list)
+            stage_bar.update(1)
+
+            log.info(f"Running {self.num_samples} Neural SSA simulations...")
+            log.info(f"Neural evaluation mode: {NEURAL_EVAL_MODE}")
+            _neural_policy = build_neural_eval_policy(
+                model,
+                mu=_mu_np,
+                rho=self.arrival_rate / float(_mu_np.sum()),
+                mode=NEURAL_EVAL_MODE,
             )
-            neural_list.append(float(
-                time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
-        neural_data = np.array(neural_list)
+            _np_max_ev = int(
+                (self.arrival_rate + float(_mu_np.sum())) * _ssa.sim_time * 1.5
+            ) + 1000
+            neural_list = []
+            for _rep in iter_progress(
+                range(self.num_samples),
+                total=self.num_samples,
+                desc="stats: neural reps",
+                unit="rep",
+                leave=False,
+            ):
+                _rng = np.random.default_rng(_sc.seed + _rep)
+                _res = simulate(
+                    num_servers=self.num_servers, arrival_rate=self.arrival_rate,
+                    service_rates=_mu_np, policy=_neural_policy,
+                    sim_time=_ssa.sim_time, sample_interval=_ssa.sample_interval,
+                    rng=_rng, max_events=_np_max_ev,
+                )
+                neural_list.append(float(
+                    time_averaged_queue_lengths(_res, _sc.burn_in_fraction).sum()))
+            neural_data = np.array(neural_list)
+            stage_bar.update(1)
         
         self._analyze(neural_data, gibbs_data)
 
@@ -236,7 +265,7 @@ def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
 
-    run_dir, run_id = get_run_config(cfg, "stats_benchmark", raw_cfg)
+    run_dir, run_id = get_run_config(cfg, "stats", raw_cfg)
     run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
 
     log.info("=" * 60)

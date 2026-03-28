@@ -25,8 +25,19 @@ from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
 from gibbsq.core.features import look_ahead_potential
 from gibbsq.core.policies import UASRouting
 from gibbsq.engines.numpy_engine import simulate
+from gibbsq.utils.progress import create_progress
 
 log = logging.getLogger(__name__)
+
+
+def compute_value_bootstrap_targets(
+    queue_totals: jnp.ndarray,
+    random_limit: float,
+    denom: float,
+) -> jnp.ndarray:
+    """Map queue totals onto the same linear PI scale used online."""
+    safe_denom = jnp.maximum(jnp.asarray(denom, dtype=jnp.float32), 1e-6)
+    return 100.0 * (jnp.asarray(random_limit, dtype=jnp.float32) - queue_totals) / safe_denom
 
 def collect_robust_expert_data(
     num_servers: int,
@@ -149,10 +160,16 @@ def train_robust_bc_policy(
         return model, opt_state, loss, acc
 
     log.info(f"--- Bootstrapping Actor (Behavior Cloning) ---")
-    for i in range(num_steps + 1):
-        policy_net, opt_state, loss, acc = step(policy_net, opt_state, X, R, Y, MU)
-        if i % 100 == 0:
-            log.info(f"  Step {i:4d} | Loss: {loss:.4f} | Acc: {acc:.2%}")
+    with create_progress(total=num_steps + 1, desc="bc_train", unit="step") as progress:
+        for i in range(num_steps + 1):
+            policy_net, opt_state, loss, acc = step(policy_net, opt_state, X, R, Y, MU)
+            progress.update(1)
+            progress.set_postfix(
+                {"loss": f"{float(loss):.4f}", "acc": f"{float(acc):.2%}"},
+                refresh=False,
+            )
+            if i % 100 == 0:
+                log.info(f"  Step {i:4d} | Loss: {loss:.4f} | Acc: {acc:.2%}")
             
     return policy_net
 
@@ -180,24 +197,14 @@ def train_robust_bc_value(
     
     optimizer = optax.adamw(lr, weight_decay=weight_decay)
     opt_state = optimizer.init(eqx.filter(value_net, eqx.is_array))
-    
-    # SOTA FIX: Map instantaneous expert queue lengths to Performance Index (G_idx)
-    # This precisely aligns the Critic initialization with the RL advantage target.
-    # SG#3: Sample-specific M/M/1 limit for cross-regime Domain Randomization
-    # CRITICAL: Added jnp.maximum to prevent division by zero NaN explosions at rho=1.0
-    # SG#3 & SG#4 FIX: Use heterogeneous M/M/1 sum to match train_reinforce.py
-    # G_rand = Σ (λ_i) / (μ_i - λ_i) where λ_i = (ρ * Σμ) / N
-    def _heterogeneous_random_limit(rho_val, mu_vec):
-        lam_i = rho_val * jnp.sum(mu_vec) / num_servers
-        return jnp.sum(lam_i / jnp.maximum(mu_vec - lam_i, 1e-6))
-    
-    G_rand = jax.vmap(_heterogeneous_random_limit)(R, MU)
-    G_den  = jnp.maximum(jax.vmap(lambda m: jnp.sum(m))(MU), 1e-6)
-    G_idx  = 100.0 * (G_rand - G) / G_den
-    
-    # Use linear targets. The RL trainer uses linear normalized returns, so the 
-    # Critic must be pretrained on the same linear scale to prevent divergence.
-    G_scaled = G_idx
+
+    # Warm-start the critic on the same linear PI scale that the online
+    # REINFORCE loop uses for its dense reward shaping.
+    G_scaled = compute_value_bootstrap_targets(
+        queue_totals=G,
+        random_limit=random_limit,
+        denom=denom,
+    )
 
     @eqx.filter_jit
     def loss_fn(model, x, r, g, mu_batch):
@@ -215,9 +222,12 @@ def train_robust_bc_value(
         return model, opt_state, loss
 
     log.info(f"--- Bootstrapping Critic (Value Warming) ---")
-    for i in range(num_steps + 1):
-        value_net, opt_state, loss = step(value_net, opt_state, X, R, G_scaled, MU)
-        if i % 100 == 0:
-            log.info(f"  Step {i:4d} | MSE Loss: {loss:.4f}")
+    with create_progress(total=num_steps + 1, desc="bc_value", unit="step") as progress:
+        for i in range(num_steps + 1):
+            value_net, opt_state, loss = step(value_net, opt_state, X, R, G_scaled, MU)
+            progress.update(1)
+            progress.set_postfix({"loss": f"{float(loss):.4f}"}, refresh=False)
+            if i % 100 == 0:
+                log.info(f"  Step {i:4d} | MSE Loss: {loss:.4f}")
             
     return value_net, opt_state

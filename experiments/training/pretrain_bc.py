@@ -16,7 +16,7 @@ from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.pretraining import train_robust_bc_policy
 from gibbsq.utils.logging import setup_wandb, get_run_config
-from gibbsq.utils.model_io import save_model_pointer
+from gibbsq.utils.model_io import BC_POINTER, save_model_pointer
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def main(raw_cfg: DictConfig):
     validate(cfg)
     
     # Use standard run config
-    run_dir, run_id = get_run_config(cfg, "platinum_pretraining", raw_cfg)
+    run_dir, run_id = get_run_config(cfg, "bc_train", raw_cfg)
     setup_wandb(cfg, raw_cfg, default_group="pretraining", run_id=run_id, run_dir=run_dir)
     
     # Initialize policy
@@ -64,7 +64,7 @@ def main(raw_cfg: DictConfig):
         model_path=model_path,
         project_root=_PROJECT_ROOT,
         output_root=pointer_dir,
-        pointer_name="latest_domain_randomized_weights.txt",
+        pointer_name=BC_POINTER,
     )
 
 if __name__ == "__main__":

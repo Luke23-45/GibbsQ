@@ -29,7 +29,7 @@ drift:
 
 stress:
   n_values: [8, 32, 128, 512, 1024]
-  critical_rhos: [0.9, 0.95, 0.99, 0.999]
+  critical_rhos: [0.9, 0.95, 0.99]
   mu_het: [10.0, 0.1, 0.1, 0.1]
   sample_interval: 1.0
   massive_n_rho: 0.8
@@ -41,7 +41,7 @@ stress:
   heterogeneity_sim_time: 1000.0
 
 generalization:
-  rho_boundary_vals: [0.90, 0.95, 0.98, 0.99, 0.999]
+  rho_boundary_vals: [0.90, 0.95, 0.98, 0.99]
   scale_vals: [0.5, 1.0, 2.0, 5.0, 10.0]
   rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
 

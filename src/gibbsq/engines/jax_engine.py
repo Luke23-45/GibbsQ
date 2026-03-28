@@ -19,6 +19,27 @@ from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
 RATE_EPSILON = constants.RATE_GUARD_EPSILON
 
+POLICY_NAME_TO_TYPE = {
+    "uniform": 0,
+    "proportional": 1,
+    "jsq": 2,
+    "softmax": 3,
+    "power_of_d": 4,
+    "jssq": 5,
+    "uas": 6,
+}
+
+
+def policy_name_to_type(name: str) -> int:
+    """Map a public policy name onto the compiled JAX policy selector id."""
+    try:
+        return POLICY_NAME_TO_TYPE[name]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported JAX policy name '{name}'. "
+            f"Expected one of {sorted(POLICY_NAME_TO_TYPE)}."
+        ) from exc
+
 
 def _validate_inputs(
     *,
@@ -45,6 +66,12 @@ def _validate_inputs(
         raise ValueError(f"alpha must be > 0, got {alpha}")
     if max_samples < 1:
         raise ValueError(f"max_samples must be >= 1, got {max_samples}")
+    required_samples = int(sim_time / sample_interval) + 1
+    if max_samples < required_samples:
+        raise ValueError(
+            "max_samples must cover the full sampling grid through sim_time: "
+            f"required >= {required_samples}, got {max_samples}"
+        )
     if policy_type not in (0, 1, 2, 3, 4, 5, 6):
         raise ValueError(f"policy_type must be one of 0..6, got {policy_type}")
     if d < 1:
@@ -85,10 +112,10 @@ class SimParams:
     sim_time:        float
     sample_interval: float
     max_events:      int            # Static bound for lax.scan
-    max_samples:     int            # Static bound for sample buffer
     policy_type:     int            # 0: Uniform, 1: Prop, 2: JSQ, 3: Softmax, 4: Power-of-d
     d:               int            # for Power-of-d (default 2)
-    scan_sampling_chunk: int        # Max events recorded per step
+    max_samples:     int = 1        # Static bound for sample buffer
+    scan_sampling_chunk: int = 16   # Max events recorded per step
 
 
 # ──────────────────────────────────────────────────────────────
@@ -256,6 +283,39 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     return next_state, None
 
 
+def _fill_remaining_samples(state: SimState, params: SimParams) -> SimState:
+    """Fill the flat terminal tail so the sampled grid reaches sim_time."""
+    required_samples = jnp.minimum(
+        jnp.array(params.max_samples, dtype=jnp.int32),
+        jnp.floor(params.sim_time / params.sample_interval).astype(jnp.int32) + 1,
+    )
+
+    def _body(i, carry):
+        times_buf, states_buf = carry
+        sample_t = i.astype(jnp.float32) * params.sample_interval
+        times_buf = times_buf.at[i].set(sample_t)
+        states_buf = states_buf.at[i].set(state.Q)
+        return times_buf, states_buf
+
+    filled_times, filled_states = lax.fori_loop(
+        state.sample_idx,
+        required_samples,
+        _body,
+        (state.times_buf, state.states_buf),
+    )
+
+    return SimState(
+        t=state.t,
+        Q=state.Q,
+        key=state.key,
+        arrival_count=state.arrival_count,
+        departure_count=state.departure_count,
+        sample_idx=required_samples,
+        times_buf=filled_times,
+        states_buf=filled_states,
+    )
+
+
 # ──────────────────────────────────────────────────────────────
 #  Public API
 # ──────────────────────────────────────────────────────────────
@@ -311,6 +371,8 @@ def _simulate_jax_impl(
         length=params.max_events
     )
     
+    final_state = _fill_remaining_samples(final_state, params)
+
     # Extract the inline-recorded sample buffers directly from carry state.
     # Memory used: O(max_samples × N) — a ~5500x reduction for N=1024 vs prior design.
     query_times    = final_state.times_buf

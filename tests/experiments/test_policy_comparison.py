@@ -1,8 +1,53 @@
 import numpy as np
 
+from experiments.evaluation import policy_comparison as pc
 from experiments.evaluation.baselines_comparison import _compute_metrics_from_arrays
 from gibbsq.analysis.metrics import gini_coefficient, sojourn_time_estimate, time_averaged_queue_lengths
 from gibbsq.engines.numpy_engine import SimResult
+
+
+def test_iter_with_progress_delegates_to_shared_helper(monkeypatch):
+    calls = {}
+
+    def fake_iter_progress(items, **kwargs):
+        calls["items"] = list(items)
+        calls["kwargs"] = kwargs
+        return calls["items"]
+
+    monkeypatch.setattr(pc, "iter_progress", fake_iter_progress)
+    wrapped = pc._iter_with_progress(["a", "b"], desc="Policies", total=2)
+    assert list(wrapped) == ["a", "b"]
+    assert calls["kwargs"]["desc"] == "Policies"
+    assert calls["kwargs"]["total"] == 2
+
+
+def test_collect_trajectory_ssa_jsq_path_uses_shared_jsq_contract(monkeypatch):
+    from experiments.training import train_reinforce as tr
+
+    class FakeJSQPolicy:
+        def __call__(self, q, rng):
+            return np.array([0.0, 0.5, 0.0, 0.5], dtype=np.float64)
+
+    class FakeRng:
+        def exponential(self, scale):
+            return 0.1
+
+        def uniform(self, low, high):
+            return high * 0.99
+
+    monkeypatch.setattr(tr, "JSQRouting", lambda: FakeJSQPolicy())
+
+    traj = tr.collect_trajectory_ssa(
+        policy_net=None,
+        num_servers=4,
+        arrival_rate=1.0,
+        service_rates=np.ones(4, dtype=np.float64),
+        sim_time=1.0,
+        rng=FakeRng(),
+        use_jsq=True,
+    )
+
+    assert traj.actions[0] == 3
 
 
 def test_compute_metrics_from_arrays_matches_reference_loop():

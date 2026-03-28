@@ -468,7 +468,7 @@ class TestMakePolicy:
             make_policy("proportional")
     
     def test_make_unknown_policy(self):
-        with pytest.raises(ValueError, match="Unknown policy"):
+        with pytest.raises(KeyError, match="Unknown policy"):
             make_policy("nonexistent")
 
 

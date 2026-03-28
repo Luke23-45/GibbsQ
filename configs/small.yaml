@@ -122,7 +122,7 @@ verification:
   gradient_check_max_steps: 100
   gradient_check_n_test: 50
   gradient_check_sim_time: 10.0
-  gradient_check_n_samples: 2500  # Small scale testing
+  gradient_check_n_samples: 5000  # Minimum verified count for stable post-fix gradient validation
   gradient_check_epsilon: 0.05
   gradient_check_cosine_threshold: 0.9
   gradient_check_error_threshold: 0.40

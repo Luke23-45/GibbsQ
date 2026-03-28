@@ -112,9 +112,10 @@ verification:
   parity_z_score: 1.96
   gradient_check_chunk_size: 100  # FAST: Reduced for speed
   gradient_check_max_steps: 50
-  gradient_check_n_test: 100
-  gradient_check_sim_time: 5.0
-  gradient_check_n_samples: 1000
+  gradient_check_n_test: 50
+  gradient_check_hidden_size: 128
+  gradient_check_sim_time: 10.0
+  gradient_check_n_samples: 5000
   gradient_check_epsilon: 0.05
   gradient_check_cosine_threshold: 0.9
   gradient_check_error_threshold: 0.30

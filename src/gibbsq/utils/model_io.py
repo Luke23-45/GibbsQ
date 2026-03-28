@@ -22,30 +22,58 @@ import logging
 from pathlib import Path
 
 import numpy as np
-
-from gibbsq.core.neural_policies import compute_adaptive_alpha
+from gibbsq.core.policy_distribution import compute_numpy_policy_probs
 log = logging.getLogger(__name__)
 
+REINFORCE_POINTER = "latest_reinforce_weights.txt"
+DOMAIN_RANDOMIZED_POINTER = "latest_domain_randomized_weights.txt"
+BC_POINTER = "latest_bc_weights.txt"
+LEGACY_POINTER = "latest_weights.txt"
+
+
+def _resolve_from_candidates(project_root: Path, candidates: list[Path]) -> Path | None:
+    for ptr in candidates:
+        if not ptr.exists():
+            continue
+        raw = Path(ptr.read_text(encoding="utf-8").strip())
+        model_path = raw if raw.is_absolute() else (project_root / raw)
+        if model_path.exists():
+            if ptr.name == LEGACY_POINTER:
+                log.warning(
+                    "Using legacy pointer latest_weights.txt; "
+                    "prefer public training pointers "
+                    "(latest_reinforce_weights.txt or latest_bc_weights.txt)."
+                )
+            return model_path
+    return None
 
 # ── Model Pointer Resolution ────────────────────────────────────
 
 def resolve_model_pointer(
     project_root: Path,
     output_root: Path,
+    *,
+    allow_bc: bool = True,
+    allow_legacy: bool = True,
 ) -> Path:
     """Resolve the latest model weights path from pointer files.
 
     Searches for pointer files in priority order:
-    1. ``latest_domain_randomized_weights.txt`` (DR-trained)
-    2. ``latest_reinforce_weights.txt`` (REINFORCE-trained)
-    3. ``latest_weights.txt`` (legacy DGA pointer)
+    1. ``latest_reinforce_weights.txt`` (REINFORCE-trained)
+    2. ``latest_domain_randomized_weights.txt`` (legacy DR-trained naming)
+    3. ``latest_bc_weights.txt`` (BC warm-start only; optional)
+    4. ``latest_weights.txt`` (legacy DGA pointer; optional)
 
     Parameters
     ----------
     project_root : Path
-        Absolute path to the MoEQ project root.
+        Absolute path to the GibbsQ project root.
     output_root : Path
         Directory containing the pointer files (typically ``run_dir.parent.parent``).
+    allow_bc : bool
+        Whether ``latest_bc_weights.txt`` is an acceptable fallback.
+    allow_legacy : bool
+        Whether ``latest_weights.txt`` is an acceptable fallback.
 
     Returns
     -------
@@ -58,36 +86,38 @@ def resolve_model_pointer(
         If no valid pointer file is found.
     """
     candidates = [
-        output_root / "latest_domain_randomized_weights.txt",
-        output_root / "latest_reinforce_weights.txt",
-        output_root / "latest_weights.txt",
+        output_root / REINFORCE_POINTER,
+        output_root / DOMAIN_RANDOMIZED_POINTER,
     ]
+    if allow_bc:
+        candidates.append(output_root / BC_POINTER)
+    if allow_legacy:
+        candidates.append(output_root / LEGACY_POINTER)
 
-    for ptr in candidates:
-        if not ptr.exists():
-            continue
-        raw = Path(ptr.read_text(encoding="utf-8").strip())
-        model_path = raw if raw.is_absolute() else (project_root / raw)
-        if model_path.exists():
-            if ptr.name == "latest_weights.txt":
-                log.warning(
-                    "Using legacy pointer latest_weights.txt; "
-                    "prefer REINFORCE pointers."
-                )
-            return model_path
+    model_path = _resolve_from_candidates(project_root, candidates)
+    if model_path is not None:
+        return model_path
 
     tried = "\n".join(f"  - {c}" for c in candidates)
+    if not allow_bc:
+        tried += f"\n  - {output_root / BC_POINTER} (rejected: BC warm-start only)"
+    if not allow_legacy:
+        tried += f"\n  - {output_root / LEGACY_POINTER} (rejected: legacy pointer not allowed)"
     raise FileNotFoundError(
         "No valid model pointer found. Tried:\n"
         f"{tried}\n"
-        "Run Track 1/3 training (reinforce_train or dr_train), "
-        "or legacy train for latest_weights.txt."
+        "Run a public training entry point "
+        "(reinforce_train or bc_train), or intentionally supply "
+        "the legacy latest_weights.txt pointer."
     )
 
 
 def resolve_model_pointer_or_none(
     project_root: Path,
     output_root: Path,
+    *,
+    allow_bc: bool = True,
+    allow_legacy: bool = True,
 ) -> Path | None:
     """Resolve model pointer, returning None if not found.
     
@@ -107,18 +137,17 @@ def resolve_model_pointer_or_none(
         Absolute path to model weights, or None if no pointer found.
     """
     candidates = [
-        output_root / "latest_domain_randomized_weights.txt",
-        output_root / "latest_reinforce_weights.txt",
-        output_root / "latest_weights.txt",
+        output_root / REINFORCE_POINTER,
+        output_root / DOMAIN_RANDOMIZED_POINTER,
     ]
+    if allow_bc:
+        candidates.append(output_root / BC_POINTER)
+    if allow_legacy:
+        candidates.append(output_root / LEGACY_POINTER)
 
-    for ptr in candidates:
-        if not ptr.exists():
-            continue
-        raw = Path(ptr.read_text(encoding="utf-8").strip())
-        model_path = raw if raw.is_absolute() else (project_root / raw)
-        if model_path.exists():
-            return model_path
+    model_path = _resolve_from_candidates(project_root, candidates)
+    if model_path is not None:
+        return model_path
 
     log.warning(
         "No model pointer found in %s. "
@@ -132,7 +161,7 @@ def save_model_pointer(
     model_path: Path,
     project_root: Path,
     output_root: Path,
-    pointer_name: str = "latest_reinforce_weights.txt",
+    pointer_name: str = REINFORCE_POINTER,
 ) -> Path:
     """Write a relative model pointer file.
 
@@ -244,29 +273,42 @@ class NeuralSSAPolicy:
 
         @functools.lru_cache(maxsize=131072)
         def _get_probs(q_tuple, rho_val):
-            q_arr = jnp.array(q_tuple, dtype=jnp.float32)
-            r_tensor = jnp.array(rho_val, dtype=jnp.float32)
-            
-            # FIX SG#4 & SG#7: Pass raw Q and operating mu. 
-            # Encapsulation in NeuralRouter handles Look-Ahead Potential math natively.
-            logits = self._forward(self._model, q_arr, r_tensor, mu_val=self.mu)
-            
-            # Application of numerically stable softmax
-            import numpy as np
-            logits_np = np.array(logits, dtype=np.float64)
-            
-            # FIX SG#5: Apply adaptive temperature to align with training
-            temp = float(compute_adaptive_alpha(rho_val))
-            logits_scaled = logits_np / temp
-            
-            logits_sh = logits_scaled - np.max(logits_scaled)
-            probs_np = np.exp(logits_sh)
-            return probs_np / probs_np.sum()
+            return compute_numpy_policy_probs(
+                self._model,
+                np.array(q_tuple, dtype=np.float64),
+                np.array(self.mu),
+                rho_val,
+            )
 
         self._get_probs = _get_probs
 
     def __call__(self, Q, rng):
         return self._get_probs(tuple(Q), self.active_rho)
+
+
+def build_neural_eval_policy(model, mu, rho=None, mode: str = "deterministic"):
+    """Create an explicit neural evaluation policy wrapper.
+
+    Parameters
+    ----------
+    model : eqx.Module
+        Trained neural router.
+    mu : array-like
+        Service-rate vector for the active evaluation regime.
+    rho : float, optional
+        Load factor for feature construction.
+    mode : {"deterministic", "stochastic"}
+        Evaluation mode. Deterministic uses greedy argmax routing,
+        stochastic samples from the learned policy distribution.
+    """
+    if mode == "deterministic":
+        return DeterministicNeuralPolicy(model, mu, rho=rho)
+    if mode == "stochastic":
+        return NeuralSSAPolicy(model, mu=mu, rho=rho)
+    raise ValueError(
+        f"Unknown neural evaluation mode '{mode}'. "
+        "Expected 'deterministic' or 'stochastic'."
+    )
 
 
 class DeterministicNeuralPolicy:
@@ -291,11 +333,7 @@ class DeterministicNeuralPolicy:
         # SG#4: Remove external transform; numpy_forward expects raw Q and mu
         # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
         mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
-        logits = self._net.numpy_forward(Q, self._np_params, self._np_config, rho=self._rho, mu=mu_val)
-        best_idx = int(np.argmax(logits))
-        probs = np.zeros(self._num_servers, dtype=np.float64)
-        probs[best_idx] = 1.0
-        return probs
+        return compute_numpy_policy_probs(self._net, Q, mu_val, self._rho, deterministic=True)
 
 
 class StochasticNeuralPolicy:
@@ -318,12 +356,4 @@ class StochasticNeuralPolicy:
         # SG#4: Remove external transform; numpy_forward expects raw Q and mu
         # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
         mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
-        logits = self._net.numpy_forward(Q, self._np_params, self._np_config, rho=self._rho, mu=mu_val)
-        
-        # FIX SG#5: Apply adaptive temperature to align with training
-        temp = float(compute_adaptive_alpha(self._rho))
-        logits = logits / temp
-        
-        logits = logits - np.max(logits)
-        probs = np.exp(logits)
-        return probs / probs.sum()
+        return compute_numpy_policy_probs(self._net, Q, mu_val, self._rho, deterministic=False)

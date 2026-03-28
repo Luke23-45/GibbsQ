@@ -228,6 +228,24 @@ class TestStationarityDiagnostic:
         diag = stationarity_diagnostic(result)
         assert diag["is_stationary"] is False
 
+    def test_negative_trend_is_not_marked_explosive(self):
+        """Only positive significant slopes should fail the stationarity gate."""
+        t = np.linspace(0, 100, 1000)
+        states = np.column_stack([100 - (t / 10), np.zeros(1000)])
+        result = SimResult(
+            times=t,
+            states=states,
+            arrival_count=500,
+            departure_count=500,
+            final_time=100.0,
+            num_servers=2,
+        )
+
+        diag = stationarity_diagnostic(result, burn_in_fraction=0.0)
+        assert diag["slope"] < 0.0
+        assert diag["p_value"] < 0.05
+        assert diag["is_stationary"] is True
+
 
 class TestMSER5Truncation:
     """Verify MSER-5 truncation point detection."""

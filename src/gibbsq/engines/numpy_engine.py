@@ -31,6 +31,7 @@ from dataclasses import dataclass
 
 from gibbsq.core.policies import RoutingPolicy
 from gibbsq.core import constants
+from gibbsq.utils.progress import iter_progress
 
 __all__ = [
     "SimResult",
@@ -304,6 +305,7 @@ def run_replications(
     base_seed:       int   = 42,
     log_interval:    float = 0.0,
     max_events:      int | None = None,
+    progress_desc:   str | None = None,
 ) -> list[SimResult]:
     """
     Run *num_replications* independent replications.
@@ -314,7 +316,15 @@ def run_replications(
     mu = np.asarray(service_rates, dtype=np.float64)
     results: list[SimResult] = []
 
-    for r in range(num_replications):
+    rep_iter = iter_progress(
+        range(num_replications),
+        total=num_replications,
+        desc=progress_desc,
+        unit="rep",
+        leave=False,
+    ) if progress_desc else range(num_replications)
+
+    for r in rep_iter:
         rng = np.random.default_rng(base_seed + r)
         log.info(f"Replication {r + 1}/{num_replications}  (seed={base_seed + r})")
         result = simulate(
