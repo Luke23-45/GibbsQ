@@ -34,12 +34,18 @@ log = logging.getLogger(__name__)
 
 
 def _require_theorem_supported_policy(policy_name: str) -> str:
-    if policy_name != "softmax":
+    theorem_modes = {
+        "softmax": "raw",
+        "uas": "uas",
+    }
+    try:
+        return theorem_modes[policy_name]
+    except KeyError as exc:
         raise ValueError(
-            "drift_verification certifies only the raw softmax theorem path "
-            f"(policy.name='softmax'); got policy.name='{policy_name}'."
-        )
-    return "raw"
+            "drift_verification certifies only theorem-backed policy paths "
+            "(policy.name in {'softmax', 'uas'}); "
+            f"got policy.name='{policy_name}'."
+        ) from exc
 
 
 # Use the dedicated theorem-path drift config by default.

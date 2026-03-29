@@ -143,10 +143,12 @@ def upper_bound(
     delta = Q_f - Q_min
 
     if mode == "uas":
-        # Archimedean R: λ log N / α + λ / (2 * min_μ) + N / 2
+        # Archimedean Step-5 bound from docs/softmax_uas.md:
+        #   LV(Q) <= -epsilon |Q|_1 + R
+        # with epsilon = (Lambda - lambda) / Lambda.
         R = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
-        # In UAS weighted space, we use a heuristic bound alignment
-        return float(-(cap - lam) / cap * Q_f.sum() + R)
+        eps = (cap - lam) / cap
+        return float(-eps * Q_f.sum() + R)
     else:
         # Standard R: λ log N / α + (λ + Λ) / 2
         R = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
@@ -294,8 +296,8 @@ def _vectorised_drift(
     Q_1   = Q.sum(axis=1)
 
     if mode == "uas":
-        # UAS heuristic alignment
-        ub = -eps * Q_1 + R 
+        # Archimedean Step-5 bound from docs/softmax_uas.md.
+        ub = -eps * Q_1 + R
     else:
         ub = -(cap - lam) * Q_min - (delta @ mu_f) + R
 

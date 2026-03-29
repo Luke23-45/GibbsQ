@@ -46,13 +46,33 @@ class GradientCheckResult(NamedTuple):
     bias_estimate: float
     variance_estimate: float
     reinforce_var_vector: np.ndarray 
+    reinforce_mean_var_vector: np.ndarray
     fd_var_vector: np.ndarray # NEW: Per-parameter FD variance
+    computed_mask: np.ndarray
     passed: bool
 
 
+def _build_plot_artifacts(
+    result: GradientCheckResult,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Return plot-ready gradient arrays restricted to computed FD coordinates."""
+    mask = np.asarray(result.computed_mask, dtype=bool)
+    fd_grads = np.asarray(result.finite_diff_grad, dtype=np.float64)[mask]
+    rf_grads = np.asarray(result.reinforce_grad, dtype=np.float64)[mask]
+    if result.reinforce_mean_var_vector is None or result.fd_var_vector is None:
+        return fd_grads, rf_grads, None
+    combined_se = np.sqrt(
+        np.asarray(result.reinforce_mean_var_vector, dtype=np.float64)[mask]
+        + np.asarray(result.fd_var_vector, dtype=np.float64)[mask]
+    )
+    safe_se = np.where(combined_se > 1e-12, combined_se, 1e-12)
+    z_scores = np.abs(rf_grads - fd_grads) / safe_se
+    return fd_grads, rf_grads, z_scores
+
+
 def _sum_masked_action_interval_returns(batch) -> jax.Array:
-    mask = batch.is_action_mask & batch.valid_mask
-    return jnp.sum(jnp.where(mask, batch.returns, 0.0))
+    action_mask = batch.is_action_mask & batch.valid_mask
+    return jnp.sum(jnp.where(action_mask, batch.returns, 0.0))
 
 def compute_reinforce_gradient(
     policy_net: NeuralRouter,
@@ -541,6 +561,8 @@ def run_gradient_check(
     log.info(f"Relative bias: {relative_bias:.4f}")
     log.info(f"Variance estimate: {variance:.6f}")
     log.info(f"Passed: {passed}")
+
+    reinforce_mean_var = grad_variance / float(n_samples)
     
     return GradientCheckResult(
         reinforce_grad=reinforce_grad,
@@ -550,7 +572,9 @@ def run_gradient_check(
         bias_estimate=bias,
         variance_estimate=variance,
         reinforce_var_vector=grad_variance,
+        reinforce_mean_var_vector=reinforce_mean_var,
         fd_var_vector=fd_var,
+        computed_mask=computed_mask,
         passed=passed,
     )
 
@@ -589,16 +613,12 @@ def main(raw_cfg: DictConfig) -> None:
     from gibbsq.analysis.plotting import plot_gradient_scatter
     
     # Compute per-parameter z-scores where variance is available
-    z_scores = None
-    if result.reinforce_var_vector is not None and result.fd_var_vector is not None:
-        combined_se = np.sqrt(result.reinforce_var_vector + result.fd_var_vector)
-        safe_se = np.where(combined_se > 1e-12, combined_se, 1e-12)
-        z_scores = np.abs(result.reinforce_grad - result.finite_diff_grad) / safe_se
+    fd_plot, rf_plot, z_scores = _build_plot_artifacts(result)
     
     plot_path = run_dir / "gradient_scatter"
     fig = plot_gradient_scatter(
-        fd_grads=result.finite_diff_grad,
-        rf_grads=result.reinforce_grad,
+        fd_grads=fd_plot,
+        rf_grads=rf_plot,
         z_scores=z_scores,
         summary_stats={
             "cosine_similarity": float(result.cosine_similarity),

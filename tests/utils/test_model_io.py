@@ -313,6 +313,39 @@ class TestSaveModelPointer:
             )
 
 
+class TestValidateNeuralModelShape:
+    """Tests for feature-aware neural model validation."""
+
+    def test_accepts_model_without_service_rate_features(self):
+        from gibbsq.core.config import NeuralConfig
+        from gibbsq.utils.model_io import validate_neural_model_shape
+
+        class MockLayer:
+            def __init__(self, out_dim, in_dim):
+                self.weight = np.zeros((out_dim, in_dim), dtype=np.float32)
+
+        class MockModel:
+            layers = [MockLayer(8, 3)]
+
+        cfg = NeuralConfig(hidden_size=8, use_service_rates=False, use_rho=False)
+        validate_neural_model_shape(MockModel(), cfg, num_servers=3)
+
+    def test_rejects_missing_service_rate_features_when_enabled(self):
+        from gibbsq.core.config import NeuralConfig
+        from gibbsq.utils.model_io import validate_neural_model_shape
+
+        class MockLayer:
+            def __init__(self, out_dim, in_dim):
+                self.weight = np.zeros((out_dim, in_dim), dtype=np.float32)
+
+        class MockModel:
+            layers = [MockLayer(8, 3)]
+
+        cfg = NeuralConfig(hidden_size=8, use_service_rates=True, use_rho=False)
+        with pytest.raises(ValueError, match="Model input dimension mismatch"):
+            validate_neural_model_shape(MockModel(), cfg, num_servers=3)
+
+
 class TestDeterministicNeuralPolicy:
     """Tests for DeterministicNeuralPolicy wrapper."""
 

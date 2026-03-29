@@ -86,6 +86,14 @@ class UniformRouting:
 NEURAL_EVAL_MODE = "deterministic"
 
 
+def _standard_error(values) -> float:
+    """Return sample standard error, guarding the single-observation case."""
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.size <= 1:
+        return 0.0
+    return float(np.std(arr, ddof=1) / np.sqrt(arr.size))
+
+
 def _build_ablation_eval_policy(model, mu_arr: np.ndarray, rho: float):
     return build_neural_eval_policy(
         model,
@@ -114,7 +122,7 @@ def evaluate_policy_ssa(policy, cfg: ExperimentConfig) -> dict:
     ]
     return {
         "mean_q_total": float(np.mean(q_totals)),
-        "se_q_total": float(np.std(q_totals) / np.sqrt(len(q_totals))),
+        "se_q_total": _standard_error(q_totals),
     }
 
 

@@ -26,7 +26,17 @@ def report_stability_sweep(run_dir: Path) -> None:
     # 1. Overall Stationarity
     total_runs = len(df)
     stationary_runs = df["is_stationary"].sum()
-    print(f"\nOverall Stationarity: {stationary_runs} / {total_runs} configurations proven stable.")
+    threshold = float(df["stationarity_threshold"].iloc[0]) if "stationarity_threshold" in df else float("nan")
+    if pd.notna(threshold):
+        print(
+            f"\nOverall Stationarity: {stationary_runs} / {total_runs} configurations "
+            f"classified stationary by the configured diagnostic (threshold={threshold:.2f})."
+        )
+    else:
+        print(
+            f"\nOverall Stationarity: {stationary_runs} / {total_runs} configurations "
+            "classified stationary by the configured diagnostic."
+        )
 
     if stationary_runs < total_runs:
         failed = df[~df["is_stationary"]]

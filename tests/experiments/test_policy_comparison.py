@@ -1,7 +1,7 @@
 import numpy as np
 
 from experiments.evaluation import policy_comparison as pc
-from experiments.evaluation.baselines_comparison import _compute_metrics_from_arrays
+from experiments.evaluation.baselines_comparison import _compute_metrics_from_arrays, _standard_error
 from gibbsq.analysis.metrics import gini_coefficient, sojourn_time_estimate, time_averaged_queue_lengths
 from gibbsq.engines.numpy_engine import SimResult
 
@@ -92,3 +92,13 @@ def test_compute_metrics_from_arrays_matches_reference_loop():
     assert np.allclose(w_vals, w_ref)
     assert np.array_equal(last_res.times, times[-1])
     assert np.array_equal(last_res.states, states[-1])
+
+
+def test_publication_standard_error_uses_sample_std():
+    values = np.array([1.0, 2.0, 5.0], dtype=np.float64)
+    expected = np.std(values, ddof=1) / np.sqrt(len(values))
+    assert _standard_error(values) == expected
+
+
+def test_publication_standard_error_returns_zero_for_single_observation():
+    assert _standard_error([3.5]) == 0.0

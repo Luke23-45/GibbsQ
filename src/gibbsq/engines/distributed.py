@@ -71,6 +71,9 @@ def sharded_replications(
     base_seed: int,
     max_samples: int,
     policy_type: int = 3,
+    max_events_multiplier: float = 1.5,
+    max_events_buffer: int = 1000,
+    scan_sampling_chunk: int = 16,
 ) -> tuple:
     """
     Run ``num_replications`` independent CTMC simulations in parallel.
@@ -128,4 +131,7 @@ def sharded_replications(
         max_samples=max_samples,
         policy_type=policy_type,
         d=2,  # Power-of-d default; ignored by Softmax (policy_type=3)
+        max_events_multiplier=max_events_multiplier,
+        max_events_buffer=max_events_buffer,
+        scan_sampling_chunk=scan_sampling_chunk,
     )

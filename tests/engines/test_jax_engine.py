@@ -17,8 +17,9 @@ import numpy as np
 from hypothesis import given, strategies as st, settings, assume
 
 from gibbsq.engines.jax_engine import (
-    simulate_jax, run_replications_jax, get_probs, SimParams, SimState,
+    simulate_jax, run_replications_jax, get_probs, SimParams, SimState, compute_configured_max_events,
 )
+from gibbsq.core.policies import JSSQRouting
 
 
 # ============================================================
@@ -136,6 +137,27 @@ class TestGetProbsCorrectness:
         assert jnp.sum(probs == 1.0) == 1
         assert jnp.sum(probs == 0.0) == 2
 
+    def test_jssq_probs_match_shared_policy_contract(self):
+        """JAX JSSQ must match the shared NumPy JSSQRouting semantics exactly."""
+        Q = jnp.array([5, 0], dtype=jnp.int32)
+        mu = jnp.array([10.0, 1.0], dtype=jnp.float32)
+        params = SimParams(
+            num_servers=2,
+            arrival_rate=1.0,
+            service_rates=mu,
+            alpha=7.0,  # Should be ignored by JSSQ
+            sim_time=10.0,
+            sample_interval=1.0,
+            max_events=1000,
+            policy_type=5,  # JSSQ
+            d=2,
+        )
+
+        probs = np.array(get_probs(Q, params, jax.random.PRNGKey(0)))
+        expected = JSSQRouting(np.array([10.0, 1.0]))(np.array([5, 0]), np.random.default_rng(0))
+
+        np.testing.assert_allclose(probs, expected, rtol=1e-6, atol=1e-6)
+
 
 class TestSimulateJaxCorrectness:
     """Verify JAX simulation produces correct outputs."""
@@ -224,6 +246,33 @@ class TestSimulateJaxCorrectness:
         valid_mask[0] = True
         final_state = np.asarray(states)[valid_mask][-1]
         assert final_state.sum() == int(arrivals) - int(departures)
+
+    def test_truncated_runs_fail_closed_in_sample_buffers(self):
+        """Early max-event truncation must not fabricate a full sampling grid."""
+        from gibbsq.engines.jax_engine import _simulate_jax_impl
+
+        times, states, counts, is_valid = _simulate_jax_impl(
+            num_servers=2,
+            arrival_rate=1.0,
+            service_rates=jnp.array([1.0, 1.0], dtype=jnp.float32),
+            alpha=1.0,
+            sim_time=10.0,
+            sample_interval=1.0,
+            key=jax.random.PRNGKey(0),
+            max_samples=11,
+            max_events=1,
+            policy_type=3,
+            d=2,
+            scan_sampling_chunk=16,
+        )
+
+        assert bool(is_valid) is False
+        np_times = np.asarray(times)
+        valid_mask = np_times > 0
+        valid_mask[0] = True
+        assert np.count_nonzero(valid_mask) < len(np_times)
+        assert np.all(np_times[~valid_mask] == 0.0)
+        assert np.all(np.asarray(states)[~valid_mask] == 0)
 
 
 class TestRunReplicationsJaxCorrectness:
@@ -596,6 +645,19 @@ class TestJaxSimulationRegressions:
                 base_seed=0,
                 max_samples=20,
             )
+
+    def test_compute_configured_max_events_honors_configurable_floor(self):
+        service_rates = np.array([1.0, 1.0], dtype=np.float64)
+        bound = compute_configured_max_events(
+            arrival_rate=1.0,
+            service_rates=service_rates,
+            sim_time=10.0,
+            max_events_multiplier=3.0,
+            max_events_buffer=17,
+        )
+
+        expected_floor = int(np.ceil((1.0 + service_rates.sum()) * 10.0 * 3.0)) + 17
+        assert bound >= expected_floor
 
     def test_vmap_replications_match_lax_map_reference(self):
         from gibbsq.engines.jax_engine import _run_replications_jax_impl, _simulate_jax_impl

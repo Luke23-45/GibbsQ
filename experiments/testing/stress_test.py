@@ -33,6 +33,29 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
+def _heterogeneity_replication_kwargs(
+    cfg,
+    *,
+    mu_het: jnp.ndarray,
+    arrival_rate: float,
+    sim_time: float,
+    max_samples: int,
+) -> dict:
+    """Build the heterogeneity stress-test replication contract from active config."""
+    return {
+        "num_replications": cfg.simulation.num_replications,
+        "num_servers": int(mu_het.shape[0]),
+        "arrival_rate": arrival_rate,
+        "service_rates": mu_het,
+        "alpha": cfg.system.alpha,
+        "sim_time": sim_time,
+        "sample_interval": cfg.stress.sample_interval,
+        "base_seed": cfg.simulation.seed,
+        "max_samples": max_samples,
+        "policy_type": policy_name_to_type(cfg.policy.name),
+    }
+
+
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
     cfg = hydra_to_config(raw_cfg)
@@ -76,6 +99,9 @@ def main(raw_cfg: DictConfig) -> None:
                     base_seed=cfg.simulation.seed,
                     max_samples=max_samples_t1,
                     policy_type=policy_name_to_type(cfg.policy.name),
+                    max_events_multiplier=cfg.jax_engine.max_events_safety_multiplier,
+                    max_events_buffer=cfg.jax_engine.max_events_additive_buffer,
+                    scan_sampling_chunk=cfg.jax_engine.scan_sampling_chunk,
                 )
 
                 ginis = []
@@ -145,6 +171,9 @@ def main(raw_cfg: DictConfig) -> None:
                     base_seed=cfg.simulation.seed,
                     max_samples=max_samples_crit,
                     policy_type=policy_name_to_type(cfg.policy.name),
+                    max_events_multiplier=cfg.jax_engine.max_events_safety_multiplier,
+                    max_events_buffer=cfg.jax_engine.max_events_additive_buffer,
+                    scan_sampling_chunk=cfg.jax_engine.scan_sampling_chunk,
                 )
 
                 total_q_trajectories = np.array(states).sum(axis=2)
@@ -230,17 +259,18 @@ def main(raw_cfg: DictConfig) -> None:
         max_samples_het = int(sim_time_het / cfg.stress.sample_interval) + 1
         log.info(f"  Simulating heterogenous setup: mu={mu_het}")
 
-        times, states, (arrs, deps) = sharded_replications(
-            num_replications=cfg.simulation.num_replications,
-            num_servers=4,
+        hetero_kwargs = _heterogeneity_replication_kwargs(
+            cfg,
+            mu_het=mu_het,
             arrival_rate=lam_het,
-            service_rates=mu_het,
-            alpha=cfg.system.alpha,
             sim_time=sim_time_het,
-            sample_interval=cfg.stress.sample_interval,
-            base_seed=cfg.simulation.seed,
             max_samples=max_samples_het,
-            policy_type=6,
+        )
+        times, states, (arrs, deps) = sharded_replications(
+            **hetero_kwargs,
+            max_events_multiplier=cfg.jax_engine.max_events_safety_multiplier,
+            max_events_buffer=cfg.jax_engine.max_events_additive_buffer,
+            scan_sampling_chunk=cfg.jax_engine.scan_sampling_chunk,
         )
 
         work_dist = []
@@ -259,7 +289,14 @@ def main(raw_cfg: DictConfig) -> None:
             if valid_len < np_s.shape[0]:
                 np_t = np_t[:valid_len]
                 np_s = np_s[:valid_len]
-            res = SimResult(np_t, np_s, int(arrs[rep_idx]), int(deps[rep_idx]), float(np_t[-1]), 4)
+            res = SimResult(
+                np_t,
+                np_s,
+                int(arrs[rep_idx]),
+                int(deps[rep_idx]),
+                float(np_t[-1]),
+                hetero_kwargs["num_servers"],
+            )
             avg_q_per_srv = time_averaged_queue_lengths(res, cfg.simulation.burn_in_fraction)
             work_dist.append(avg_q_per_srv)
 

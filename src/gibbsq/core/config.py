@@ -212,7 +212,7 @@ class VerificationThresholds:
     # With the softer DGA steepness (Constants.DGA_INDICATOR_STEEPNESS = 5.0),
     # the finite-difference check passes reliably at the mathematically sound 5% threshold.
     jacobian_rel_tol: float = 0.05
-    stationarity_threshold: float = 0.5
+    stationarity_threshold: float = 1.0
     alpha_significance: float = 0.05
     confidence_interval: float = 0.95
     parity_z_score: float = 1.96  # Z-score for parity margins
@@ -612,11 +612,19 @@ def validate(cfg: ExperimentConfig) -> None:
     # ── Domain Randomization ──────────────────────────────────
     dr = cfg.domain_randomization
     if dr.enabled:
-        for i, phase in enumerate(dr.phases):
-            if not (0 < phase.rho_min < phase.rho_max < 1.0):
-                raise ValueError(f"DR phase {i} has invalid rho range [{phase.rho_min}, {phase.rho_max}]")
-            if phase.epochs < 1:
-                raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
+        if dr.phases:
+            for i, phase in enumerate(dr.phases):
+                if not (0 < phase.rho_min < phase.rho_max < 1.0):
+                    raise ValueError(f"DR phase {i} has invalid rho range [{phase.rho_min}, {phase.rho_max}]")
+                if phase.epochs < 1:
+                    raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
+        else:
+            # SG#1 PATCH: Validate top-level rho bounds when phases are absent
+            if not (0 < dr.rho_min < dr.rho_max < 1.0):
+                raise ValueError(
+                    f"domain_randomization has invalid rho range "
+                    f"[{dr.rho_min}, {dr.rho_max}]; need 0 < rho_min < rho_max < 1"
+                )
 
     # ── Sweep/generalization/stress domain guards ─────────────
     # These values are transformed into λ = ρ·Λ in experiment loops,
@@ -766,16 +774,19 @@ def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
 def _build_dr_config(dr_dict: dict) -> DomainRandomizationConfig:
     """Build DomainRandomizationConfig from YAML dict.
 
-    SG-1 FIX: Handles both simple YAML format (enabled/rho_min/rho_max
-    without phases) and full format (with explicit phases list).
-    When 'phases' is absent, the dataclass default curriculum is used.
+    SG#1 PATCH: When 'phases' is absent from the YAML, explicitly set
+    phases=[] so the dataclass default curriculum is NOT injected.
+    This ensures the top-level rho_min/rho_max are honored by the
+    training loop.  When 'phases' IS present, parse and pass them
+    through (existing behavior).
     """
     dr_dict = dict(dr_dict)  # shallow copy
     phases_raw = dr_dict.pop("phases", None)
     if phases_raw is not None:
         phases = [DomainRandomizationPhase(**p) for p in phases_raw]
         return DomainRandomizationConfig(**dr_dict, phases=phases)
-    return DomainRandomizationConfig(**dr_dict)
+    # SG#1 PATCH: Pass phases=[] to prevent dataclass default injection
+    return DomainRandomizationConfig(**dr_dict, phases=[])
 
 
 def hydra_to_config(raw: DictConfig) -> ExperimentConfig:

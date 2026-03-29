@@ -46,6 +46,13 @@ stability_sweep:
 stress:
   n_values: [2, 4, 8]  # Grid feasible for N≤3, trajectory for N>3
   critical_rhos: [0.90, 0.95, 0.98]
+  critical_load_base_rho: 0.8
+  critical_load_max_sim_time: 500000.0
+
+generalization:
+  rho_boundary_vals: [0.90, 0.95, 0.98]
+  scale_vals: [0.5, 1.0, 2.0, 5.0, 10.0]
+  rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
 
 neural_training:
   learning_rate: 3e-3

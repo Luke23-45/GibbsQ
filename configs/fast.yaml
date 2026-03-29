@@ -108,7 +108,7 @@ generalization:
 verification:
   alpha_significance: 0.05
   confidence_interval: 0.95
-  stationarity_threshold: 0.5
+  stationarity_threshold: 1.0
   parity_z_score: 1.96
   gradient_check_chunk_size: 100  # FAST: Reduced for speed
   gradient_check_max_steps: 50

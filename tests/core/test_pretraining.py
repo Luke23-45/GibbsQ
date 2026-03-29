@@ -59,3 +59,32 @@ def test_fast_config_value_bootstrap_targets_stay_finite_and_reasonable():
 
     assert np.isfinite(targets).all()
     assert float(np.max(np.abs(targets))) < 1.0e4
+
+
+def test_collect_robust_expert_data_uses_requested_alpha(monkeypatch):
+    captured_alphas = []
+
+    class FakeExpert:
+        def __init__(self, service_rates, alpha):
+            captured_alphas.append(float(alpha))
+
+        def __call__(self, state, rng):
+            return np.array([1.0, 0.0], dtype=np.float64)
+
+    class FakeResult:
+        states = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.int32)
+
+    monkeypatch.setattr("gibbsq.core.pretraining.UASRouting", FakeExpert)
+    monkeypatch.setattr("gibbsq.core.pretraining.simulate", lambda **kwargs: FakeResult())
+
+    collect_robust_expert_data(
+        num_servers=2,
+        service_rates=np.array([1.0, 2.0], dtype=np.float64),
+        rhos=[0.5],
+        samples_per_rho=3,
+        seed=7,
+        alpha=2.5,
+    )
+
+    assert captured_alphas
+    assert set(captured_alphas) == {2.5}

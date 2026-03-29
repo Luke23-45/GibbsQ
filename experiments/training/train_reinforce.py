@@ -100,6 +100,7 @@ def compute_gae(
     denom: float = 5.0,
     squash_scale: float = 100.0,
     squash_threshold: float = 100.0,
+    decision_states: list[np.ndarray] | None = None,
 ):
     """
     Compute Generalized Advantage Estimation (GAE) for CTMC trajectories.
@@ -120,7 +121,8 @@ def compute_gae(
     Parameters
     ----------
     states : list of np.ndarray
-        All states visited during trajectory.
+        Post-event states aligned with ``jump_times``. These states determine
+        the queue integral over each inter-event interval.
     jump_times : list of float
         Time of each SSA event.
     action_step_indices : list of int
@@ -135,6 +137,9 @@ def compute_gae(
         Critic network for V(s) estimation.
     service_rates : np.ndarray
         Service rates for sojourn-time feature computation.
+    decision_states : list of np.ndarray, optional
+        Pre-decision states aligned with routing actions. Required when a
+        critic is provided so value targets match the actor input contract.
 
     Returns
     -------
@@ -145,67 +150,86 @@ def compute_gae(
         # Fallback to returns-to-go if no critic
         return compute_causal_returns_to_go(states, jump_times, action_step_indices, sim_time, gamma)
 
-    # 1. Compute continuous-time intervals
-    q_totals = np.array([np.sum(s) for s in states])
-    dt = np.diff(np.array(jump_times), append=sim_time)
+    if decision_states is None:
+        raise ValueError("decision_states is required when compute_gae uses a critic.")
+    if len(states) != len(jump_times):
+        raise ValueError("states and jump_times must have the same length.")
+    if len(decision_states) != len(action_step_indices):
+        raise ValueError("decision_states and action_step_indices must have the same length.")
+    if any(idx < 0 or idx >= len(states) for idx in action_step_indices):
+        raise ValueError("action_step_indices must refer to valid post-event states.")
+    if list(action_step_indices) != sorted(action_step_indices):
+        raise ValueError("action_step_indices must be sorted in ascending order.")
 
-    # 2. Compute rewards: Centered Native Reward (SOTA Dense Architecture)
-    # We must align exactly with the Performance Index scale the Critic is predicting.
-    # The instantaneous value V(s) is pretrained to predict squashed PI.
-    # To maintain TD consistency: r_t + gamma^dt V(s_{t+1}) = V(s_t) when V is perfect.
-    # Thus r_t = (1 - gamma^dt) * V_target(s_t).
+    # 1. Compute event-level interval costs from the post-event state that
+    # governs the queue between consecutive jumps.
+    q_totals = np.array([np.sum(s) for s in states], dtype=np.float64)
+    dt = np.diff(np.array(jump_times, dtype=np.float64), append=sim_time)
 
+    # 2. Convert event-level queue integrals into action-interval rewards.
+    # The critic is trained on pre-decision states, so Bellman targets must be
+    # defined on arrival decision epochs rather than post-arrival event states.
     G_idx = 100.0 * (random_limit - q_totals) / denom
-    # SG#4 FIX: Remove tanh squashing to preserve drift pressure at high Q
-    # Previously: G_scaled = squash_scale * np.tanh(G_idx / squash_threshold)
-    G_scaled = G_idx
-    rewards = (1.0 - (gamma ** dt)) * G_scaled
-
-    # 3. Compute V(s) for all states using critic (Unsquashed)
-    import jax.numpy as jnp
-
-    states_arr = np.array(states)
-    # Encapsulated call: ValueNetwork now handles (Q+1)/mu internally
-    # Broadcast mu across the batch using in_axes=(0, None, None)
-    v_preds = np.array(jax.vmap(value_net, in_axes=(0, None, None))(jnp.asarray(states_arr), jnp.asarray(service_rates), rho))
-
-    # 4. Compute TD residuals with continuous-time discounting
-    # δ_t = r_t + γ^(Δt) * V(s_{t+1}) - V(s_t)
-    td_residuals = np.zeros(len(states))
-    for t in range(len(states) - 1):
-        gamma_dt = gamma ** dt[t]  # Continuous-time discount
-        td_residuals[t] = rewards[t] + gamma_dt * v_preds[t + 1] - v_preds[t]
-    # Terminal state: SOTA Infinite-Horizon Bootstrap (Pardo et al. 2018)
-    # Since the 300s limit is an artificial computational truncation of a steady-state process,
-    # we MUST bootstrap the remaining infinite-horizon tail to prevent massive value distortion.
-    # Extrapolating V(s_{T+1}) ≈ V(s_T) is mathematically seamless in high-frequency CTMC steady-state.
-    gamma_dt_term = gamma ** (dt[-1] if len(dt) > 0 else 0)
-    td_residuals[-1] = rewards[-1] + gamma_dt_term * v_preds[-1] - v_preds[-1]
-
-    # 5. Compute GAE: A_t = Σ_{l=0}^∞ (γλ)^l * δ_{t+l}
-    advantages = np.zeros(len(action_step_indices))
+    action_rewards = np.zeros(len(action_step_indices), dtype=np.float64)
+    action_dt = np.zeros(len(action_step_indices), dtype=np.float64)
 
     for i, action_idx in enumerate(action_step_indices):
-        # Sum TD residuals from this action to the next
-        next_action_idx = action_step_indices[i + 1] if i + 1 < len(action_step_indices) else len(td_residuals)
+        next_action_idx = action_step_indices[i + 1] if i + 1 < len(action_step_indices) else len(states)
+        elapsed = 0.0
+        reward = 0.0
+        duration = 0.0
+        for t in range(action_idx, next_action_idx):
+            reward += (gamma ** elapsed) * (1.0 - (gamma ** dt[t])) * G_idx[t]
+            elapsed += dt[t]
+            duration += dt[t]
+        action_rewards[i] = reward
+        action_dt[i] = duration
 
+    # 3. Compute V(s) on decision states plus a terminal bootstrap value.
+    import jax.numpy as jnp
+
+    decision_states_arr = np.array(decision_states)
+    decision_v_preds = np.array(
+        jax.vmap(value_net, in_axes=(0, None, None))(
+            jnp.asarray(decision_states_arr),
+            jnp.asarray(service_rates),
+            rho,
+        )
+    )
+    terminal_v_pred = float(
+        value_net(
+            jnp.asarray(states[-1]),
+            jnp.asarray(service_rates),
+            rho,
+        )
+    )
+
+    # 4. Compute TD residuals on action intervals.
+    td_residuals = np.zeros(len(action_step_indices), dtype=np.float64)
+    for i in range(len(action_step_indices)):
+        next_v = decision_v_preds[i + 1] if i + 1 < len(action_step_indices) else terminal_v_pred
+        td_residuals[i] = (
+            action_rewards[i]
+            + (gamma ** action_dt[i]) * next_v
+            - decision_v_preds[i]
+        )
+
+    # 5. Compute action-level GAE: A_k = Σ_l (γλ)^{ΔT_{k:k+l}} δ_{k+l}
+    advantages = np.zeros(len(action_step_indices))
+
+    for i in range(len(action_step_indices)):
         gae = 0.0
         decay = 1.0
-        # SG#8 FIX: Use continuous-time exponential decay instead of
-        # broken (gamma*gae_lambda)^dt which distorts the bias-variance
-        # tradeoff for fast queueing systems with small dt.
-        # β = -ln(γ·λ_GAE) converts the discrete compound base to a rate.
         import math
         beta = -math.log(max(gamma * gae_lambda, 1e-10))
-        for t in range(action_idx, next_action_idx):
+        for t in range(i, len(td_residuals)):
             gae += decay * td_residuals[t]
-            dt_t = dt[t] if t < len(dt) else 0.0
-            decay *= math.exp(-beta * dt_t)
+            decay *= math.exp(-beta * action_dt[t])
 
         advantages[i] = gae
 
-    # SOTA: The true target return for the Critic is Advantage + V(s)
-    returns = advantages + v_preds[action_step_indices]
+    # 6. The critic target must align with the pre-decision value contract.
+    returns = advantages + decision_v_preds
 
     return advantages, returns
 
@@ -425,6 +449,8 @@ class ReinforceTrainer:
             policy_net=policy_net,
             service_rates=self.service_rates,
             key=key,
+            seed=self.cfg.simulation.seed,
+            alpha=self.cfg.system.alpha,
             num_steps=self.cfg.neural_training.bc_num_steps,
             lr=self.cfg.neural_training.bc_lr,
             weight_decay=self.cfg.neural_training.weight_decay,
@@ -437,6 +463,8 @@ class ReinforceTrainer:
             value_net=value_net,
             service_rates=self.service_rates,
             key=key,
+            seed=self.cfg.simulation.seed,
+            alpha=self.cfg.system.alpha,
             num_steps=self.cfg.neural_training.bc_num_steps,
             lr=self.cfg.neural_training.bc_lr,
             weight_decay=self.cfg.neural_training.weight_decay,
@@ -661,8 +689,9 @@ class ReinforceTrainer:
                             rho_min = getattr(dr_cfg, 'rho_min', 0.4)
                             rho_max = getattr(dr_cfg, 'rho_max', 0.85)
                     else:
-                        rho_min = 0.4
-                        rho_max = 0.85
+                        config_rho = self.cfg.system.arrival_rate / np.sum(self.service_rates)
+                        rho_min = float(config_rho)
+                        rho_max = float(config_rho)
 
                     for _ in iter_progress(
                         range(self.batch_size),
@@ -725,7 +754,8 @@ class ReinforceTrainer:
                                 random_limit=random_limit,
                                 denom=denom,
                                 squash_scale=self.cfg.neural_training.squash_scale,
-                                squash_threshold=self.cfg.neural_training.squash_threshold
+                                squash_threshold=self.cfg.neural_training.squash_threshold,
+                                decision_states=traj.states,
                             )
                             all_advantages.append((G_raw, gae_adv, gae_ret))
                         else:

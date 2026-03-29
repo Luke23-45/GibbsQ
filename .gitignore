@@ -13,7 +13,12 @@ build/
 .venv/
 venv/
 env/
-
+.test-scratch-20260329003707
+.tmp
+.pytest-tmp
+.pytest-tmp-run
+.uv-cache
+.uv-python
 # IDE
 .idea/
 .vscode/
@@ -38,7 +43,7 @@ docs/logs
 .DS_Store
 Thumbs.db
 outputs
-ledger
+# ledger
 new_test
 docs/PROPOSED
 UAS_FINAL_AUDIT_REPORT.md

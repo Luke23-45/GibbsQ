@@ -24,6 +24,11 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 
+def _classify_stationarity(stationarity_rate: float, threshold: float) -> bool:
+    """Classify a sweep cell as stationary using an inclusive threshold."""
+    return float(stationarity_rate) >= (float(threshold) - 1e-12)
+
+
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
     cfg = hydra_to_config(raw_cfg)
@@ -97,6 +102,9 @@ def main(raw_cfg: DictConfig) -> None:
                         base_seed=_cell_seed,
                         max_samples=max_samples,
                         policy_type=policy_name_to_type(cfg.policy.name),
+                        max_events_multiplier=cfg.jax_engine.max_events_safety_multiplier,
+                        max_events_buffer=cfg.jax_engine.max_events_additive_buffer,
+                        scan_sampling_chunk=cfg.jax_engine.scan_sampling_chunk,
                     )
 
                     for r in iter_progress(
@@ -162,7 +170,7 @@ def main(raw_cfg: DictConfig) -> None:
                 mean_Q[i, j] = float(np.mean(rep_means)) if rep_means else 0.0
                 stationarity_rate = float(np.mean(rep_stationary_flags)) if rep_stationary_flags else 0.0
                 threshold = float(cfg.verification.stationarity_threshold)
-                stationary[i, j] = stationarity_rate >= threshold
+                stationary[i, j] = _classify_stationarity(stationarity_rate, threshold)
 
                 metrics = {
                     "rho": float(rho),
@@ -171,6 +179,9 @@ def main(raw_cfg: DictConfig) -> None:
                     "mean_q_total": float(mean_Q[i, j]),
                     "is_stationary": bool(stationary[i, j]),
                     "stationarity_rate": stationarity_rate,
+                    "stationary_replications": int(np.sum(rep_stationary_flags)),
+                    "num_replications": int(cfg.simulation.num_replications),
+                    "stationarity_threshold": threshold,
                     "backend": "JAX" if cfg.jax.enabled else "NumPy",
                 }
                 append_metrics_jsonl(metrics, out_dir / "metrics.jsonl")

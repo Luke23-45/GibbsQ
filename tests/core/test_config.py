@@ -604,6 +604,17 @@ class TestHydraConversion:
         )
         validate(cfg)
 
+    def test_default_stationarity_threshold_requires_all_replications(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.5],
+                alpha=1.0,
+            ),
+        )
+        assert cfg.verification.stationarity_threshold == pytest.approx(1.0)
+
 
 # ============================================================
 # POLICY NAME ENUM TESTS

@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
+import numpy as np
 
 from gibbsq.core.config import NeuralConfig
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
@@ -82,3 +83,35 @@ def test_policy_direct_batched_call_matches_keyword_vmap(policy_net):
 
     assert direct.shape == (2, 3)
     assert jnp.allclose(direct, via_vmap, atol=1e-5)
+
+
+def test_numpy_eval_path_matches_jax_without_service_rate_features():
+    from gibbsq.core.policy_distribution import compute_numpy_policy_probs
+
+    config = NeuralConfig(
+        hidden_size=16,
+        use_rho=True,
+        use_service_rates=False,
+        rho_input_scale=10.0,
+        preprocessing="log1p",
+    )
+    service_rates = np.array([1.0, 2.0, 3.0], dtype=np.float64)
+    rho = 0.7
+    Q = np.array([2.0, 0.0, 1.0], dtype=np.float64)
+
+    net = NeuralRouter(
+        num_servers=3,
+        config=config,
+        service_rates=service_rates,
+        key=jax.random.PRNGKey(11),
+    )
+
+    probs_numpy = compute_numpy_policy_probs(net, Q, service_rates, rho, deterministic=False)
+    logits_jax = net(
+        jnp.asarray(Q, dtype=jnp.float32),
+        mu=jnp.asarray(service_rates, dtype=jnp.float32),
+        rho=jnp.asarray(rho, dtype=jnp.float32),
+    )
+    probs_jax = np.array(jax.nn.softmax(logits_jax, axis=-1), dtype=np.float64)
+
+    np.testing.assert_allclose(probs_numpy, probs_jax, rtol=1e-6, atol=1e-6)

@@ -212,8 +212,12 @@ def validate_neural_model_shape(model, config, num_servers: int) -> None:
     ValueError
         If either the input dimension or hidden size does not match the config.
     """
-    # Input dimension: N (queue) + N (service rates) + (1 if use_rho)
-    expected_input_dim = 2 * num_servers + (1 if config.use_rho else 0)
+    # Input dimension: N queue-derived features + optional N service-rate features + optional rho
+    expected_input_dim = num_servers
+    if getattr(config, "use_service_rates", True):
+        expected_input_dim += num_servers
+    if config.use_rho:
+        expected_input_dim += 1
     try:
         actual_input_dim = model.layers[0].weight.shape[1]
     except (AttributeError, IndexError):
@@ -223,7 +227,10 @@ def validate_neural_model_shape(model, config, num_servers: int) -> None:
     if actual_input_dim != expected_input_dim:
         raise ValueError(
             f"Model input dimension mismatch: loaded model expects {actual_input_dim}, "
-            f"but active config requires {expected_input_dim} (N={num_servers}, use_rho={config.use_rho})."
+            "but active config requires "
+            f"{expected_input_dim} (N={num_servers}, "
+            f"use_service_rates={getattr(config, 'use_service_rates', True)}, "
+            f"use_rho={config.use_rho})."
         )
         
     expected_hidden = config.hidden_size

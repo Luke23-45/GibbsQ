@@ -12,6 +12,7 @@ from jax import lax
 from functools import partial
 from typing import NamedTuple
 from dataclasses import dataclass
+import numpy as np
 
 
 from gibbsq.core import constants
@@ -39,6 +40,21 @@ def policy_name_to_type(name: str) -> int:
             f"Unsupported JAX policy name '{name}'. "
             f"Expected one of {sorted(POLICY_NAME_TO_TYPE)}."
         ) from exc
+
+
+def compute_configured_max_events(
+    arrival_rate: float,
+    service_rates: np.ndarray,
+    sim_time: float,
+    *,
+    max_events_multiplier: float = 1.5,
+    max_events_buffer: int = 1000,
+) -> int:
+    """Return the JAX scan bound after applying configurable safety settings."""
+    poisson_bound = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
+    expected_events = (float(arrival_rate) + float(np.sum(service_rates))) * float(sim_time)
+    configured_bound = int(np.ceil(expected_events * float(max_events_multiplier))) + int(max_events_buffer)
+    return max(poisson_bound, configured_bound)
 
 
 def _validate_inputs(
@@ -157,15 +173,11 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         winner = candidates[winner_local]
         return jnp.zeros(N).at[winner].set(1.0)
         
-    elif params.policy_type == 5:  # Look-Ahead Potential Softmax (heterogeneity-aware)
-        # SG#7 FIX: Use (Q+1)/mu to match policies.py, drift.py, and
-        # the look_ahead_potential used during neural network training.
-        # Previously used Q/mu which was inconsistent (shifted input domain).
+    elif params.policy_type == 5:  # JSSQ: deterministic minimum look-ahead potential
         potential = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
-        logits = -params.alpha * potential
-        max_logit = jnp.max(logits)
-        exp_logits = jnp.exp(logits - max_logit)
-        return exp_logits / jnp.sum(exp_logits)
+        is_min = potential == jnp.min(potential)
+        mask = is_min.astype(params.service_rates.dtype)
+        return mask / jnp.sum(mask)
         
     elif params.policy_type == 6:  # UAS (Unified Archimedean Softmax)
         # UAS formula: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
@@ -316,6 +328,34 @@ def _fill_remaining_samples(state: SimState, params: SimParams) -> SimState:
     )
 
 
+def _truncate_unused_samples(state: SimState) -> SimState:
+    """Zero out unused sample slots so truncated runs fail closed downstream."""
+
+    def _body(i, carry):
+        times_buf, states_buf = carry
+        times_buf = times_buf.at[i].set(0.0)
+        states_buf = states_buf.at[i].set(jnp.zeros_like(state.Q))
+        return times_buf, states_buf
+
+    cleared_times, cleared_states = lax.fori_loop(
+        state.sample_idx,
+        state.times_buf.shape[0],
+        _body,
+        (state.times_buf, state.states_buf),
+    )
+
+    return SimState(
+        t=state.t,
+        Q=state.Q,
+        key=state.key,
+        arrival_count=state.arrival_count,
+        departure_count=state.departure_count,
+        sample_idx=state.sample_idx,
+        times_buf=cleared_times,
+        states_buf=cleared_states,
+    )
+
+
 # ──────────────────────────────────────────────────────────────
 #  Public API
 # ──────────────────────────────────────────────────────────────
@@ -371,16 +411,18 @@ def _simulate_jax_impl(
         length=params.max_events
     )
     
-    final_state = _fill_remaining_samples(final_state, params)
+    is_valid = (final_state.t >= sim_time) | (params.arrival_rate == 0.0)
+    final_state = lax.cond(
+        is_valid,
+        lambda s: _fill_remaining_samples(s, params),
+        _truncate_unused_samples,
+        final_state,
+    )
 
     # Extract the inline-recorded sample buffers directly from carry state.
     # Memory used: O(max_samples × N) — a ~5500x reduction for N=1024 vs prior design.
     query_times    = final_state.times_buf
     sampled_states = final_state.states_buf
-    
-    # Safety Check: Did we truncate because max_events was too small?
-    # Valid if we reached sim_time OR if the simulation halted (arrival_rate = 0)
-    is_valid = (final_state.t >= sim_time) | (params.arrival_rate == 0.0)
     
     return query_times, sampled_states, (final_state.arrival_count, final_state.departure_count), is_valid
 
@@ -414,8 +456,13 @@ def simulate_jax(
     )
     
     import numpy as np
-    # Patch: Use Poisson 6-Sigma bound for absolute mathematical safety at high load
-    max_events = compute_poisson_max_steps(arrival_rate, np.array(service_rates), sim_time)
+    max_events = compute_configured_max_events(
+        arrival_rate=arrival_rate,
+        service_rates=np.array(service_rates),
+        sim_time=sim_time,
+        max_events_multiplier=max_events_multiplier,
+        max_events_buffer=max_events_buffer,
+    )
     
     times, states, counts, is_valid = _simulate_jax_impl(
         num_servers=num_servers,
@@ -509,8 +556,13 @@ def run_replications_jax(
     
     import numpy as np
     
-    # Patch: Use Poisson 6-Sigma bound for absolute mathematical safety at high load
-    max_events = compute_poisson_max_steps(arrival_rate, np.array(service_rates), sim_time)
+    max_events = compute_configured_max_events(
+        arrival_rate=arrival_rate,
+        service_rates=np.array(service_rates),
+        sim_time=sim_time,
+        max_events_multiplier=max_events_multiplier,
+        max_events_buffer=max_events_buffer,
+    )
     
     times, states, counts, is_valid = _run_replications_jax_impl(
         num_replications=num_replications,

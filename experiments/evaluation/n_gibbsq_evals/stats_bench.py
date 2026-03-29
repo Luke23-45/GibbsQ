@@ -119,6 +119,9 @@ class StatsBenchmark:
                 base_seed=_sc.seed,
                 max_samples=_max_samples,
                 policy_type=baseline_policy_type,
+                max_events_multiplier=self.cfg.jax_engine.max_events_safety_multiplier,
+                max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
+                scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
             )
             gibbs_list = []
             for _r in iter_progress(

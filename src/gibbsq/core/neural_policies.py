@@ -196,10 +196,13 @@ class NeuralRouter(eqx.Module):
         else:
             x = np.asarray(s_feat, dtype=np.float64)
 
-        # PATCH P2: Append normalized service rates for heterogeneity awareness
-        mu_sum = np.sum(effective_mu)
-        mu_normalized = effective_mu / np.where(mu_sum > 0, mu_sum, 1.0)
-        x = np.concatenate([x, mu_normalized])
+        # PATCH P2: Append normalized service rates only when the model was built with them.
+        if getattr(config, "use_service_rates", True):
+            mu_sum = np.sum(effective_mu)
+            mu_normalized = effective_mu / np.where(mu_sum > 0, mu_sum, 1.0)
+            if x.ndim > 1:
+                mu_normalized = np.broadcast_to(mu_normalized, x.shape)
+            x = np.concatenate([x, mu_normalized], axis=-1)
         
         # PI-V4: Append rho
         if config.use_rho:
@@ -215,8 +218,7 @@ class NeuralRouter(eqx.Module):
                     rho_feat = np.repeat(rho_feat, x.shape[0], axis=0)
                 elif rho_feat.shape[0] != x.shape[0]:
                     raise ValueError(f"rho shape {rho_feat.shape} incompatible with x shape {x.shape}")
-            else:  # x is 1D
-                x = np.concatenate([x, rho_feat], axis=-1)
+            x = np.concatenate([x, rho_feat], axis=-1)
 
         # MLP layers
         for i, (w, b) in enumerate(params):

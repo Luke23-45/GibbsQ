@@ -47,7 +47,9 @@ def main(raw_cfg: DictConfig):
         num_steps=cfg.neural_training.bc_num_steps,
         lr=cfg.neural_training.bc_lr,
         weight_decay=cfg.neural_training.weight_decay,
-        label_smoothing=cfg.neural_training.bc_label_smoothing
+        label_smoothing=cfg.neural_training.bc_label_smoothing,
+        seed=cfg.simulation.seed,
+        alpha=cfg.system.alpha,
     )
     
     # Save assets

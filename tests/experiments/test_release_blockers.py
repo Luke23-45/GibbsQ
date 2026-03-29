@@ -39,12 +39,35 @@ def test_check_configs_discovers_experiment_profiles():
     )
 
 
-def test_drift_verification_rejects_non_softmax_theorem_claims():
+def test_drift_and_final_configs_now_validate():
+    from hydra import compose, initialize_config_dir
+
+    from gibbsq.core.config import hydra_to_config, validate
+
+    config_dir = str(Path("configs").resolve())
+    with initialize_config_dir(config_dir=config_dir, version_base=None):
+        for config_name in ("drift", "final_experiment"):
+            raw_cfg = compose(config_name=config_name)
+            validate(hydra_to_config(raw_cfg))
+
+
+def test_drift_verification_accepts_theorem_backed_policy_paths():
     from experiments.verification.drift_verification import _require_theorem_supported_policy
 
     assert _require_theorem_supported_policy("softmax") == "raw"
-    with pytest.raises(ValueError, match="certifies only the raw softmax theorem path"):
-        _require_theorem_supported_policy("uas")
+    assert _require_theorem_supported_policy("uas") == "uas"
+    with pytest.raises(ValueError, match="certifies only theorem-backed policy paths"):
+        _require_theorem_supported_policy("jsq")
+
+
+def test_public_configs_require_full_stationarity_for_sweep_certification():
+    from hydra import compose, initialize_config_dir
+
+    config_dir = str(Path("configs").resolve())
+    with initialize_config_dir(config_dir=config_dir, version_base=None):
+        for config_name in ("default", "final_experiment", "fast", "small"):
+            raw_cfg = compose(config_name=config_name)
+            assert float(raw_cfg.verification.stationarity_threshold) == pytest.approx(1.0)
 
 
 def test_gradient_check_fd_uses_same_action_interval_objective():
@@ -57,6 +80,33 @@ def test_gradient_check_fd_uses_same_action_interval_objective():
 
     total = float(_sum_masked_action_interval_returns(Batch()))
     assert total == pytest.approx(25.0)
+
+
+def test_gradient_check_plot_artifacts_only_use_computed_mask():
+    from experiments.testing.reinforce_gradient_check import GradientCheckResult, _build_plot_artifacts
+
+    result = GradientCheckResult(
+        reinforce_grad=np.array([1.0, 2.0, 30.0]),
+        finite_diff_grad=np.array([1.5, 0.0, -40.0]),
+        relative_error=0.0,
+        cosine_similarity=1.0,
+        bias_estimate=0.0,
+        variance_estimate=0.0,
+        reinforce_var_vector=np.array([9.0, 9.0, 9.0]),
+        reinforce_mean_var_vector=np.array([0.09, 0.09, 0.09]),
+        fd_var_vector=np.array([0.16, 0.25, 0.36]),
+        computed_mask=np.array([True, False, True]),
+        passed=True,
+    )
+
+    fd_grads, rf_grads, z_scores = _build_plot_artifacts(result)
+
+    np.testing.assert_allclose(fd_grads, np.array([1.5, -40.0]))
+    np.testing.assert_allclose(rf_grads, np.array([1.0, 30.0]))
+    np.testing.assert_allclose(
+        z_scores,
+        np.abs(rf_grads - fd_grads) / np.sqrt(np.array([0.09, 0.09]) + np.array([0.16, 0.36])),
+    )
 
 
 def test_stats_benchmark_load_helper_fails_closed(monkeypatch):
@@ -82,6 +132,76 @@ def test_stats_benchmark_load_helper_fails_closed(monkeypatch):
             project_root=Path("temp"),
             output_root=Path("temp"),
         )
+
+
+def test_policy_comparison_requires_neural_weights(monkeypatch, tmp_path):
+    from gibbsq.core.config import ExperimentConfig
+    from experiments.evaluation.baselines_comparison import run_corrected_comparison
+
+    monkeypatch.setattr(
+        "experiments.evaluation.baselines_comparison.resolve_model_pointer",
+        lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError("missing reinforce pointer")),
+    )
+
+    cfg = ExperimentConfig()
+    cfg.system.num_servers = 2
+    cfg.system.service_rates = [1.0, 1.0]
+    cfg.system.arrival_rate = 1.0
+    cfg.simulation.num_replications = 1
+    cfg.simulation.ssa.sim_time = 5.0
+
+    with pytest.raises(FileNotFoundError, match="missing reinforce pointer"):
+        run_corrected_comparison(cfg, tmp_path)
+
+
+def test_policy_grid_rebuilds_neural_eval_policy_for_each_rho(monkeypatch):
+    from experiments.evaluation import baselines_comparison as module
+    from gibbsq.core.config import ExperimentConfig
+
+    cfg = ExperimentConfig()
+    cfg.system.num_servers = 2
+    cfg.system.service_rates = [1.0, 2.0]
+    cfg.simulation.num_replications = 1
+    cfg.simulation.ssa.sim_time = 2.0
+    cfg.generalization.rho_grid_vals = [0.5, 0.9]
+
+    seen_rhos = []
+
+    def fake_build_neural_eval_policy(model, mu, rho=None, mode="deterministic"):
+        seen_rhos.append(float(rho))
+        return object()
+
+    class DummyResult:
+        def __init__(self):
+            self.states = np.zeros((2, 2), dtype=np.int64)
+            self.times = np.array([0.0, 1.0], dtype=np.float64)
+            self.arrival_count = 1
+            self.departure_count = 0
+            self.final_time = 1.0
+            self.num_servers = 2
+
+    monkeypatch.setattr(module, "build_neural_eval_policy", fake_build_neural_eval_policy)
+    monkeypatch.setattr(
+        module,
+        "run_replications",
+        lambda **kwargs: [DummyResult()],
+    )
+    monkeypatch.setattr(
+        module,
+        "build_policy_by_name",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        module,
+        "time_averaged_queue_lengths",
+        lambda result, burn_in_fraction: np.array([1.0, 2.0], dtype=np.float64),
+    )
+    monkeypatch.setattr(module.pd.DataFrame, "to_csv", lambda self, path, index=False: None)
+    monkeypatch.setattr(module, "_plot_platinum_grid", lambda df, output_dir: None)
+
+    module.run_grid_generalization(model=object(), cfg=cfg, run_dir=Path("."))
+
+    assert seen_rhos == [0.5, 0.9]
 
 
 def test_ablation_uses_deterministic_eval_policy():
@@ -120,6 +240,98 @@ def test_ablation_variants_are_canonical_and_distinct():
     assert no_init_cfg.neural.init_type == "standard"
 
 
+def test_ablation_standard_error_uses_sample_std():
+    from experiments.evaluation.n_gibbsq_evals.ablation_ssa import _standard_error
+
+    values = np.array([2.0, 4.0, 8.0], dtype=np.float64)
+    expected = np.std(values, ddof=1) / np.sqrt(len(values))
+    assert _standard_error(values) == expected
+
+
+def test_bc_pretraining_entrypoint_forwards_seed_and_alpha(monkeypatch, tmp_path):
+    import experiments.training.pretrain_bc as module
+    from gibbsq.core.config import ExperimentConfig
+
+    cfg = ExperimentConfig()
+    cfg.simulation.seed = 321
+    cfg.system.alpha = 7.5
+    cfg.system.num_servers = 2
+    cfg.system.service_rates = [1.0, 1.5]
+
+    seen = {}
+
+    monkeypatch.setattr(module, "hydra_to_config", lambda raw_cfg: cfg)
+    monkeypatch.setattr(module, "validate", lambda cfg: None)
+    monkeypatch.setattr(module, "get_run_config", lambda cfg, name, raw_cfg: (tmp_path, "run-id"))
+    monkeypatch.setattr(module, "setup_wandb", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "train_robust_bc_policy",
+        lambda **kwargs: seen.update(kwargs) or object(),
+    )
+    monkeypatch.setattr("equinox.tree_serialise_leaves", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "save_model_pointer", lambda **kwargs: None)
+
+    class FakeNet:
+        pass
+
+    monkeypatch.setattr(module, "NeuralRouter", lambda **kwargs: FakeNet())
+
+    module.main(object())
+
+    assert seen["seed"] == cfg.simulation.seed
+    assert seen["alpha"] == cfg.system.alpha
+
+
+def test_reinforce_bootstrap_forwards_seed_and_alpha(monkeypatch, tmp_path):
+    from experiments.training.train_reinforce import ReinforceTrainer
+    from gibbsq.core.config import ExperimentConfig
+
+    cfg = ExperimentConfig()
+    cfg.simulation.seed = 123
+    cfg.system.alpha = 4.0
+    cfg.system.num_servers = 2
+    cfg.system.service_rates = [1.0, 1.5]
+
+    trainer = ReinforceTrainer(cfg, tmp_path, run_logger=None)
+    seen = {}
+
+    def fake_train_policy(**kwargs):
+        seen["policy"] = kwargs
+        return kwargs["policy_net"]
+
+    def fake_train_value(**kwargs):
+        seen["value"] = kwargs
+        return kwargs["value_net"], None
+
+    monkeypatch.setattr(
+        "gibbsq.core.pretraining.train_robust_bc_policy",
+        fake_train_policy,
+    )
+    monkeypatch.setattr(
+        "gibbsq.core.pretraining.train_robust_bc_value",
+        fake_train_value,
+    )
+
+    policy_net = object()
+    value_net = object()
+    out_policy, out_value = trainer.bootstrap_from_expert(
+        policy_net,
+        value_net,
+        key=None,
+        jsq_limit=1.0,
+        random_limit=2.0,
+        denom=1.0,
+    )
+
+    assert out_policy is policy_net
+    assert out_value is value_net
+    assert seen["policy"]["seed"] == cfg.simulation.seed
+    assert seen["policy"]["alpha"] == cfg.system.alpha
+    assert seen["value"]["seed"] == cfg.simulation.seed
+    assert seen["value"]["alpha"] == cfg.system.alpha
+
+
 def test_policy_baselines_remove_alpha_opt_label():
     from experiments.evaluation.baselines_comparison import CORRECTED_POLICIES
 
@@ -147,6 +359,29 @@ def test_publication_baselines_follow_active_policy_config():
     assert cfg.policy.name == "softmax" or cfg.policy.name == "uas"
     assert policy_name_to_type("softmax") == 3
     assert policy_name_to_type("uas") == 6
+
+
+def test_stress_heterogeneity_path_uses_active_policy_contract():
+    import jax.numpy as jnp
+
+    from experiments.testing.stress_test import _heterogeneity_replication_kwargs
+    from gibbsq.core.config import ExperimentConfig, PolicyConfig
+    from gibbsq.engines.jax_engine import policy_name_to_type
+
+    cfg = ExperimentConfig()
+    cfg.policy = PolicyConfig(name="softmax")
+    mu_het = jnp.array([10.0, 0.1, 0.1, 0.1], dtype=jnp.float32)
+
+    kwargs = _heterogeneity_replication_kwargs(
+        cfg,
+        mu_het=mu_het,
+        arrival_rate=0.5,
+        sim_time=100.0,
+        max_samples=101,
+    )
+
+    assert kwargs["policy_type"] == policy_name_to_type("softmax")
+    assert kwargs["num_servers"] == len(mu_het)
 
 
 def test_jax_policy_type_helper_rejects_unknown_names():
@@ -234,3 +469,37 @@ def test_public_progress_labels_drop_stale_track_wording():
 
     assert "Track 5" not in reproduction_source
     assert "Track 5" not in validation_source
+
+
+def test_compute_gae_bootstraps_on_predecision_states():
+    pytest.importorskip("jax")
+
+    from experiments.training.train_reinforce import compute_gae
+
+    def linear_value_net(Q, mu=None, rho=None):
+        return Q[0]
+
+    advantages, returns = compute_gae(
+        states=[
+            np.array([1.0], dtype=np.float32),
+            np.array([2.0], dtype=np.float32),
+            np.array([3.0], dtype=np.float32),
+        ],
+        jump_times=[0.0, 1.0, 2.0],
+        action_step_indices=[0, 2],
+        sim_time=3.0,
+        gamma=0.5,
+        gae_lambda=0.5,
+        value_net=linear_value_net,
+        service_rates=np.array([1.0], dtype=np.float32),
+        rho=0.7,
+        random_limit=10.0,
+        denom=10.0,
+        decision_states=[
+            np.array([10.0], dtype=np.float32),
+            np.array([20.0], dtype=np.float32),
+        ],
+    )
+
+    np.testing.assert_allclose(advantages, np.array([61.03125, 16.5]), rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(returns, np.array([71.03125, 36.5]), rtol=1e-6, atol=1e-6)

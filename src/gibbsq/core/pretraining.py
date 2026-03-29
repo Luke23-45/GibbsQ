@@ -44,7 +44,8 @@ def collect_robust_expert_data(
     service_rates: np.ndarray,
     rhos: list[float] = [0.45, 0.65, 0.85],
     samples_per_rho: int = 1000,
-    seed: int = 42
+    seed: int = 42,
+    alpha: float = 1.0,
 ):
     """Collects steady-state expert data with noisy state augmentation."""
     log.info(f"--- Collecting Robust Expert Data (Steady-State + Augmentation) ---")
@@ -64,7 +65,7 @@ def collect_robust_expert_data(
     
     for mu_scale in mu_scales:
         scaled_service_rates = service_rates * mu_scale
-        expert = UASRouting(scaled_service_rates, alpha=1.0)
+        expert = UASRouting(scaled_service_rates, alpha=alpha)
         total_capacity = np.sum(scaled_service_rates)
         
         for rho in rhos:
@@ -117,6 +118,8 @@ def train_robust_bc_policy(
     weight_decay: float = 1e-4,
     label_smoothing: float = 0.1,
     entropy_bonus: float = 0.01,
+    seed: int = 42,
+    alpha: float = 1.0,
 ):
     """Trains a neural policy using Ultra-Robust BC logic."""
     # Extract num_servers from the model's final layer
@@ -124,7 +127,9 @@ def train_robust_bc_policy(
     
     X, R, Y, G, MU = collect_robust_expert_data(
         num_servers=num_servers,
-        service_rates=service_rates
+        service_rates=service_rates,
+        seed=seed,
+        alpha=alpha,
     )
     
     # Optimizer
@@ -185,6 +190,8 @@ def train_robust_bc_value(
     denom: float = 1.0,
     squash_scale: float = 100.0,
     squash_threshold: float = 100.0,
+    seed: int = 42,
+    alpha: float = 1.0,
 ):
     """Trains a value network (critic) to estimate steady-state queue lengths."""
     # Extract num_servers from the model's layers
@@ -192,7 +199,9 @@ def train_robust_bc_value(
     
     X, R, Y, G, MU = collect_robust_expert_data(
         num_servers=num_servers,
-        service_rates=service_rates
+        service_rates=service_rates,
+        seed=seed,
+        alpha=alpha,
     )
     
     optimizer = optax.adamw(lr, weight_decay=weight_decay)

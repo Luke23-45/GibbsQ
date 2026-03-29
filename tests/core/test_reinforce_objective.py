@@ -46,6 +46,44 @@ def test_action_interval_returns_match_handcrafted_trace():
     assert np.isclose(first_jax, returns_np[is_action][0])
 
 
+def test_extract_first_action_returns_jax_is_batchwise_and_skips_missing_actions():
+    pytest.importorskip("jax")
+    import jax.numpy as jnp
+
+    from gibbsq.core.reinforce_objective import extract_first_action_returns_jax
+
+    step_returns = jnp.asarray(
+        [
+            [10.0, 0.0, 4.0, 1.0],
+            [0.0, 7.0, 8.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0],
+        ],
+        dtype=jnp.float32,
+    )
+    is_action = jnp.asarray(
+        [
+            [True, False, True, False],
+            [False, True, True, False],
+            [False, False, False, False],
+        ],
+        dtype=bool,
+    )
+    valid_mask = jnp.asarray(
+        [
+            [True, True, False, False],
+            [True, True, True, True],
+            [True, True, True, True],
+        ],
+        dtype=bool,
+    )
+
+    first_returns = np.array(
+        extract_first_action_returns_jax(step_returns, is_action, valid_mask)
+    )
+
+    np.testing.assert_allclose(first_returns, np.array([10.0, 7.0, 0.0]))
+
+
 def test_policy_distribution_matches_across_paths():
     pytest.importorskip("jax")
     pytest.importorskip("equinox")

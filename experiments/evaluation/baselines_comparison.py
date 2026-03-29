@@ -23,7 +23,7 @@ import jax
 from omegaconf import DictConfig
 from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
 from gibbsq.core.builders import build_policy_by_name
-from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer_or_none
+from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.engines.numpy_engine import simulate, run_replications, SimResult
 from gibbsq.analysis.metrics import (
     time_averaged_queue_lengths, gini_coefficient, sojourn_time_estimate
@@ -46,6 +46,14 @@ NEURAL_EVAL_MODE = "deterministic"
 def _iter_with_progress(items, **kwargs):
     """Compatibility wrapper for optional progress bars."""
     return iter_progress(items, **kwargs)
+
+
+def _standard_error(values) -> float:
+    """Return sample standard error, guarding the single-observation case."""
+    arr = np.asarray(values, dtype=np.float64)
+    if arr.size <= 1:
+        return 0.0
+    return float(np.std(arr, ddof=1) / np.sqrt(arr.size))
 
 
 def _compute_metrics_from_arrays(
@@ -141,11 +149,11 @@ def evaluate_single_policy(
 
     return {
         "mean_q_total": float(np.mean(q_totals)),
-        "se_q_total": float(np.std(q_totals) / np.sqrt(len(q_totals))),
+        "se_q_total": _standard_error(q_totals),
         "mean_gini": float(np.mean(ginis)),
-        "se_gini": float(np.std(ginis) / np.sqrt(len(ginis))),
+        "se_gini": _standard_error(ginis),
         "mean_sojourn": float(np.mean(sojourns)),
-        "se_sojourn": float(np.std(sojourns) / np.sqrt(len(sojourns))),
+        "se_sojourn": _standard_error(sojourns),
     }
 
 
@@ -217,56 +225,41 @@ def run_corrected_comparison(
     # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
     pointer_dir = run_dir.parent.parent
 
-    model_path = resolve_model_pointer_or_none(
+    model_path = resolve_model_pointer(
         _PROJECT_ROOT,
         pointer_dir,
         allow_bc=False,
         allow_legacy=False,
     )
+    log.info("\nEvaluating Tier 5: N-GibbsQ (REINFORCE trained)...")
+    log.info(f"Using neural weights from {model_path}")
 
-    if model_path is not None:
-        log.info("\nEvaluating Tier 5: N-GibbsQ (REINFORCE trained)...")
-        try:
-            log.info(f"Using neural weights from {model_path}")
+    key = jax.random.PRNGKey(cfg.simulation.seed)
+    policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
+    policy_net = eqx.tree_deserialise_leaves(model_path, policy_net)
 
-            if model_path.exists():
-                # Initialize and load
-                key = jax.random.PRNGKey(cfg.simulation.seed)
-                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
-                policy_net = eqx.tree_deserialise_leaves(model_path, policy_net)
+    from gibbsq.utils.model_io import validate_neural_model_shape
 
-                # SG-9 PATCH: Validate BOTH input_dim AND hidden_size.
-                from gibbsq.utils.model_io import validate_neural_model_shape
-                try:
-                    validate_neural_model_shape(policy_net, cfg.neural, N)
-                except ValueError as e:
-                    log.warning(f"[SG-9] {e} Skipping neural evaluation.")
-                    policy_net = None
+    validate_neural_model_shape(policy_net, cfg.neural, N)
 
-                if policy_net is not None:
-                    neural_policy = build_neural_eval_policy(
-                        policy_net,
-                        mu,
-                        rho=rho,
-                        mode=NEURAL_EVAL_MODE,
-                    )
+    neural_policy = build_neural_eval_policy(
+        policy_net,
+        mu,
+        rho=rho,
+        mode=NEURAL_EVAL_MODE,
+    )
 
-                    log.info(f"Evaluating N-GibbsQ ({NEURAL_EVAL_MODE})...")
-                    metrics = evaluate_single_policy(neural_policy, cfg,
-                                                    np.random.default_rng(cfg.simulation.seed))
+    log.info(f"Evaluating N-GibbsQ ({NEURAL_EVAL_MODE})...")
+    metrics = evaluate_single_policy(neural_policy, cfg, np.random.default_rng(cfg.simulation.seed))
 
-                    results["N-GibbsQ (Platinum)"] = {
-                        "tier": 5,
-                        "name": f"neural_platinum_{NEURAL_EVAL_MODE}",
-                        "eval_mode": NEURAL_EVAL_MODE,
-                        **metrics,
-                    }
+    results["N-GibbsQ (Platinum)"] = {
+        "tier": 5,
+        "name": f"neural_platinum_{NEURAL_EVAL_MODE}",
+        "eval_mode": NEURAL_EVAL_MODE,
+        **metrics,
+    }
 
-                    log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
-        except (KeyError, FileNotFoundError, ValueError, RuntimeError) as e:
-            # Catch specific exceptions that indicate configuration/model issues
-            # Do NOT catch all Exception types to avoid hiding real bugs
-            log.warning(f"Could not evaluate neural policy: {type(e).__name__}: {e}")
+    log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
 
     # Compute parity result using corrected tiered criteria
     log.info("\n" + "=" * 60)
@@ -340,7 +333,7 @@ def run_corrected_comparison(
         # Store parity result
         neural_result["parity"] = parity
     else:
-        log.info("N-GibbsQ (REINFORCE) not evaluated - skipping parity analysis")
+        raise RuntimeError("N-GibbsQ evaluation is required for policy comparison parity analysis.")
 
     # Generate comparison plot
     _generate_comparison_plot(results, run_dir)
@@ -376,8 +369,18 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     log.info(f"Comparison plot saved to {plot_path}.png, {plot_path}.pdf")
 
 
+def _build_grid_eval_policy(model, service_rates: np.ndarray, rho: float):
+    """Build a neural SSA policy for one grid cell using that cell's load factor."""
+    return build_neural_eval_policy(
+        model,
+        service_rates,
+        rho=rho,
+        mode=NEURAL_EVAL_MODE,
+    )
+
+
 def run_grid_generalization(
-    neural_policy,
+    model,
     cfg: ExperimentConfig,
     run_dir: Path,
 ):
@@ -420,6 +423,7 @@ def run_grid_generalization(
                                                    progress_desc=f"policy grid jsq rho={rho:.2f}")] ))
 
         # 3. Neural (Greedy)
+        neural_policy = _build_grid_eval_policy(model, service_rates, float(rho))
         q_n = float(np.mean([time_averaged_queue_lengths(r, cfg.simulation.burn_in_fraction).sum()
                            for r in run_replications(num_servers=num_servers, arrival_rate=arrival_rate, service_rates=service_rates,
                                                    policy=neural_policy,
@@ -491,28 +495,18 @@ def main(raw_cfg: DictConfig):
             N = cfg.system.num_servers
             mu = np.array(cfg.system.service_rates)
             pointer_dir = run_dir.parent.parent
-            model_path = resolve_model_pointer_or_none(
+            model_path = resolve_model_pointer(
                 Path(__file__).resolve().parents[2],
                 pointer_dir,
                 allow_bc=False,
                 allow_legacy=False,
             )
+            key = jax.random.PRNGKey(cfg.simulation.seed)
+            policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
+            policy_net = eqx.tree_deserialise_leaves(model_path, policy_net)
 
-            if model_path is not None:
-                key = jax.random.PRNGKey(cfg.simulation.seed)
-                policy_net = NeuralRouter(num_servers=N, config=cfg.neural, service_rates=mu, key=key)
-                policy_net = eqx.tree_deserialise_leaves(model_path, policy_net)
-
-                rho = cfg.system.arrival_rate / float(mu.sum())
-                platinum_policy = build_neural_eval_policy(
-                    policy_net,
-                    mu,
-                    rho=rho,
-                    mode=NEURAL_EVAL_MODE,
-                )
-                run_grid_generalization(platinum_policy, cfg, run_dir)
-            else:
-                log.warning("No neural weights found - skipping grid sweep.")
+            rho = cfg.system.arrival_rate / float(mu.sum())
+            run_grid_generalization(policy_net, cfg, run_dir)
 
     if run_logger:
         run_logger.finish()

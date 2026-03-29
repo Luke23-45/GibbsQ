@@ -139,6 +139,21 @@ class TestBoundsCorrectness:
         expected = -eps * 30 + R
         assert sb == pytest.approx(expected)
 
+    def test_uas_upper_bound_matches_archimedean_step5_formula(self):
+        Q = np.array([5, 10, 15])
+        lam = 1.0
+        mu = np.array([2.0, 3.0, 4.0])
+        alpha = 1.0
+
+        ub = upper_bound(Q, lam, mu, alpha, mode="uas")
+
+        import math
+        cap = mu.sum()
+        eps = (cap - lam) / cap
+        R = (lam * math.log(3)) / alpha + (lam / (2.0 * mu.min())) + (3 / 2.0)
+        expected = -eps * Q.sum() + R
+        assert ub == pytest.approx(expected)
+
 
 class TestVerifySingleCorrectness:
     """Verify verify_single returns correct structure."""

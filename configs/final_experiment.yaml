@@ -36,7 +36,7 @@ stress:
   massive_n_sim_time: 500.0
   critical_load_n: 10
   critical_load_base_rho: 0.8
-  critical_load_max_sim_time: 100000.0
+  critical_load_max_sim_time: 400000.0
   heterogeneity_rho: 0.5
   heterogeneity_sim_time: 1000.0
 
@@ -108,7 +108,7 @@ verification:
   jacobian_rel_tol: 0.05
   alpha_significance: 0.05
   confidence_interval: 0.95
-  stationarity_threshold: 0.5
+  stationarity_threshold: 1.0
   parity_z_score: 1.96
   gradient_check_chunk_size: 1500
   gradient_check_max_steps: 300
