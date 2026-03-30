@@ -1,5 +1,0 @@
-# @package _global_
-
-# Neural eval (parity test) overlay
-simulation:
-  num_replications: 10

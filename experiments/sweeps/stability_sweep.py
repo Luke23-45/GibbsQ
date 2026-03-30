@@ -9,7 +9,7 @@ from gibbsq.analysis.metrics import stationarity_diagnostic, time_averaged_queue
 from gibbsq.analysis.plotting import plot_alpha_sweep
 from gibbsq.analysis.theme import apply_theme
 from gibbsq.core.builders import build_policy_by_name
-from gibbsq.core.config import hydra_to_config, validate
+from gibbsq.core.config import load_experiment_config
 from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.numpy_engine import SimResult, simulate
 from gibbsq.utils.exporter import append_metrics_jsonl, save_trajectory_parquet
@@ -31,11 +31,10 @@ def _classify_stationarity(stationarity_rate: float, threshold: float) -> bool:
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "sweep")
 
-    run_dir, run_id = get_run_config(cfg, "sweep", raw_cfg)
-    run = setup_wandb(cfg, raw_cfg, default_group="stability_sweep", run_id=run_id, run_dir=run_dir)
+    run_dir, run_id = get_run_config(cfg, "sweep", resolved_raw_cfg)
+    run = setup_wandb(cfg, resolved_raw_cfg, default_group="stability_sweep", run_id=run_id, run_dir=run_dir)
 
     apply_theme("publication")
 

@@ -31,7 +31,7 @@ multirun/
 
 # Data artifacts
 *.npz
-*.csv
+# *.csv
 *.parquet
 temp
 # Plots (generated, not source)

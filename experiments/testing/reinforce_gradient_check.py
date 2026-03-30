@@ -19,7 +19,7 @@ from jax.flatten_util import ravel_pytree
 from jaxtyping import PRNGKeyArray, Array, Float
 from omegaconf import DictConfig
 
-from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
+from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import look_ahead_potential
@@ -496,11 +496,10 @@ def run_gradient_check(
 
 def main(raw_cfg: DictConfig) -> None:
     """Main entry point for gradient validation."""
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "reinforce_check")
     
-    run_dir, run_id = get_run_config(cfg, "reinforce_check", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="gradient_check",
+    run_dir, run_id = get_run_config(cfg, "reinforce_check", resolved_raw_cfg)
+    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="gradient_check",
                             run_id=run_id, run_dir=run_dir)
     
     log.info("=" * 60)

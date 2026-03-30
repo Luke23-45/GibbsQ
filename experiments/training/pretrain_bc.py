@@ -12,7 +12,7 @@ import jax
 import numpy as np
 from omegaconf import DictConfig
 
-from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
+from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.pretraining import train_robust_bc_policy
 from gibbsq.utils.logging import setup_wandb, get_run_config
@@ -21,11 +21,10 @@ from gibbsq.utils.model_io import BC_POINTER, save_model_pointer
 log = logging.getLogger(__name__)
 
 def main(raw_cfg: DictConfig):
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "bc_train")
     
-    run_dir, run_id = get_run_config(cfg, "bc_train", raw_cfg)
-    setup_wandb(cfg, raw_cfg, default_group="pretraining", run_id=run_id, run_dir=run_dir)
+    run_dir, run_id = get_run_config(cfg, "bc_train", resolved_raw_cfg)
+    setup_wandb(cfg, resolved_raw_cfg, default_group="pretraining", run_id=run_id, run_dir=run_dir)
 
     key = jax.random.PRNGKey(cfg.simulation.seed)
     key, actor_key = jax.random.split(key)

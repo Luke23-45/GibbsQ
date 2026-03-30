@@ -17,7 +17,7 @@ from gibbsq.analysis.metrics import (
     time_averaged_queue_lengths,
     time_averaged_queue_lengths_from_index,
 )
-from gibbsq.core.config import critical_load_sim_time, hydra_to_config, validate
+from gibbsq.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.engines.distributed import sharded_replications
 from gibbsq.engines.jax_engine import policy_name_to_type
 from gibbsq.engines.numpy_engine import SimResult
@@ -58,14 +58,13 @@ def _heterogeneity_replication_kwargs(
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "stress")
 
     if not cfg.jax.enabled:
         raise ValueError("stress_test requires cfg.jax.enabled=True")
 
-    run_dir, run_id = get_run_config(cfg, "stress", raw_cfg)
-    run = setup_wandb(cfg, raw_cfg, default_group="scientific_stress", run_id=run_id, run_dir=run_dir)
+    run_dir, run_id = get_run_config(cfg, "stress", resolved_raw_cfg)
+    run = setup_wandb(cfg, resolved_raw_cfg, default_group="scientific_stress", run_id=run_id, run_dir=run_dir)
     out_dir = run_dir
 
     log.info("=" * 60)

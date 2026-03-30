@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import jax
 from omegaconf import DictConfig
-from gibbsq.core.config import ExperimentConfig, hydra_to_config, validate
+from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.core.builders import build_policy_by_name
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.engines.numpy_engine import simulate, run_replications, SimResult
@@ -452,11 +452,10 @@ def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
 
 def main(raw_cfg: DictConfig):
     """Main entry point for corrected policy comparison."""
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "policy")
 
-    run_dir, run_id = get_run_config(cfg, "policy", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="policy_comparison",
+    run_dir, run_id = get_run_config(cfg, "policy", resolved_raw_cfg)
+    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="policy_comparison",
                             run_id=run_id, run_dir=run_dir)
 
     import jax

@@ -6,6 +6,7 @@ Empirical verification of the proof that softmax (Boltzmann) routing yields posi
 > **Hardware note:** The full default-config pipeline (especially the stress test with
 > `stress.n_values` containing N ≥ 128, and the bias verification at ρ > 0.95) requires
 > a CUDA-capable GPU (≥ 8 GB VRAM) for practical wall-clock runtime.
+> For the fastest smoke checks use `--config-name debug`.
 > For CPU-only validation use `--config-name small`, which completes
 > in under 5 minutes.
 > The default config is calibrated for GPU execution and is required for paper results.
@@ -58,7 +59,30 @@ GibbsQ/
 
 ## Configuration
 
-All experiments use [Hydra](https://hydra.cc/) for configuration management. Override any parameter from the command line:
+All experiments use [Hydra](https://hydra.cc/) for configuration management.
+
+The project now uses self-contained profile configs:
+- `configs/debug.yaml`
+- `configs/small.yaml`
+- `configs/default.yaml`
+- `configs/final_experiment.yaml`
+
+Each profile file contains:
+- shared top-level defaults
+- an `experiments:` section with one block for each public experiment
+
+At runtime the effective config is resolved as:
+
+`selected profile root + experiments.<experiment_name> block + CLI overrides`
+
+This means:
+- `debug` is the smoke/test profile
+- `small` is the CPU validation profile
+- `default` is the research baseline profile
+- `final_experiment` is the publication profile
+- experiments do not rely on runtime `+experiment=...` overlays anymore
+
+Override any parameter from the command line:
 
 ```bash
 # Override α and simulation time

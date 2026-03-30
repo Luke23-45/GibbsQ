@@ -1,0 +1,170 @@
+Category,Parameter,debug,small,default,final_experiment
+batch_size,batch_size,16,16,16,32
+domain_randomization,domain_randomization.enabled,True,True,False,True
+domain_randomization,domain_randomization.phases,[],[],[],[]
+domain_randomization,domain_randomization.rho_max,0.98,0.85,0.95,0.95
+domain_randomization,domain_randomization.rho_min,0.4,0.4,0.4,0.45
+drift,drift.q_max,50,50,50,120
+drift,drift.use_grid,True,True,True,True
+experiments,experiments.drift.batch_size,N/A,N/A,64,N/A
+experiments,experiments.drift.log_dir,N/A,N/A,outputs/sota/logs,N/A
+experiments,experiments.drift.output_dir,N/A,N/A,outputs/sota,N/A
+experiments,experiments.drift.train_epochs,N/A,N/A,100,N/A
+experiments,experiments.drift.domain_randomization.enabled,N/A,N/A,True,N/A
+experiments,experiments.drift.domain_randomization.rho_max,N/A,N/A,0.98,N/A
+experiments,experiments.drift.domain_randomization.rho_min,N/A,N/A,0.7,N/A
+experiments,experiments.drift.drift.q_max,N/A,N/A,200,N/A
+experiments,experiments.drift.drift.use_grid,N/A,N/A,True,N/A
+experiments,experiments.drift.generalization.rho_boundary_vals,N/A,N/A,"[0.9, 0.95, 0.98]",N/A
+experiments,experiments.drift.generalization.rho_grid_vals,N/A,N/A,"[0.5, 0.7, 0.85, 0.95, 0.98]",N/A
+experiments,experiments.drift.generalization.scale_vals,N/A,N/A,"[0.5, 1.0, 2.0, 5.0, 10.0]",N/A
+experiments,experiments.drift.jax.enabled,N/A,N/A,False,N/A
+experiments,experiments.drift.jax.fallback_to_cpu,N/A,N/A,True,N/A
+experiments,experiments.drift.jax.platform,N/A,N/A,auto,N/A
+experiments,experiments.drift.jax.precision,N/A,N/A,float64,N/A
+experiments,experiments.drift.neural.actor_lr,N/A,N/A,0.0003,N/A
+experiments,experiments.drift.neural.clip_global_norm,N/A,N/A,0.5,N/A
+experiments,experiments.drift.neural.critic_lr,N/A,N/A,0.003,N/A
+experiments,experiments.drift.neural.entropy_bonus,N/A,N/A,0.01,N/A
+experiments,experiments.drift.neural.hidden_size,N/A,N/A,128,N/A
+experiments,experiments.drift.neural.init_type,N/A,N/A,zero_final,N/A
+experiments,experiments.drift.neural.preprocessing,N/A,N/A,log1p,N/A
+experiments,experiments.drift.neural.rho_input_scale,N/A,N/A,10.0,N/A
+experiments,experiments.drift.neural.use_rho,N/A,N/A,True,N/A
+experiments,experiments.drift.neural.use_service_rates,N/A,N/A,True,N/A
+experiments,experiments.drift.neural.weight_decay,N/A,N/A,0.0001,N/A
+experiments,experiments.drift.neural_training.curriculum,N/A,N/A,"[[10, 500], [20, 2000], [30, 10000]]",N/A
+experiments,experiments.drift.neural_training.min_temperature,N/A,N/A,0.3,N/A
+experiments,experiments.drift.policy.d,2,2,2,2
+experiments,experiments.drift.policy.name,softmax,softmax,softmax,softmax
+experiments,experiments.drift.simulation.burn_in_fraction,N/A,N/A,0.1,N/A
+experiments,experiments.drift.simulation.num_replications,N/A,N/A,20,N/A
+experiments,experiments.drift.stability_sweep.alpha_vals,N/A,N/A,"[0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0]",N/A
+experiments,experiments.drift.stability_sweep.rho_vals,N/A,N/A,"[0.8, 0.85, 0.9, 0.95, 0.98]",N/A
+experiments,experiments.drift.stress.critical_load_base_rho,N/A,N/A,0.8,N/A
+experiments,experiments.drift.stress.critical_load_max_sim_time,N/A,N/A,500000.0,N/A
+experiments,experiments.drift.stress.critical_rhos,N/A,N/A,"[0.9, 0.95, 0.98]",N/A
+experiments,experiments.drift.stress.n_values,N/A,N/A,"[2, 4, 8]",N/A
+experiments,experiments.drift.system.alpha,N/A,N/A,1.0,N/A
+experiments,experiments.drift.system.arrival_rate,N/A,N/A,2.375,N/A
+experiments,experiments.drift.system.num_servers,N/A,N/A,2,N/A
+experiments,experiments.drift.system.service_rates,N/A,N/A,"[1.0, 1.5]",N/A
+experiments,experiments.drift.wandb.enabled,N/A,N/A,False,N/A
+experiments,experiments.drift.wandb.project,N/A,N/A,GibbsQ-SOTA,N/A
+experiments,experiments.policy.jax.enabled,N/A,True,True,N/A
+experiments,experiments.policy.jax.fallback_to_cpu,N/A,True,True,N/A
+experiments,experiments.policy.jax.platform,N/A,auto,auto,N/A
+experiments,experiments.policy.jax.precision,N/A,float32,float32,N/A
+experiments,experiments.policy.wandb.enabled,True,True,True,True
+experiments,experiments.policy.wandb.group,policy_evaluation,policy_evaluation,policy_evaluation,policy_evaluation
+experiments,experiments.policy.wandb.mode,offline,offline,offline,offline
+experiments,experiments.policy.wandb.project,GibbsQ-Paper,GibbsQ-Paper,GibbsQ-Paper,GibbsQ-Paper
+experiments,experiments.stats.simulation.num_replications,N/A,N/A,30,30
+experiments,experiments.stress.jax.enabled,True,True,True,True
+experiments,experiments.sweep.jax.enabled,N/A,True,True,N/A
+experiments,experiments.sweep.jax.fallback_to_cpu,N/A,True,True,N/A
+experiments,experiments.sweep.jax.platform,N/A,auto,auto,N/A
+experiments,experiments.sweep.jax.precision,N/A,float32,float32,N/A
+experiments,experiments.sweep.wandb.enabled,True,True,True,True
+experiments,experiments.sweep.wandb.group,stability_sweep,stability_sweep,stability_sweep,stability_sweep
+experiments,experiments.sweep.wandb.mode,offline,offline,offline,offline
+experiments,experiments.sweep.wandb.project,GibbsQ-Paper,GibbsQ-Paper,GibbsQ-Paper,GibbsQ-Paper
+experiments,experiments.drift.simulation.dga.sim_steps,N/A,N/A,5000,N/A
+experiments,experiments.drift.simulation.dga.temperature,N/A,N/A,0.5,N/A
+experiments,experiments.drift.simulation.ssa.sample_interval,N/A,N/A,1.0,N/A
+experiments,experiments.drift.simulation.ssa.sim_time,N/A,N/A,50000.0,N/A
+generalization,generalization.rho_boundary_vals,[0.95],[0.95],"[0.9, 0.95, 0.98, 0.99]","[0.9, 0.95, 0.98, 0.99]"
+generalization,generalization.rho_grid_vals,"[0.5, 0.85]","[0.5, 0.85]","[0.5, 0.7, 0.85, 0.95, 0.98]","[0.5, 0.7, 0.85, 0.95, 0.98]"
+generalization,generalization.scale_vals,"[0.5, 2.0]","[0.5, 2.0]","[0.5, 1.0, 2.0, 5.0, 10.0]","[0.5, 1.0, 2.0, 5.0, 10.0]"
+jax,jax.enabled,True,False,False,True
+jax,jax.fallback_to_cpu,True,True,True,True
+jax,jax.platform,auto,auto,auto,auto
+jax,jax.precision,float32,float32,float32,float32
+jax_engine,jax_engine.max_events_additive_buffer,1000,1000,1000,1000
+jax_engine,jax_engine.max_events_safety_multiplier,1.5,1.5,1.5,1.5
+jax_engine,jax_engine.scan_sampling_chunk,16,16,16,16
+log_dir,log_dir,outputs/debug/logs,outputs/small/logs,outputs/logs,outputs/final/logs
+neural,neural.actor_lr,0.001,0.0003,0.001,0.0003
+neural,neural.capacity_bound,100.0,100.0,100.0,100.0
+neural,neural.clip_global_norm,0.5,0.5,0.5,0.5
+neural,neural.critic_lr,0.005,0.003,0.001,0.001
+neural,neural.entropy_bonus,0.01,0.01,0.01,0.01
+neural,neural.entropy_final,0.001,0.001,0.001,0.001
+neural,neural.hidden_size,64,128,64,128
+neural,neural.init_type,zero_final,zero_final,xavier_uniform,zero_final
+neural,neural.lr_decay_rate,0.9,0.9,0.9,0.9
+neural,neural.preprocessing,log1p,log1p,none,log1p
+neural,neural.rho_input_scale,10.0,10.0,1.0,10.0
+neural,neural.use_rho,True,True,True,True
+neural,neural.use_service_rates,True,True,True,True
+neural,neural.weight_decay,0.0001,0.0001,0.0001,0.0001
+neural_training,neural_training.bc_label_smoothing,0.1,0.1,0.1,0.1
+neural_training,neural_training.bc_lr,0.002,0.002,0.002,0.002
+neural_training,neural_training.bc_num_steps,200,1000,1000,1000
+neural_training,neural_training.checkpoint_freq,10,25,25,25
+neural_training,neural_training.curriculum,"[[20, 1000]]","[[10, 200], [20, 1000], [20, 3000]]","[[20, 500], [30, 2000], [50, 5000]]","[[20, 500], [30, 2000], [50, 5000]]"
+neural_training,neural_training.dga_learning_rate,0.1,0.1,0.1,0.1
+neural_training,neural_training.eval_batches,1,2,5,5
+neural_training,neural_training.eval_trajs_per_batch,3,5,10,10
+neural_training,neural_training.gae_lambda,0.95,0.95,0.95,0.95
+neural_training,neural_training.gamma,0.99,0.99,0.99,0.99
+neural_training,neural_training.learning_rate,0.003,0.003,0.003,0.003
+neural_training,neural_training.min_temperature,0.3,0.3,0.3,0.3
+neural_training,neural_training.perf_index_jsq_margin,0.05,0.05,0.05,0.05
+neural_training,neural_training.perf_index_min_denom,0.5,0.5,0.5,0.5
+neural_training,neural_training.shake_scale,0.01,0.01,0.01,0.01
+neural_training,neural_training.squash_scale,100.0,100.0,100.0,100.0
+neural_training,neural_training.squash_threshold,500.0,500.0,500.0,500.0
+neural_training,neural_training.weight_decay,0.0001,0.0001,0.0001,0.0001
+output_dir,output_dir,outputs/debug,outputs/small,outputs,outputs/final
+policy,policy.d,2,2,2,2
+policy,policy.name,uas,uas,uas,uas
+simulation,simulation.burn_in_fraction,0.2,0.2,0.2,0.2
+simulation,simulation.export_trajectories,False,False,False,True
+simulation,simulation.num_replications,10,10,50,64
+simulation,simulation.seed,42,42,42,42
+simulation,simulation.dga.sim_steps,1000,1000,5000,5000
+simulation,simulation.dga.temperature,0.5,0.5,0.5,0.5
+simulation,simulation.ssa.sample_interval,1.0,1.0,1.0,1.0
+simulation,simulation.ssa.sim_time,1000.0,5000.0,5000.0,20000.0
+stability_sweep,stability_sweep.alpha_vals,"[0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0]","[0.1, 1.0, 5.0]","[0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]","[0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]"
+stability_sweep,stability_sweep.rho_vals,"[0.8, 0.85, 0.9, 0.95, 0.98]","[0.5, 0.8, 0.9]","[0.5, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99]","[0.5, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99]"
+stress,stress.critical_load_base_rho,0.8,0.8,0.8,0.8
+stress,stress.critical_load_max_sim_time,100000.0,100000.0,100000.0,400000.0
+stress,stress.critical_load_n,10,10,10,10
+stress,stress.critical_rhos,[0.9],"[0.9, 0.95]","[0.9, 0.95, 0.99]","[0.9, 0.95, 0.98, 0.99]"
+stress,stress.heterogeneity_rho,0.5,0.5,0.5,0.5
+stress,stress.heterogeneity_sim_time,1000.0,1000.0,1000.0,1000.0
+stress,stress.massive_n_rho,0.8,0.8,0.8,0.8
+stress,stress.massive_n_sim_time,500.0,500.0,500.0,500.0
+stress,stress.mu_het,"[10.0, 0.1, 0.1, 0.1]","[10.0, 0.1, 0.1, 0.1]","[10.0, 0.1, 0.1, 0.1]","[10.0, 0.1, 0.1, 0.1]"
+stress,stress.n_values,"[4, 8]","[4, 8, 16]","[8, 32, 128, 512, 1024]","[8, 32, 128, 512, 1024]"
+stress,stress.sample_interval,1.0,1.0,1.0,1.0
+system,system.alpha,1.0,1.0,1.0,1.0
+system,system.arrival_rate,1.0,1.0,11.2,11.2
+system,system.num_servers,2,2,10,10
+system,system.service_rates,"[1.0, 1.5]","[1.0, 1.5]","[0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]","[0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]"
+train_epochs,train_epochs,30,30,30,60
+verification,verification.alpha_significance,0.05,0.05,0.05,0.05
+verification,verification.confidence_interval,0.95,0.95,0.95,0.95
+verification,verification.gradient_check_chunk_size,100,500,1500,1500
+verification,verification.gradient_check_cosine_threshold,0.9,0.9,0.9,0.9
+verification,verification.gradient_check_epsilon,0.05,0.05,0.05,0.05
+verification,verification.gradient_check_error_threshold,0.3,0.4,0.4,0.4
+verification,verification.gradient_check_hidden_size,128,null,null,null
+verification,verification.gradient_check_max_steps,50,100,300,300
+verification,verification.gradient_check_n_samples,5000,5000,15000,15000
+verification,verification.gradient_check_n_test,50,50,50,50
+verification,verification.gradient_check_sim_time,10.0,10.0,15.0,15.0
+verification,verification.gradient_shake_scale,0.1,0.1,0.1,0.1
+verification,verification.jacobian_rel_tol,0.05,0.05,0.05,0.05
+verification,verification.parity_threshold_percent,25.0,25.0,25.0,25.0
+verification,verification.parity_z_score,1.96,1.96,1.96,1.96
+verification,verification.stationarity_threshold,1.0,1.0,1.0,1.0
+wandb,wandb.enabled,False,False,False,False
+wandb,wandb.entity,null,null,null,null
+wandb,wandb.group,null,null,null,null
+wandb,wandb.mode,offline,offline,offline,offline
+wandb,wandb.project,GibbsQ-Debug,GibbsQ-Small,GibbsQ,GibbsQ
+wandb,wandb.run_name,null,null,null,final
+wandb,wandb.tags,[],[],[],[]

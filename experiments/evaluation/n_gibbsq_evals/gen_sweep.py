@@ -38,7 +38,7 @@ import matplotlib.pyplot as plt
 import functools
 from gibbsq.core import constants
 
-from gibbsq.core.config import hydra_to_config, validate
+from gibbsq.core.config import load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.numpy_engine import simulate, SimResult
@@ -228,11 +228,10 @@ class GeneralizationSweeper:
 
 @hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "generalize")
 
-    run_dir, run_id = get_run_config(cfg, "generalize", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
+    run_dir, run_id = get_run_config(cfg, "generalize", resolved_raw_cfg)
+    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
 
     log.info("=" * 60)
     log.info("  Phase VIII: Generalization & Stress Heatmap")

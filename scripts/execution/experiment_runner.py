@@ -57,13 +57,8 @@ def default_hydra_overrides_for_experiment(
     existing = list(existing_overrides or [])
     defaults: list[str] = []
 
-    if experiment in {"sweep", "stats", "policy"} and not _has_override(existing, "experiment"):
-        experiment_profiles = {
-            "sweep": "stability_sweep",
-            "stats": "stats_bench",
-            "policy": "policy_comparison",
-        }
-        defaults.append(f"+experiment={experiment_profiles[experiment]}")
+    if not _has_override(existing, "active_experiment"):
+        defaults.append(f"++active_experiment={experiment}")
 
     if experiment == "stress" and not _has_override(existing, "jax.enabled"):
         defaults.append("++jax.enabled=True")
@@ -88,6 +83,11 @@ def main():
         add_help=False
     )
     parser.add_argument("experiment", nargs="?", help="Experiment name to run")
+    parser.add_argument(
+        "--config-name",
+        default="default",
+        help="Profile config to load (default: default)",
+    )
     parser.add_argument(
         "--progress",
         choices=["auto", "on", "off"],
@@ -131,6 +131,7 @@ def main():
     
     print("=" * 58)
     print(f" Starting Experiment: {experiment}")
+    print(f" Config Profile: {args.config_name}")
     print(f" Progress Mode: {args.progress}")
     print(f" Remaining Args (Hydra Overrides): {' '.join(resolved_hydra_overrides)}")
     print("=" * 58)
@@ -138,7 +139,14 @@ def main():
     # Change to project root and run
     os.chdir(project_root)
     
-    cmd = [sys.executable, "-m", python_script] + resolved_hydra_overrides
+    cmd = [
+        sys.executable,
+        "-m",
+        python_script,
+        "--config-name",
+        args.config_name,
+        f"++active_profile={args.config_name}",
+    ] + resolved_hydra_overrides
     
     try:
         result = subprocess.run(cmd, env=env)

@@ -1,11 +1,9 @@
-# Fast validation configuration - optimized for quick iteration
-# Reduces sim_time and batch_size for speed while maintaining DR functionality
+# Debug self-contained profile configuration
 
 system:
   num_servers: 2
   arrival_rate: 1.0
   service_rates: [1.0, 1.5]
-  # Λ = 2.5, ρ = 0.4
   alpha: 1.0
 
 simulation:
@@ -28,7 +26,6 @@ drift:
   q_max: 50
   use_grid: true
 
-# Minimal stress section for fast loading
 stress:
   n_values: [4, 8]
   critical_rhos: [0.9]
@@ -49,9 +46,8 @@ neural_training:
   min_temperature: 0.3
   gamma: 0.99
   gae_lambda: 0.95
-
   curriculum:
-    - [20, 1000]  # 20 epochs at 1000s (vs 3 phases at up to 3000s)
+    - [20, 1000]
   eval_batches: 1
   eval_trajs_per_batch: 3
   perf_index_min_denom: 0.5
@@ -64,23 +60,12 @@ neural_training:
   squash_scale: 100.0
   squash_threshold: 500.0
 
-jax:
-  enabled: true
-  platform: auto
-  precision: float32
-  fallback_to_cpu: true
-
-wandb:
-  enabled: false
-  project: GibbsQ-Fast
-
-batch_size: 16
-
 neural:
   hidden_size: 64
   preprocessing: log1p
   init_type: zero_final
   use_rho: true
+  use_service_rates: true
   rho_input_scale: 10.0
   entropy_bonus: 0.01
   entropy_final: 0.001
@@ -90,9 +75,6 @@ neural:
   lr_decay_rate: 0.9
   weight_decay: 0.0001
 
-train_epochs: 30
-
-# Domain Randomization enabled for generalization testing
 domain_randomization:
   enabled: true
   rho_min: 0.4
@@ -103,7 +85,26 @@ generalization:
   scale_vals: [0.5, 2.0]
   rho_grid_vals: [0.5, 0.85]
 
+jax:
+  enabled: true
+  platform: auto
+  precision: float32
+  fallback_to_cpu: true
+
+jax_engine:
+  max_events_safety_multiplier: 1.5
+  max_events_additive_buffer: 1000
+  scan_sampling_chunk: 16
+
+wandb:
+  enabled: false
+  project: GibbsQ-Debug
+  mode: offline
+  run_name: null
+
 verification:
+  parity_threshold_percent: 25.0
+  jacobian_rel_tol: 0.05
   alpha_significance: 0.05
   confidence_interval: 0.95
   stationarity_threshold: 1.0
@@ -119,4 +120,36 @@ verification:
   gradient_check_error_threshold: 0.30
   gradient_shake_scale: 0.1
 
-output_dir: outputs/fast
+output_dir: outputs/debug
+log_dir: ${output_dir}/logs
+train_epochs: 30
+batch_size: 16
+
+experiments:
+  check_configs: {}
+  reinforce_check: {}
+  drift:
+    policy:
+      name: softmax
+      d: 2
+  sweep:
+    wandb:
+      enabled: true
+      mode: offline
+      project: GibbsQ-Paper
+      group: stability_sweep
+  stress:
+    jax:
+      enabled: true
+  policy:
+    wandb:
+      enabled: true
+      mode: offline
+      project: GibbsQ-Paper
+      group: policy_evaluation
+  bc_train: {}
+  reinforce_train: {}
+  stats: {}
+  generalize: {}
+  ablation: {}
+  critical: {}

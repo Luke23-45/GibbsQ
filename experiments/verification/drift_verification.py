@@ -15,7 +15,7 @@ import numpy as np
 import hydra
 from omegaconf import DictConfig
 
-from gibbsq.core.config import hydra_to_config, validate, drift_constant_R, drift_rate_epsilon
+from gibbsq.core.config import load_experiment_config, drift_constant_R, drift_rate_epsilon
 from gibbsq.core.builders import build_policy_by_name
 from gibbsq.engines.numpy_engine import simulate
 from gibbsq.core.drift import evaluate_grid, evaluate_trajectory
@@ -48,14 +48,13 @@ def _require_theorem_supported_policy(policy_name: str) -> str:
         ) from exc
 
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="drift")
+@hydra.main(version_base=None, config_path="../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "drift")
 
-    run_dir, run_id = get_run_config(cfg, "drift", raw_cfg)
+    run_dir, run_id = get_run_config(cfg, "drift", resolved_raw_cfg)
 
-    run = setup_wandb(cfg, raw_cfg, default_group="drift_verification", run_id=run_id, run_dir=run_dir)
+    run = setup_wandb(cfg, resolved_raw_cfg, default_group="drift_verification", run_id=run_id, run_dir=run_dir)
 
     apply_theme('publication')
 

@@ -1,8 +1,14 @@
 import sys
 import logging
-from pathlib import Path
 from hydra import compose, initialize
-from gibbsq.core.config import hydra_to_config, validate
+from gibbsq.core.config import (
+    PROFILE_CONFIG_NAMES,
+    EXPERIMENT_BLOCK_NAMES,
+    hydra_to_config,
+    validate,
+    validate_profile_config,
+    resolve_experiment_config,
+)
 from gibbsq.utils.progress import iter_progress
 from scripts.execution.experiment_runner import (
     EXPERIMENTS,
@@ -13,34 +19,11 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 def _discover_root_config_names() -> list[str]:
-    config_dir = Path(__file__).resolve().parents[2] / "configs"
-    names = sorted(
-        path.stem
-        for path in config_dir.glob("*.yaml")
-        if path.is_file()
-    )
-    return names
-
-
-def _discover_experiment_profiles() -> list[str]:
-    experiment_dir = Path(__file__).resolve().parents[2] / "configs" / "experiment"
-    return sorted(
-        path.stem
-        for path in experiment_dir.glob("*.yaml")
-        if path.is_file()
-    )
-
-
-def _base_config_for_experiment(profile_name: str) -> str:
-    if profile_name.endswith("_small"):
-        return "small"
-    if profile_name.endswith("_large"):
-        return "large"
-    return "default"
+    return list(PROFILE_CONFIG_NAMES)
 
 
 PUBLIC_EXPERIMENT_BASE_CONFIGS = {
-    experiment_name: ("drift" if experiment_name == "drift" else "default")
+    experiment_name: "default"
     for experiment_name in EXPERIMENTS
     if experiment_name != "check_configs"
 }
@@ -51,7 +34,6 @@ def _public_experiment_overrides(experiment_name: str) -> list[str]:
 
 def main():
     root_config_names = _discover_root_config_names()
-    experiment_profiles = _discover_experiment_profiles()
 
     failed = False
     with initialize(version_base=None, config_path="../../configs"):
@@ -64,32 +46,39 @@ def main():
         ):
             try:
                 cfg = compose(config_name=name)
-                validated = hydra_to_config(cfg)
-                validate(validated)
+                validate_profile_config(cfg)
                 print(f"[OK] Config {name} validated successfully.")
             except Exception as e:
                 print(f"[FAIL] Config {name} failed validation: {e}")
                 failed = True
-        for profile_name in iter_progress(
-            experiment_profiles,
-            total=len(experiment_profiles),
-            desc="check_configs: profiles",
-            unit="profile",
+        profile_paths = [
+            (profile_name, experiment_name)
+            for profile_name in root_config_names
+            for experiment_name in EXPERIMENT_BLOCK_NAMES
+            if experiment_name != "check_configs"
+        ]
+        for profile_name, experiment_name in iter_progress(
+            profile_paths,
+            total=len(profile_paths),
+            desc="check_configs: resolved paths",
+            unit="path",
             leave=False,
         ):
-            base_config = _base_config_for_experiment(profile_name)
+            overrides = [f"++active_profile={profile_name}"] + _public_experiment_overrides(experiment_name)
             try:
-                cfg = compose(config_name=base_config, overrides=[f"+experiment={profile_name}"])
-                validated = hydra_to_config(cfg)
+                cfg = compose(config_name=profile_name, overrides=overrides)
+                validate_profile_config(cfg)
+                resolved = resolve_experiment_config(cfg, experiment_name, profile_name=profile_name)
+                validated = hydra_to_config(resolved)
                 validate(validated)
                 print(
-                    f"[OK] Experiment profile {profile_name} "
-                    f"(base={base_config}) validated successfully."
+                    f"[OK] Resolved experiment path {experiment_name} "
+                    f"(profile={profile_name}, overrides={overrides}) validated successfully."
                 )
             except Exception as e:
                 print(
-                    f"[FAIL] Experiment profile {profile_name} "
-                    f"(base={base_config}) failed validation: {e}"
+                    f"[FAIL] Resolved experiment path {experiment_name} "
+                    f"(profile={profile_name}, overrides={overrides}) failed validation: {e}"
                 )
                 failed = True
         public_paths = list(PUBLIC_EXPERIMENT_BASE_CONFIGS.items())
@@ -100,10 +89,12 @@ def main():
             unit="path",
             leave=False,
         ):
-            overrides = _public_experiment_overrides(experiment_name)
+            overrides = [f"++active_profile={base_config}"] + _public_experiment_overrides(experiment_name)
             try:
                 cfg = compose(config_name=base_config, overrides=overrides)
-                validated = hydra_to_config(cfg)
+                validate_profile_config(cfg)
+                resolved = resolve_experiment_config(cfg, experiment_name, profile_name=base_config)
+                validated = hydra_to_config(resolved)
                 validate(validated)
                 print(
                     f"[OK] Public experiment path {experiment_name} "

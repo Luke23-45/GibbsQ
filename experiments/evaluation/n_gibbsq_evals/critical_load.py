@@ -17,7 +17,7 @@ from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.core.config import critical_load_sim_time, hydra_to_config, validate
+from gibbsq.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
@@ -211,11 +211,10 @@ class CriticalLoadTest:
 
 @hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "critical")
 
-    run_dir, run_id = get_run_config(cfg, "critical", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
+    run_dir, run_id = get_run_config(cfg, "critical", resolved_raw_cfg)
+    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
 
     log.info("=" * 60)
     log.info("  Phase VIII: The Critical Stability Boundary")

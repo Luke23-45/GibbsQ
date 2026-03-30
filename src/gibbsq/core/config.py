@@ -16,8 +16,9 @@ Derived quantities mirror the proof exactly:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import List, Sequence
 
 from hydra.core.config_store import ConfigStore
@@ -43,7 +44,35 @@ __all__ = [
     "compact_set_radius",
     "critical_load_required_sim_time",
     "critical_load_sim_time",
+    "PROFILE_CONFIG_NAMES",
+    "EXPERIMENT_BLOCK_NAMES",
+    "validate_profile_config",
+    "resolve_experiment_config",
+    "load_experiment_config",
+    "runtime_root_dict",
 ]
+
+PROFILE_CONFIG_NAMES = (
+    "debug",
+    "small",
+    "default",
+    "final_experiment",
+)
+
+EXPERIMENT_BLOCK_NAMES = (
+    "check_configs",
+    "reinforce_check",
+    "drift",
+    "sweep",
+    "stress",
+    "policy",
+    "bc_train",
+    "reinforce_train",
+    "stats",
+    "generalize",
+    "ablation",
+    "critical",
+)
 
 class PolicyName(str, Enum):
     """Supported routing policies."""
@@ -419,6 +448,16 @@ def _validate_positive_list(name: str, values: Sequence[float]) -> None:
         if not (float(x) > 0.0):
             raise ValueError(f"{name}[{i}] must be > 0, got {x}")
 
+def _validate_positive_int(name: str, value: int) -> None:
+    """Validate that an integer-valued count or budget is strictly positive."""
+    if int(value) < 1:
+        raise ValueError(f"{name} must be >= 1, got {value}")
+
+def _validate_non_empty_string(name: str, value: str) -> None:
+    """Validate that a string-valued path/name is not empty after stripping."""
+    if not str(value).strip():
+        raise ValueError(f"{name} must be a non-empty string")
+
 def validate(cfg: ExperimentConfig) -> None:
     """
     Validate every constraint on *cfg* and raise ``ValueError`` with a
@@ -526,9 +565,56 @@ def validate(cfg: ExperimentConfig) -> None:
     if neu.weight_decay > 1.0:
         raise ValueError(f"neural.weight_decay must be <= 1.0, got {neu.weight_decay}")
     
+    _validate_non_empty_string("output_dir", cfg.output_dir)
+    _validate_non_empty_string("log_dir", cfg.log_dir)
+    _validate_positive_int("train_epochs", cfg.train_epochs)
+    _validate_positive_int("batch_size", cfg.batch_size)
+
     ntc = cfg.neural_training
+    if ntc.learning_rate <= 0:
+        raise ValueError(f"neural_training.learning_rate must be > 0, got {ntc.learning_rate}")
+    if ntc.dga_learning_rate <= 0:
+        raise ValueError(f"neural_training.dga_learning_rate must be > 0, got {ntc.dga_learning_rate}")
+    if ntc.weight_decay < 0:
+        raise ValueError(f"neural_training.weight_decay must be >= 0, got {ntc.weight_decay}")
+    if ntc.min_temperature <= 0:
+        raise ValueError(f"neural_training.min_temperature must be > 0, got {ntc.min_temperature}")
     if not (0 <= ntc.gamma <= 1):
         raise ValueError(f"neural_training.gamma must be in [0, 1], got {ntc.gamma}")
+    if not (0 <= ntc.gae_lambda <= 1):
+        raise ValueError(f"neural_training.gae_lambda must be in [0, 1], got {ntc.gae_lambda}")
+    if not ntc.curriculum:
+        raise ValueError("neural_training.curriculum must contain at least one [epochs, horizon] phase.")
+    for i, phase in enumerate(ntc.curriculum):
+        if len(phase) != 2:
+            raise ValueError(f"neural_training.curriculum[{i}] must contain exactly [epochs, horizon], got {phase}")
+        phase_epochs, phase_horizon = phase
+        _validate_positive_int(f"neural_training.curriculum[{i}][0]", phase_epochs)
+        _validate_positive_int(f"neural_training.curriculum[{i}][1]", phase_horizon)
+    _validate_positive_int("neural_training.eval_batches", ntc.eval_batches)
+    _validate_positive_int("neural_training.eval_trajs_per_batch", ntc.eval_trajs_per_batch)
+    _validate_positive_int("neural_training.bc_num_steps", ntc.bc_num_steps)
+    if ntc.bc_lr <= 0:
+        raise ValueError(f"neural_training.bc_lr must be > 0, got {ntc.bc_lr}")
+    if not (0 <= ntc.bc_label_smoothing < 1):
+        raise ValueError(
+            f"neural_training.bc_label_smoothing must be in [0, 1), got {ntc.bc_label_smoothing}"
+        )
+    if ntc.perf_index_min_denom <= 0:
+        raise ValueError(
+            f"neural_training.perf_index_min_denom must be > 0, got {ntc.perf_index_min_denom}"
+        )
+    if ntc.perf_index_jsq_margin < 0:
+        raise ValueError(
+            f"neural_training.perf_index_jsq_margin must be >= 0, got {ntc.perf_index_jsq_margin}"
+        )
+    if ntc.shake_scale < 0:
+        raise ValueError(f"neural_training.shake_scale must be >= 0, got {ntc.shake_scale}")
+    _validate_positive_int("neural_training.checkpoint_freq", ntc.checkpoint_freq)
+    if ntc.squash_scale <= 0:
+        raise ValueError(f"neural_training.squash_scale must be > 0, got {ntc.squash_scale}")
+    if ntc.squash_threshold <= 0:
+        raise ValueError(f"neural_training.squash_threshold must be > 0, got {ntc.squash_threshold}")
 
     jen = cfg.jax_engine
     if jen.max_events_safety_multiplier < 1.0:
@@ -549,6 +635,35 @@ def validate(cfg: ExperimentConfig) -> None:
         raise ValueError(f"verification.stationarity_threshold must be in (0, 1.0], got {ver.stationarity_threshold}")
     if not (0.5 < ver.confidence_interval < 1.0):
         raise ValueError(f"verification.confidence_interval must be in (0.5, 1.0), got {ver.confidence_interval}")
+    if ver.parity_z_score <= 0:
+        raise ValueError(f"verification.parity_z_score must be > 0, got {ver.parity_z_score}")
+    _validate_positive_int("verification.gradient_check_chunk_size", ver.gradient_check_chunk_size)
+    _validate_positive_int("verification.gradient_check_max_steps", ver.gradient_check_max_steps)
+    _validate_positive_int("verification.gradient_check_n_test", ver.gradient_check_n_test)
+    if ver.gradient_check_hidden_size is not None:
+        _validate_positive_int("verification.gradient_check_hidden_size", ver.gradient_check_hidden_size)
+    if ver.gradient_check_sim_time <= 0:
+        raise ValueError(f"verification.gradient_check_sim_time must be > 0, got {ver.gradient_check_sim_time}")
+    _validate_positive_int("verification.gradient_check_n_samples", ver.gradient_check_n_samples)
+    if ver.gradient_check_epsilon <= 0:
+        raise ValueError(f"verification.gradient_check_epsilon must be > 0, got {ver.gradient_check_epsilon}")
+    if not (0 < ver.gradient_check_cosine_threshold <= 1.0):
+        raise ValueError(
+            "verification.gradient_check_cosine_threshold must be in (0, 1], "
+            f"got {ver.gradient_check_cosine_threshold}"
+        )
+    if ver.gradient_check_error_threshold <= 0:
+        raise ValueError(
+            f"verification.gradient_check_error_threshold must be > 0, got {ver.gradient_check_error_threshold}"
+        )
+    if ver.gradient_shake_scale < 0:
+        raise ValueError(f"verification.gradient_shake_scale must be >= 0, got {ver.gradient_shake_scale}")
+
+    valid_wandb_modes = {"online", "offline", "disabled"}
+    if cfg.wandb.mode not in valid_wandb_modes:
+        raise ValueError(f"wandb.mode must be one of {sorted(valid_wandb_modes)}, got {cfg.wandb.mode}")
+    if cfg.wandb.run_name is not None and not str(cfg.wandb.run_name).strip():
+        raise ValueError("wandb.run_name must be null or a non-empty string")
 
     dr = cfg.domain_randomization
     if dr.enabled:
@@ -556,6 +671,8 @@ def validate(cfg: ExperimentConfig) -> None:
             for i, phase in enumerate(dr.phases):
                 if not (0 < phase.rho_min < phase.rho_max < 1.0):
                     raise ValueError(f"DR phase {i} has invalid rho range [{phase.rho_min}, {phase.rho_max}]")
+                if phase.horizon < 1:
+                    raise ValueError(f"DR phase {i} must have horizon >= 1, got {phase.horizon}")
                 if phase.epochs < 1:
                     raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
         else:
@@ -572,10 +689,31 @@ def validate(cfg: ExperimentConfig) -> None:
     _validate_rho_list("generalization.rho_grid_vals", cfg.generalization.rho_grid_vals)
     _validate_rho_list("generalization.rho_boundary_vals", cfg.generalization.rho_boundary_vals)
     _validate_rho_list("stress.critical_rhos", cfg.stress.critical_rhos)
+    if not cfg.stress.n_values:
+        raise ValueError("stress.n_values must contain at least one target system size.")
+    for i, n in enumerate(cfg.stress.n_values):
+        _validate_positive_int(f"stress.n_values[{i}]", n)
+    _validate_positive_list("stress.mu_het", cfg.stress.mu_het)
+    if cfg.stress.sample_interval <= 0:
+        raise ValueError(f"stress.sample_interval must be > 0, got {cfg.stress.sample_interval}")
     if not (0.0 < float(cfg.stress.massive_n_rho) < 1.0):
         raise ValueError(f"stress.massive_n_rho must be in (0, 1), got {cfg.stress.massive_n_rho}")
+    if cfg.stress.massive_n_sim_time <= 0:
+        raise ValueError(f"stress.massive_n_sim_time must be > 0, got {cfg.stress.massive_n_sim_time}")
+    _validate_positive_int("stress.critical_load_n", cfg.stress.critical_load_n)
+    if not (0.0 < float(cfg.stress.critical_load_base_rho) < 1.0):
+        raise ValueError(
+            f"stress.critical_load_base_rho must be in (0, 1), got {cfg.stress.critical_load_base_rho}"
+        )
+    if float(cfg.stress.critical_load_max_sim_time) <= 0:
+        raise ValueError(
+            "stress.critical_load_max_sim_time must be > 0, "
+            f"got {cfg.stress.critical_load_max_sim_time}"
+        )
     if not (0.0 < float(cfg.stress.heterogeneity_rho) < 1.0):
         raise ValueError(f"stress.heterogeneity_rho must be in (0, 1), got {cfg.stress.heterogeneity_rho}")
+    if cfg.stress.heterogeneity_sim_time <= 0:
+        raise ValueError(f"stress.heterogeneity_sim_time must be > 0, got {cfg.stress.heterogeneity_sim_time}")
 
     for name, rho_values in (
         ("generalization.rho_boundary_vals", cfg.generalization.rho_boundary_vals),
@@ -737,6 +875,158 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         train_epochs=d.get("train_epochs", 30),
         batch_size=d.get("batch_size", 16),
     )
+
+
+_CONFIGS_DIR = Path(__file__).resolve().parents[3] / "configs"
+_MISSING = object()
+
+
+def _profile_path(profile_name: str) -> Path:
+    path = _CONFIGS_DIR / f"{profile_name}.yaml"
+    if not path.exists():
+        raise FileNotFoundError(f"Unknown profile config '{profile_name}' at {path}")
+    return path
+
+
+def _plain_container(raw: DictConfig | dict) -> dict:
+    if isinstance(raw, DictConfig):
+        data = OmegaConf.to_container(raw, resolve=True)
+    else:
+        data = raw
+    if not isinstance(data, dict):
+        raise TypeError(f"Expected mapping-like config, got {type(data)}")
+    return data
+
+
+def _diff_container(base, current):
+    if isinstance(base, dict) and isinstance(current, dict):
+        changed = {}
+        for key in current:
+            base_value = base.get(key, _MISSING)
+            current_value = current[key]
+            if base_value is _MISSING:
+                changed[key] = current_value
+                continue
+            delta = _diff_container(base_value, current_value)
+            if delta is not _MISSING:
+                changed[key] = delta
+        return changed if changed else _MISSING
+    if base == current:
+        return _MISSING
+    return current
+
+
+def _try_runtime_profile_name() -> str | None:
+    try:
+        from hydra.core.hydra_config import HydraConfig
+        hydra_cfg = HydraConfig.get()
+    except Exception:
+        return None
+    config_name = getattr(getattr(hydra_cfg, "job", None), "config_name", None)
+    return config_name or None
+
+
+def validate_profile_config(raw: DictConfig | dict) -> None:
+    data = _plain_container(raw)
+    experiments = data.get("experiments")
+    if not isinstance(experiments, dict):
+        raise ValueError("Profile config must define a top-level 'experiments' mapping.")
+
+    present = set(experiments.keys())
+    expected = set(EXPERIMENT_BLOCK_NAMES)
+    missing = sorted(expected - present)
+    extra = sorted(present - expected)
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(f"missing blocks: {missing}")
+        if extra:
+            parts.append(f"unknown blocks: {extra}")
+        raise ValueError("Invalid experiments profile structure: " + "; ".join(parts))
+
+    for name in EXPERIMENT_BLOCK_NAMES:
+        block = experiments.get(name)
+        if block is None:
+            continue
+        if not isinstance(block, dict):
+            raise ValueError(f"experiments.{name} must be a mapping, got {type(block)}")
+
+
+def resolve_experiment_config(
+    raw: DictConfig | dict,
+    experiment_name: str,
+    profile_name: str | None = None,
+) -> DictConfig:
+    if experiment_name not in EXPERIMENT_BLOCK_NAMES:
+        raise ValueError(
+            f"Unknown experiment '{experiment_name}'. "
+            f"Expected one of {list(EXPERIMENT_BLOCK_NAMES)}."
+        )
+
+    selected_profile = (
+        profile_name
+        or _plain_container(raw).get("active_profile")
+        or _try_runtime_profile_name()
+        or "default"
+    )
+
+    pristine_profile = OmegaConf.load(_profile_path(selected_profile))
+    validate_profile_config(pristine_profile)
+
+    pristine_data = _plain_container(pristine_profile)
+    raw_data = _plain_container(raw)
+
+    pristine_root = {
+        k: v for k, v in pristine_data.items()
+        if k not in {"experiments", "active_experiment", "active_profile"}
+    }
+    raw_root = {
+        k: v for k, v in raw_data.items()
+        if k not in {"experiments", "active_experiment", "active_profile"}
+    }
+    raw_experiments = raw_data.get("experiments")
+    if not isinstance(raw_experiments, dict):
+        raise ValueError("Resolved config is missing the top-level 'experiments' mapping.")
+    if experiment_name not in raw_experiments:
+        raise ValueError(f"Config profile '{selected_profile}' does not define experiments.{experiment_name}.")
+
+    experiment_block = raw_experiments.get(experiment_name) or {}
+    if not isinstance(experiment_block, dict):
+        raise ValueError(f"experiments.{experiment_name} must be a mapping, got {type(experiment_block)}")
+
+    top_level_diff = _diff_container(pristine_root, raw_root)
+    merged = OmegaConf.merge(
+        OmegaConf.create(pristine_root),
+        OmegaConf.create(experiment_block),
+        OmegaConf.create(top_level_diff if top_level_diff is not _MISSING else {}),
+    )
+    return OmegaConf.create(OmegaConf.to_container(merged, resolve=True))
+
+
+def load_experiment_config(
+    raw: DictConfig | dict,
+    experiment_name: str,
+    profile_name: str | None = None,
+) -> tuple[ExperimentConfig, DictConfig]:
+    resolved_raw = resolve_experiment_config(raw, experiment_name, profile_name=profile_name)
+    cfg = hydra_to_config(resolved_raw)
+    validate(cfg)
+    return cfg, resolved_raw
+
+def runtime_root_dict(raw: DictConfig | dict) -> dict:
+    """Return the resolved runtime root config as a plain mapping.
+
+    This excludes experiment overrides and profile metadata, while preserving
+    schema defaults that become active at runtime even when omitted in YAML.
+    """
+    data = _plain_container(raw)
+    root_data = {
+        k: v for k, v in data.items()
+        if k not in {"experiments", "active_experiment", "active_profile"}
+    }
+    cfg = hydra_to_config(OmegaConf.create(root_data))
+    validate(cfg)
+    return asdict(cfg)
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=ExperimentConfig)

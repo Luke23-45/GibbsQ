@@ -31,7 +31,7 @@ from jaxtyping import PRNGKeyArray, Array, Float
 from jax.flatten_util import ravel_pytree
 from omegaconf import DictConfig
 
-from gibbsq.core.config import ExperimentConfig, NeuralConfig, hydra_to_config, validate
+from gibbsq.core.config import ExperimentConfig, NeuralConfig, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
 from gibbsq.core.policy_distribution import compute_numpy_policy_probs
 from gibbsq.core.reinforce_objective import compute_action_interval_returns_from_trajectory_numpy
@@ -1041,11 +1041,10 @@ class ReinforceTrainer:
 
 def main(raw_cfg: DictConfig):
     """Main entry point for REINFORCE training."""
-    cfg = hydra_to_config(raw_cfg)
-    validate(cfg)
+    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "reinforce_train")
 
-    run_dir, run_id = get_run_config(cfg, "reinforce_train", raw_cfg)
-    run_logger = setup_wandb(cfg, raw_cfg, default_group="reinforce_training",
+    run_dir, run_id = get_run_config(cfg, "reinforce_train", resolved_raw_cfg)
+    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="reinforce_training",
                             run_id=run_id, run_dir=run_dir)
 
     trainer = ReinforceTrainer(cfg, run_dir, run_logger)

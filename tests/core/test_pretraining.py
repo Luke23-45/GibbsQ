@@ -4,17 +4,19 @@ import jax.numpy as jnp
 import numpy as np
 from hydra import compose, initialize_config_dir
 
-from gibbsq.core.config import hydra_to_config
+from gibbsq.core.config import load_experiment_config
 from gibbsq.core.pretraining import (
     collect_robust_expert_data,
     compute_value_bootstrap_targets,
 )
 
 
-def load_config(name: str):
+def load_config(name: str, experiment: str = "bc_train"):
     config_dir = os.path.join(os.getcwd(), "configs")
     with initialize_config_dir(config_dir=config_dir, version_base=None):
-        return hydra_to_config(compose(config_name=name))
+        raw_cfg = compose(config_name=name, overrides=[f"++active_profile={name}"])
+        cfg, _ = load_experiment_config(raw_cfg, experiment, profile_name=name)
+        return cfg
 
 
 def test_compute_value_bootstrap_targets_matches_linear_pi_scale():
@@ -32,8 +34,8 @@ def test_compute_value_bootstrap_targets_matches_linear_pi_scale():
     )
 
 
-def test_fast_config_value_bootstrap_targets_stay_finite_and_reasonable():
-    cfg = load_config("fast")
+def test_debug_config_value_bootstrap_targets_stay_finite_and_reasonable():
+    cfg = load_config("debug")
     service_rates = np.asarray(cfg.system.service_rates, dtype=float)
     _, _, _, queue_totals, _ = collect_robust_expert_data(
         num_servers=len(service_rates),

@@ -1,8 +1,35 @@
 import math
+from pathlib import Path
+import csv
 import pytest
 import numpy as np
-from hypothesis import given, strategies as st, assume, settings
-from hypothesis.extra.numpy import arrays
+from hydra import compose, initialize_config_dir
+try:
+    from hypothesis import given, strategies as st, assume, settings
+    from hypothesis.extra.numpy import arrays
+except ModuleNotFoundError:
+    def given(*args, **kwargs):
+        return pytest.mark.skip(reason="hypothesis is not installed in this environment")
+
+    class _HypothesisStrategiesStub:
+        def integers(self, *args, **kwargs):
+            return None
+
+        def floats(self, *args, **kwargs):
+            return None
+
+    st = _HypothesisStrategiesStub()
+
+    def assume(condition):
+        return None
+
+    def settings(*args, **kwargs):
+        def decorator(fn):
+            return fn
+        return decorator
+
+    def arrays(*args, **kwargs):
+        return None
 
 from gibbsq.core.config import (
     SystemConfig, SSAConfig, SimulationConfig, PolicyConfig, DriftConfig,
@@ -10,8 +37,25 @@ from gibbsq.core.config import (
     validate, total_capacity, load_factor, drift_constant_R, 
     drift_rate_epsilon, compact_set_radius, hydra_to_config, PolicyName,
     critical_load_required_sim_time, critical_load_sim_time,
+    PROFILE_CONFIG_NAMES, EXPERIMENT_BLOCK_NAMES, validate_profile_config,
+    resolve_experiment_config, runtime_root_dict,
 )
 from omegaconf import DictConfig, OmegaConf
+
+
+def _flatten_dict(d, parent_key="", sep="."):
+    items = {}
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.update(_flatten_dict(v, new_key, sep=sep))
+        elif isinstance(v, list):
+            items[new_key] = str(v)
+        elif v is None:
+            items[new_key] = "null"
+        else:
+            items[new_key] = v
+    return items
 
 class TestDerivedQuantitiesCorrectness:
     def test_total_capacity_sum(self):
@@ -510,6 +554,108 @@ class TestHydraConversion:
         )
         assert cfg.verification.stationarity_threshold == pytest.approx(1.0)
 
+    def test_profile_configs_define_all_experiment_blocks(self):
+        config_dir = str(Path("configs").resolve())
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            for profile_name in PROFILE_CONFIG_NAMES:
+                raw_cfg = compose(config_name=profile_name)
+                validate_profile_config(raw_cfg)
+                assert sorted(raw_cfg.experiments.keys()) == sorted(EXPERIMENT_BLOCK_NAMES)
+
+    def test_experiment_resolution_keeps_cli_override_precedence(self):
+        config_dir = str(Path("configs").resolve())
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raw_cfg = compose(
+                config_name="default",
+                overrides=[
+                    "system.alpha=7.0",
+                    "simulation.ssa.sim_time=1234.0",
+                    "++active_profile=default",
+                ],
+            )
+            resolved = resolve_experiment_config(raw_cfg, "drift", profile_name="default")
+
+        assert float(resolved.system.alpha) == pytest.approx(7.0)
+        assert float(resolved.simulation.ssa.sim_time) == pytest.approx(1234.0)
+        assert resolved.policy.name == "softmax"
+
+    def test_profile_invariants_hold_across_active_profiles(self):
+        config_dir = str(Path("configs").resolve())
+        invariant_paths = {
+            "system.alpha": 1.0,
+            "policy.name": "uas",
+            "policy.d": 2,
+            "verification.stationarity_threshold": 1.0,
+            "verification.jacobian_rel_tol": 0.05,
+            "jax.platform": "auto",
+            "jax.fallback_to_cpu": True,
+            "jax_engine.max_events_safety_multiplier": 1.5,
+            "jax_engine.max_events_additive_buffer": 1000,
+            "jax_engine.scan_sampling_chunk": 16,
+        }
+
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raws = {name: compose(config_name=name) for name in PROFILE_CONFIG_NAMES}
+
+        for path, expected in invariant_paths.items():
+            values = {name: OmegaConf.select(raw, path) for name, raw in raws.items()}
+            assert all(value == expected for value in values.values()), f"{path} diverged: {values}"
+
+    def test_profile_scaled_runtime_budgets_are_monotonic(self):
+        config_dir = str(Path("configs").resolve())
+        ordered_profiles = ["debug", "small", "default", "final_experiment"]
+        monotonic_paths = [
+            "simulation.num_replications",
+            "simulation.ssa.sim_time",
+            "simulation.dga.sim_steps",
+            "train_epochs",
+            "batch_size",
+            "verification.gradient_check_chunk_size",
+            "verification.gradient_check_max_steps",
+            "verification.gradient_check_n_samples",
+        ]
+
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raws = {name: compose(config_name=name) for name in ordered_profiles}
+
+        for path in monotonic_paths:
+            values = [float(OmegaConf.select(raws[name], path)) for name in ordered_profiles]
+            assert values == sorted(values), f"{path} is not monotonic: {values}"
+
+        stress_lengths = [len(OmegaConf.select(raws[name], "stress.n_values")) for name in ordered_profiles]
+        assert stress_lengths == sorted(stress_lengths), f"stress.n_values is not monotonic: {stress_lengths}"
+
+    def test_parameter_freeze_ledger_covers_all_active_parameters(self):
+        config_dir = str(Path("configs").resolve())
+        ledger_path = Path("configs") / "notes" / "parameter_freeze_ledger.csv"
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raws = {name: compose(config_name=name) for name in PROFILE_CONFIG_NAMES}
+
+        all_paths = set()
+        for raw in raws.values():
+            runtime_root = _flatten_dict(runtime_root_dict(raw))
+            all_paths.update(runtime_root.keys())
+
+            raw_flat = OmegaConf.to_container(raw, resolve=True)
+            experiments = raw_flat.get("experiments", {})
+            if isinstance(experiments, dict):
+                all_paths.update(_flatten_dict({"experiments": experiments}).keys())
+
+        with ledger_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            rows = list(reader)
+
+        allowed_classes = {
+            "Invariant",
+            "Profile-Scaled",
+            "Workload-Defining",
+            "Experiment-Specific Override",
+            "Metadata/Output",
+        }
+        ledger_paths = {row["Parameter"] for row in rows}
+        assert all_paths == ledger_paths
+        assert all(row["Classification"] in allowed_classes for row in rows)
+
 class TestPolicyNameEnum:
     def test_all_valid_names(self):
         for policy_name in PolicyName:
@@ -609,4 +755,73 @@ class TestCriticalLoadGuards:
         cfg.stress.critical_load_max_sim_time = 100000.0
 
         with pytest.raises(ValueError, match=r"generalization\.rho_boundary_vals\[1\]=0.999"):
+            validate(cfg)
+
+
+class TestConfigValidationCoverage:
+    def test_rejects_non_positive_root_training_budget(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.train_epochs = 0
+        with pytest.raises(ValueError, match="train_epochs"):
+            validate(cfg)
+
+    def test_rejects_invalid_neural_training_curriculum_shape(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.neural_training.curriculum = [[20, 500, 1]]
+        with pytest.raises(ValueError, match="neural_training.curriculum\\[0\\]"):
+            validate(cfg)
+
+    def test_rejects_non_positive_gradient_check_budget(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.verification.gradient_check_n_test = 0
+        with pytest.raises(ValueError, match="verification.gradient_check_n_test"):
+            validate(cfg)
+
+    def test_rejects_invalid_stress_targets(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.stress.n_values = [4, 0]
+        with pytest.raises(ValueError, match=r"stress\.n_values\[1\]"):
+            validate(cfg)
+
+    def test_rejects_invalid_domain_randomization_phase_horizon(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=2,
+                arrival_rate=1.0,
+                service_rates=[1.0, 1.0],
+                alpha=1.0,
+            ),
+        )
+        cfg.domain_randomization.phases = [
+            type(cfg.domain_randomization.phases[0])(rho_min=0.5, rho_max=0.8, epochs=10, horizon=0)
+        ]
+        with pytest.raises(ValueError, match="horizon"):
             validate(cfg)

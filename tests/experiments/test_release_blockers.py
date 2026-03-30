@@ -6,49 +6,53 @@ import numpy as np
 import pytest
 
 
-def test_check_configs_discovers_experiment_profiles():
+def test_check_configs_discovers_profile_configs_and_public_paths():
     from experiments.testing.check_configs import (
+        EXPERIMENT_BLOCK_NAMES,
         PUBLIC_EXPERIMENT_BASE_CONFIGS,
         _public_experiment_overrides,
-        _base_config_for_experiment,
-        _discover_experiment_profiles,
+        _discover_root_config_names,
     )
+    from gibbsq.core.config import PROFILE_CONFIG_NAMES
     from scripts.execution.experiment_runner import EXPERIMENTS
 
-    profiles = _discover_experiment_profiles()
-    assert profiles == [
-        "neural_eval",
-        "policy_comparison",
-        "stability_sweep",
-        "stats_bench",
-    ]
-    assert _base_config_for_experiment("stability_sweep") == "default"
-    assert _base_config_for_experiment("stability_sweep_small") == "small"
-    assert _base_config_for_experiment("stability_sweep_large") == "large"
-    assert _public_experiment_overrides("stress") == ["++jax.enabled=True"]
-    assert _public_experiment_overrides("policy") == ["+experiment=policy_comparison"]
-    assert _public_experiment_overrides("stats") == ["+experiment=stats_bench"]
+    profiles = _discover_root_config_names()
+    assert profiles == list(PROFILE_CONFIG_NAMES)
+    assert tuple(EXPERIMENT_BLOCK_NAMES) == (
+        "check_configs",
+        "reinforce_check",
+        "drift",
+        "sweep",
+        "stress",
+        "policy",
+        "bc_train",
+        "reinforce_train",
+        "stats",
+        "generalize",
+        "ablation",
+        "critical",
+    )
+    assert _public_experiment_overrides("policy") == ["++active_experiment=policy"]
+    assert _public_experiment_overrides("stats") == ["++active_experiment=stats"]
+    assert _public_experiment_overrides("stress") == ["++active_experiment=stress", "++jax.enabled=True"]
     assert list(PUBLIC_EXPERIMENT_BASE_CONFIGS) == [
         experiment_name for experiment_name in EXPERIMENTS if experiment_name != "check_configs"
     ]
-    assert PUBLIC_EXPERIMENT_BASE_CONFIGS["drift"] == "drift"
-    assert all(
-        PUBLIC_EXPERIMENT_BASE_CONFIGS[name] == "default"
-        for name in PUBLIC_EXPERIMENT_BASE_CONFIGS
-        if name != "drift"
-    )
+    assert all(PUBLIC_EXPERIMENT_BASE_CONFIGS[name] == "default" for name in PUBLIC_EXPERIMENT_BASE_CONFIGS)
 
 
-def test_drift_and_final_configs_now_validate():
+def test_profile_configs_and_resolved_drift_paths_now_validate():
     from hydra import compose, initialize_config_dir
 
-    from gibbsq.core.config import hydra_to_config, validate
+    from gibbsq.core.config import resolve_experiment_config, hydra_to_config, validate, validate_profile_config
 
     config_dir = str(Path("configs").resolve())
     with initialize_config_dir(config_dir=config_dir, version_base=None):
-        for config_name in ("drift", "final_experiment"):
+        for config_name in ("debug", "small", "default", "final_experiment"):
             raw_cfg = compose(config_name=config_name)
-            validate(hydra_to_config(raw_cfg))
+            validate_profile_config(raw_cfg)
+            resolved = resolve_experiment_config(raw_cfg, "drift", profile_name=config_name)
+            validate(hydra_to_config(resolved))
 
 
 def test_drift_verification_accepts_theorem_backed_policy_paths():
@@ -65,7 +69,7 @@ def test_public_configs_require_full_stationarity_for_sweep_certification():
 
     config_dir = str(Path("configs").resolve())
     with initialize_config_dir(config_dir=config_dir, version_base=None):
-        for config_name in ("default", "final_experiment", "fast", "small"):
+        for config_name in ("debug", "small", "default", "final_experiment"):
             raw_cfg = compose(config_name=config_name)
             assert float(raw_cfg.verification.stationarity_threshold) == pytest.approx(1.0)
 
@@ -260,8 +264,7 @@ def test_bc_pretraining_entrypoint_forwards_seed_and_alpha(monkeypatch, tmp_path
 
     seen = {}
 
-    monkeypatch.setattr(module, "hydra_to_config", lambda raw_cfg: cfg)
-    monkeypatch.setattr(module, "validate", lambda cfg: None)
+    monkeypatch.setattr(module, "load_experiment_config", lambda raw_cfg, experiment_name: (cfg, object()))
     monkeypatch.setattr(module, "get_run_config", lambda cfg, name, raw_cfg: (tmp_path, "run-id"))
     monkeypatch.setattr(module, "setup_wandb", lambda *args, **kwargs: None)
     monkeypatch.setattr(
@@ -342,13 +345,13 @@ def test_policy_baselines_remove_alpha_opt_label():
 def test_runner_injects_publication_safe_defaults():
     from scripts.execution.experiment_runner import default_hydra_overrides_for_experiment
 
-    assert default_hydra_overrides_for_experiment("drift", []) == []
-    assert default_hydra_overrides_for_experiment("sweep", []) == ["+experiment=stability_sweep"]
-    assert default_hydra_overrides_for_experiment("policy", []) == ["+experiment=policy_comparison"]
-    assert default_hydra_overrides_for_experiment("stats", []) == ["+experiment=stats_bench"]
-    assert default_hydra_overrides_for_experiment("stress", []) == ["++jax.enabled=True"]
-    assert default_hydra_overrides_for_experiment("stress", ["++jax.enabled=False"]) == []
-    assert default_hydra_overrides_for_experiment("stats", ["+experiment=custom"]) == []
+    assert default_hydra_overrides_for_experiment("drift", []) == ["++active_experiment=drift"]
+    assert default_hydra_overrides_for_experiment("sweep", []) == ["++active_experiment=sweep"]
+    assert default_hydra_overrides_for_experiment("policy", []) == ["++active_experiment=policy"]
+    assert default_hydra_overrides_for_experiment("stats", []) == ["++active_experiment=stats"]
+    assert default_hydra_overrides_for_experiment("stress", []) == ["++active_experiment=stress", "++jax.enabled=True"]
+    assert default_hydra_overrides_for_experiment("stress", ["++jax.enabled=False"]) == ["++active_experiment=stress"]
+    assert default_hydra_overrides_for_experiment("stats", ["++active_experiment=custom"]) == []
 
 
 def test_publication_baselines_follow_active_policy_config():
