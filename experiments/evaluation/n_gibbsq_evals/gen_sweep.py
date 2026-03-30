@@ -9,7 +9,7 @@ public entry points:
   python scripts/execution/experiment_runner.py bc_train --config-name <your-config>
   python scripts/execution/experiment_runner.py reinforce_train --config-name <your-config>
 The model architecture (num_servers, hidden_size) must match the active config.
-The SG#16 check (model.layers[0].weight.shape[1] == num_servers) enforces this.
+The shape check (model.layers[0].weight.shape[1] == num_servers) enforces this.
 
 The "rate-scale" and "load" axes below vary the OPERATING CONDITIONS, not the
 model architecture. The model is never re-trained during the sweep — it is
@@ -19,10 +19,10 @@ Sweeps (2-D grid):
 - Rate-Scale Axis: Uniform scaling of all service rates (config: generalization.scale_vals).
 - Load Axis:       Arrival-rate ρ (config: generalization.rho_grid_vals).
 
-NOTE: N-scaling (varying server count) is NOT implemented in this sweep.
-      The model is evaluated only on the same N it was trained on.
+This sweep does not vary server count.
+The model is evaluated only at the same N used for training.
 
-SG-D FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
+Both sides measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -50,15 +50,10 @@ from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 from gibbsq.utils.progress import create_progress, iter_progress
 
 
-# _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
-
-
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 NEURAL_EVAL_MODE = "deterministic"
 
-
-# _resolve_model_pointer moved to gibbsq.utils.model_io.resolve_model_pointer
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
     """Pure functional bridge."""
@@ -82,42 +77,30 @@ class GeneralizationSweeper:
         """Runs the multi-dimensional sweep."""
         k_load, k_grid = jax.random.split(key)
         
-        # 1. Load trained model
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         model_path = resolve_model_pointer(_PROJECT_ROOT, output_root, allow_bc=False, allow_legacy=False)
-        
-        # SG#8 FIX: Removed stale comment referencing "[100,1,1,1]" training
-        # config (not part of this codebase). The sweep design is:
-        #   base_rates  = cfg.system.service_rates (matches training config)
-        #   Scale axis  = base_rates × generalization.scale_vals
-        #   Load axis   = generalization.rho_grid_vals × total_capacity(scaled)
-        # The model evaluates zero-shot on each (scale, rho) grid cell.
-        
-        scale_vals = list(self.cfg.generalization.scale_vals)  # Multiply base rates
+
+        scale_vals = list(self.cfg.generalization.scale_vals)
         rho_vals = list(self.cfg.generalization.rho_grid_vals)
-        base_rates = jnp.array(self.cfg.system.service_rates, dtype=jnp.float32)  # Same structure as training
+        base_rates = jnp.array(self.cfg.system.service_rates, dtype=jnp.float32)
         
         grid = np.zeros((len(scale_vals), len(rho_vals)))
         
         log.info(f"Initiating Generalization Sweep (Scales={scale_vals}, rho={rho_vals})")
         
-        # Load Neural model matching training dimensions using validated NeuralConfig
         skeleton = NeuralRouter(num_servers=self.cfg.system.num_servers, config=self.cfg.neural, service_rates=self.cfg.system.service_rates, key=k_load)
         model = eqx.tree_deserialise_leaves(model_path, skeleton)
-        
-        # SG#16 Fix: Validate that the loaded model matches the current config
+
         from gibbsq.utils.model_io import validate_neural_model_shape
         try:
             validate_neural_model_shape(model, self.cfg.neural, self.cfg.system.num_servers)
         except ValueError as e:
             raise RuntimeError(f"Model shape mismatch: {e}") from e
         
-        # SG-4 FIX: Replace single-sample DGA calls with replicated SSA.
         _cell_reps   = int(self.cfg.simulation.num_replications)
         _max_s_cell  = int(self.ssa_sim_time / self.ssa_sample_interval) + 1
 
-        # Pre-generate unique keys for each grid cell (stochastic independence)
         total_cells = len(scale_vals) * len(rho_vals)
         cell_keys = jax.random.split(k_grid, total_cells)
         
@@ -129,7 +112,7 @@ class GeneralizationSweeper:
 
         with create_progress(total=total_cells, desc="generalize", unit="cell") as cell_bar:
             for i, scale in enumerate(scale_vals):
-                mu = base_rates * scale  # Scale the rates but keep structure
+                mu = base_rates * scale
                 total_cap = jnp.sum(mu)
                 for j, rho in enumerate(rho_vals):
                     cell_bar.set_postfix(
@@ -212,7 +195,7 @@ class GeneralizationSweeper:
         self._plot_heatmap(grid, scale_vals, rho_vals)
 
     def _plot_heatmap(self, grid, scale_vals, rho_vals):
-        """Generates generalization heatmap using chart-type-aware styling."""
+        """Generates generalization heatmap."""
         from gibbsq.analysis.plotting import plot_improvement_heatmap
 
         plot_path = self.run_dir / "generalization_heatmap"
@@ -237,7 +220,6 @@ class GeneralizationSweeper:
             except Exception:
                 pass
 
-        # Persist metrics locally
         append_metrics_jsonl({
             "grid": grid.tolist(),
             "scale_vals": scale_vals,

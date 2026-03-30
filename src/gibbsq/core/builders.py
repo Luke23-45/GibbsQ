@@ -33,9 +33,8 @@ import numpy as np
 
 from gibbsq.core.registry import ComponentRegistry
 
-# CRITICAL: Import policies module to trigger decorator-based registration.
-# Without this import, the registry remains empty and build_policy_by_name fails.
-# This must be a runtime import, not under TYPE_CHECKING.
+# Imports policy classes so decorator registration runs before registry lookups.
+# Keeping this at runtime avoids an empty registry in build_policy_by_name.
 import gibbsq.core.policies as _policies_module  # noqa: F401
 
 if TYPE_CHECKING:
@@ -45,7 +44,6 @@ if TYPE_CHECKING:
         SystemConfig,
     )
     from gibbsq.core.policies import RoutingPolicy
-
 
 def build_policy(
     policy_cfg: PolicyConfig,
@@ -77,7 +75,6 @@ def build_policy(
         mu=mu,
         d=policy_cfg.d,
     )
-
 
 def build_policy_by_name(
     name: str,
@@ -112,7 +109,6 @@ def build_policy_by_name(
         mu=mu,
         d=d,
     )
-
 
 def select_engine(cfg: ExperimentConfig) -> str:
     """Determine which simulation engine to use.

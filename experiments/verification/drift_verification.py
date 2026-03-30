@@ -48,23 +48,17 @@ def _require_theorem_supported_policy(policy_name: str) -> str:
         ) from exc
 
 
-# Use the dedicated theorem-path drift config by default.
 @hydra.main(version_base=None, config_path="../../configs", config_name="drift")
 def main(raw_cfg: DictConfig) -> None:
-    # 1. Parse and validate
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
 
-    # Initialize Run Capsule (Dynamic Directory + Config Persistence)
     run_dir, run_id = get_run_config(cfg, "drift", raw_cfg)
 
-    # Initialize WandB via centralized utility
     run = setup_wandb(cfg, raw_cfg, default_group="drift_verification", run_id=run_id, run_dir=run_dir)
 
-    # Apply publication theme for paper-ready charts
     apply_theme('publication')
 
-    # Use the isolated Run Directory for all outputs
     out_dir = run_dir
 
     sc = cfg.system
@@ -74,7 +68,6 @@ def main(raw_cfg: DictConfig) -> None:
     alpha = sc.alpha
     drift_mode = _require_theorem_supported_policy(cfg.policy.name)
 
-    # Derived proof constants
     R = drift_constant_R(cfg)
     eps = drift_rate_epsilon(cfg)
     log.info(f"System: N={N}, lam={lam}, alpha={alpha}, cap={sum(mu):.4f}")
@@ -120,7 +113,6 @@ def main(raw_cfg: DictConfig) -> None:
                     "drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))
                 })
 
-            # Persist metrics locally for capsule integrity
             append_metrics_jsonl({
                 "num_servers": int(N),
                 "arrival_rate": float(lam),
@@ -162,7 +154,6 @@ def main(raw_cfg: DictConfig) -> None:
             if run:
                 run.log({"drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))})
 
-            # Persist metrics locally for capsule integrity
             append_metrics_jsonl({
                 "num_servers": int(N),
                 "arrival_rate": float(lam),

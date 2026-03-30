@@ -27,11 +27,6 @@ __all__ = [
     "THEMES",
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-# Colorblind-Safe Palettes
-# ──────────────────────────────────────────────────────────────
-
 # Okabe-Ito colorblind-safe palette (optimized for common color vision deficiencies)
 OKABE_ITO = [
     "#E69F00",  # Orange
@@ -56,11 +51,6 @@ WONG_PALETTE = [
     "#CC79A7",  # Purple
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-# Theme Definitions
-# ──────────────────────────────────────────────────────────────
-
 @dataclass
 class ThemeConfig:
     """Configuration for a matplotlib theme."""
@@ -84,8 +74,6 @@ class ThemeConfig:
     dpi_save: int
     color_palette: List[str]
     
-
-# Dark theme (for presentations/screens)
 DARK_THEME = ThemeConfig(
     name="dark",
     figure_facecolor="#1a1a2e",
@@ -108,8 +96,6 @@ DARK_THEME = ThemeConfig(
     color_palette=OKABE_ITO,
 )
 
-
-# Publication theme (for papers/reports)
 PUBLICATION_THEME = ThemeConfig(
     name="publication",
     figure_facecolor="white",
@@ -139,11 +125,6 @@ THEMES = {
 
 _current_theme: Optional[str] = None
 
-
-# ──────────────────────────────────────────────────────────────
-# Theme Application
-# ──────────────────────────────────────────────────────────────
-
 def apply_theme(theme: str = "publication") -> None:
     """
     Apply a matplotlib theme for all subsequent plots.
@@ -159,10 +140,8 @@ def apply_theme(theme: str = "publication") -> None:
     _current_theme = theme
     config = THEMES[theme]
     
-    # Get available fonts
     installed_fonts = {f.name for f in font_manager.fontManager.ttflist}
     
-    # Build font stack
     if config.font_family == "serif":
         available_fonts = [f for f in config.font_serif if f in installed_fonts]
         font_stack = available_fonts + ["DejaVu Serif", "serif"]
@@ -170,14 +149,11 @@ def apply_theme(theme: str = "publication") -> None:
         available_fonts = [f for f in config.font_serif if f in installed_fonts]
         font_stack = available_fonts + ["DejaVu Sans", "sans-serif"]
     
-    # Apply rcParams
     params = {
-        # Figure settings
         "figure.facecolor": config.figure_facecolor,
         "figure.dpi": config.dpi_figure,
         "figure.figsize": (8, 5),
         
-        # Axes settings
         "axes.facecolor": config.axes_facecolor,
         "axes.edgecolor": config.axes_edgecolor,
         "axes.linewidth": config.linewidth_axes,
@@ -187,47 +163,38 @@ def apply_theme(theme: str = "publication") -> None:
         "axes.titlecolor": config.text_color,
         "axes.grid": True,
         
-        # Grid settings
         "grid.color": config.grid_color,
         "grid.alpha": config.grid_alpha,
         "grid.linestyle": "--",
         "grid.linewidth": config.linewidth_grid,
         
-        # Tick settings
         "xtick.labelsize": config.font_size_tick,
         "ytick.labelsize": config.font_size_tick,
         "xtick.color": config.text_color,
         "ytick.color": config.text_color,
         
-        # Font settings
         "font.family": config.font_family,
         "font.size": config.font_size_tick,
         
-        # Legend settings
         "legend.fontsize": config.font_size_legend,
         "legend.frameon": True if theme == "publication" else False,
         "legend.edgecolor": config.axes_edgecolor,
         "legend.facecolor": config.figure_facecolor,
         
-        # Line settings
         "lines.linewidth": config.linewidth_lines,
         "lines.markersize": 6,
         
-        # Save settings
         "savefig.dpi": config.dpi_save,
         "savefig.bbox": "tight",
         "savefig.pad_inches": 0.1,
         "savefig.facecolor": config.figure_facecolor,
         "savefig.edgecolor": config.figure_facecolor,
         
-        # Text settings
         "text.color": config.text_color,
         
-        # Image settings
         "image.cmap": "viridis",
     }
     
-    # Add font stack only for the matching family
     if config.font_family == "serif":
         params["font.serif"] = font_stack
     else:
@@ -235,9 +202,7 @@ def apply_theme(theme: str = "publication") -> None:
     
     plt.rcParams.update(params)
     
-    # Set color cycle
     plt.rcParams["axes.prop_cycle"] = plt.cycler(color=config.color_palette)
-
 
 def get_publication_params() -> Dict:
     """Get publication theme parameters as dictionary."""
@@ -251,7 +216,6 @@ def get_publication_params() -> Dict:
         "savefig.dpi": config.dpi_save,
     }
 
-
 def get_dark_params() -> Dict:
     """Get dark theme parameters as dictionary."""
     config = DARK_THEME
@@ -264,15 +228,9 @@ def get_dark_params() -> Dict:
         "savefig.dpi": config.dpi_save,
     }
 
-
 def get_current_theme() -> Optional[str]:
     """Get the currently applied theme name."""
     return _current_theme
-
-
-# ──────────────────────────────────────────────────────────────
-# Theme Class for Advanced Usage
-# ──────────────────────────────────────────────────────────────
 
 class PublicationTheme:
     """
@@ -312,11 +270,6 @@ class PublicationTheme:
         """Get a color that contrasts with the background."""
         return self.config.text_color
 
-
-# ──────────────────────────────────────────────────────────────
-# Context Manager for Temporary Theme
-# ──────────────────────────────────────────────────────────────
-
 class temporary_theme:
     """
     Context manager to temporarily apply a theme.
@@ -341,11 +294,6 @@ class temporary_theme:
         if self._original_rcparams is not None:
             plt.rcParams.update(self._original_rcparams)
         return False
-
-
-# ──────────────────────────────────────────────────────────────
-# Chart-Style Integration (bridge to chart_styles module)
-# ──────────────────────────────────────────────────────────────
 
 def get_chart_style_for_theme(chart_type, theme: Optional[str] = None):
     """Get a chart style spec merged with the current theme settings.

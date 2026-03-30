@@ -8,7 +8,7 @@ system:
   alpha: 1.0
 
 simulation:
-  num_replications: 50  # P3: Increased for statistical power
+  num_replications: 50
   seed: 42
   burn_in_fraction: 0.2
   export_trajectories: false
@@ -46,8 +46,8 @@ generalization:
   rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
 
 stability_sweep:
-  alpha_vals: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]  # P1: Extended for heavy-traffic optimization
-  rho_vals: [0.5, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99]  # P2: Added heavy-traffic regime
+  alpha_vals: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]
+  rho_vals: [0.5, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99]
 
 neural_training:
   learning_rate: 3e-3

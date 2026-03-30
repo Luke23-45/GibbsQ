@@ -36,7 +36,6 @@ from typing import Any, Callable, Dict, Type
 
 import numpy as np
 
-
 class ComponentRegistry:
     """Central registry for pluggable GibbsQ components.
 
@@ -50,8 +49,6 @@ class ComponentRegistry:
 
     _policies: Dict[str, Type] = {}
     _engines: Dict[str, Callable] = {}
-
-    # ── Policy Registration ──────────────────────────────────────
 
     @classmethod
     def register_policy(cls, name: str) -> Callable:
@@ -119,8 +116,6 @@ class ComponentRegistry:
 
         policy_cls = cls._policies[name]
 
-        # Dispatch constructor arguments based on policy type.
-        # This replaces the old match/case in make_policy().
         if name == "softmax":
             return policy_cls(alpha)
         elif name == "uniform":
@@ -142,10 +137,7 @@ class ComponentRegistry:
                 raise ValueError("UAS routing requires 'mu'")
             return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
         else:
-            # Generic fallback: try no-arg constructor
             return policy_cls()
-
-    # ── Engine Registration ──────────────────────────────────────
 
     @classmethod
     def register_engine(cls, name: str) -> Callable:
@@ -169,8 +161,6 @@ class ComponentRegistry:
                 f"Registered engines: [{available}]"
             )
         return cls._engines[name]
-
-    # ── Introspection ────────────────────────────────────────────
 
     @classmethod
     def list_policies(cls) -> list[str]:

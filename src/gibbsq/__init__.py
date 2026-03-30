@@ -13,22 +13,15 @@ from gibbsq.utils.exporter import save_trajectory_parquet, append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
 
 __all__ = [
-    # Config
     "ExperimentConfig", "SystemConfig", "SimulationConfig", "PolicyConfig", "DriftConfig",
     "validate", "total_capacity", "load_factor", "drift_constant_R", "drift_rate_epsilon",
     "hydra_to_config",
-    # Policies
     "make_policy", "SoftmaxRouting", "UniformRouting", "ProportionalRouting", "JSQRouting", "PowerOfDRouting", "JSSQRouting", "UASRouting",
-    # Simulator
     "simulate", "run_replications", "SimResult",
     "simulate_jax", "run_replications_jax",
-    # Drift
     "generator_drift", "upper_bound", "simplified_bound", "verify_single",
     "evaluate_grid", "evaluate_trajectory", "lyapunov_V",
-    # Metrics
     "time_averaged_queue_lengths", "gini_coefficient", "stationarity_diagnostic",
-    # Exporter
     "save_trajectory_parquet", "append_metrics_jsonl",
-    # Logging
     "setup_wandb", "get_run_config",
 ]

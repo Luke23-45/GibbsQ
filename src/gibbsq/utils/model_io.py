@@ -30,7 +30,6 @@ DOMAIN_RANDOMIZED_POINTER = "latest_domain_randomized_weights.txt"
 BC_POINTER = "latest_bc_weights.txt"
 LEGACY_POINTER = "latest_weights.txt"
 
-
 def _resolve_from_candidates(project_root: Path, candidates: list[Path]) -> Path | None:
     for ptr in candidates:
         if not ptr.exists():
@@ -46,8 +45,6 @@ def _resolve_from_candidates(project_root: Path, candidates: list[Path]) -> Path
                 )
             return model_path
     return None
-
-# ── Model Pointer Resolution ────────────────────────────────────
 
 def resolve_model_pointer(
     project_root: Path,
@@ -111,7 +108,6 @@ def resolve_model_pointer(
         "the legacy latest_weights.txt pointer."
     )
 
-
 def resolve_model_pointer_or_none(
     project_root: Path,
     output_root: Path,
@@ -121,7 +117,6 @@ def resolve_model_pointer_or_none(
 ) -> Path | None:
     """Resolve model pointer, returning None if not found.
     
-    PATCH H#3: Graceful fallback for missing pointers.
     Allows callers to create fresh models when no trained weights exist.
     
     Parameters
@@ -156,7 +151,6 @@ def resolve_model_pointer_or_none(
     )
     return None
 
-
 def save_model_pointer(
     model_path: Path,
     project_root: Path,
@@ -189,9 +183,6 @@ def save_model_pointer(
     log.info(f"[Pointer] Updated {pointer_name} at {ptr_path}")
     return ptr_path
 
-
-# ── Neural Policy Validation ────────────────────────────────────
-
 def validate_neural_model_shape(model, config, num_servers: int) -> None:
     """Validates that loaded neural model weights match the active configuration.
     
@@ -212,7 +203,6 @@ def validate_neural_model_shape(model, config, num_servers: int) -> None:
     ValueError
         If either the input dimension or hidden size does not match the config.
     """
-    # Input dimension: N queue-derived features + optional N service-rate features + optional rho
     expected_input_dim = num_servers
     if getattr(config, "use_service_rates", True):
         expected_input_dim += num_servers
@@ -221,7 +211,6 @@ def validate_neural_model_shape(model, config, num_servers: int) -> None:
     try:
         actual_input_dim = model.layers[0].weight.shape[1]
     except (AttributeError, IndexError):
-        # Fallback if layer structure doesn't match expectations
         return
         
     if actual_input_dim != expected_input_dim:
@@ -244,9 +233,6 @@ def validate_neural_model_shape(model, config, num_servers: int) -> None:
             f"Model hidden size mismatch: loaded model expects {actual_hidden}, "
             f"but active config expects {expected_hidden}."
         )
-
-
-# ── Neural SSA Policy Bridge ────────────────────────────────────
 
 class NeuralSSAPolicy:
     """Bridges a JAX ``NeuralRouter`` into the NumPy SSA engine.
@@ -292,7 +278,6 @@ class NeuralSSAPolicy:
     def __call__(self, Q, rng):
         return self._get_probs(tuple(Q), self.active_rho)
 
-
 def build_neural_eval_policy(model, mu, rho=None, mode: str = "deterministic"):
     """Create an explicit neural evaluation policy wrapper.
 
@@ -317,7 +302,6 @@ def build_neural_eval_policy(model, mu, rho=None, mode: str = "deterministic"):
         "Expected 'deterministic' or 'stochastic'."
     )
 
-
 class DeterministicNeuralPolicy:
     """Wraps a trained NeuralRouter to provide deterministic (greedy) actions.
 
@@ -332,16 +316,12 @@ class DeterministicNeuralPolicy:
         self._np_params = net.get_numpy_params()
         self._np_config = net.config
         self._num_servers = len(mu)
-        # PATCH P2: Store service_rates for heterogeneity awareness
         self._service_rates = self._mu
         self._rho = float(rho) if rho is not None else 0.0
 
     def __call__(self, Q: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-        # SG#4: Remove external transform; numpy_forward expects raw Q and mu
-        # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
         mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
         return compute_numpy_policy_probs(self._net, Q, mu_val, self._rho, deterministic=True)
-
 
 class StochasticNeuralPolicy:
     """Wraps a trained NeuralRouter for stochastic evaluation.
@@ -355,12 +335,9 @@ class StochasticNeuralPolicy:
         self._mu = np.asarray(mu, dtype=np.float64)
         self._np_params = net.get_numpy_params()
         self._np_config = net.config
-        # PATCH P2: Store service_rates for heterogeneity awareness
         self._service_rates = self._mu
         self._rho = float(rho) if rho is not None else 0.0
 
     def __call__(self, Q: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-        # SG#4: Remove external transform; numpy_forward expects raw Q and mu
-        # Bulletproof alias resolution for both Deterministic and Stochastic wrappers
         mu_val = getattr(self, '_mu', getattr(self, '_service_rates', None))
         return compute_numpy_policy_probs(self._net, Q, mu_val, self._rho, deterministic=False)

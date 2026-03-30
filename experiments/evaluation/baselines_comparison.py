@@ -90,21 +90,10 @@ def _compute_metrics_from_arrays(
     return np.asarray(q_vals), np.asarray(g_vals), np.asarray(w_vals), last_res
 
 
-# DeterministicNeuralPolicy moved to gibbsq.utils.model_io.DeterministicNeuralPolicy
-
-
-# Corrected baseline hierarchy (per professor's spec at suggestions.md:517-539)
 CORRECTED_POLICIES = [
-    # Tier 1: Analytical Optimum (Upper Bound on Performance)
-    # cμ-rule: route to server i = argmax(μ_i · Q_i > 0)
-    # [Known optimal for minimizing expected queue length in heavy traffic]
-    # NOTE: cμ-rule not implemented as policy class - theoretical upper bound
-
-    # Tier 2: Practical Asymptotic Optima
     {"tier": 2, "name": "jsq", "label": "JSQ (Min Queue)", "requires_mu": False},
     {"tier": 2, "name": "jssq", "label": "JSSQ (Min Sojourn)", "requires_mu": True},
 
-    # Tier 3: Empirical sojourn-time softmax baselines
     {"tier": 3, "name": "uas", "label": "UAS (alpha=1.0)", "requires_mu": True, "alpha": 1.0},
     {"tier": 3, "name": "uas", "label": "UAS (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
     {"tier": 3, "name": "uas", "label": "UAS (alpha=5.0)", "requires_mu": True, "alpha": 5.0},
@@ -139,7 +128,6 @@ def evaluate_single_policy(
         progress_desc=f"policy eval ({type(policy).__name__})",
     )
 
-    # Compute metrics
     q_totals = [time_averaged_queue_lengths(r, burn_in).sum()
                 for r in results]
     ginis = [gini_coefficient(time_averaged_queue_lengths(r, burn_in))
@@ -190,7 +178,6 @@ def run_corrected_comparison(
 
         log.info(f"Evaluating Tier {tier}: {label}...")
 
-        # Create policy via Builders (Configuration-as-Code)
         kwargs = {}
         if entry.get("requires_mu", False):
             kwargs["mu"] = mu
@@ -201,7 +188,6 @@ def run_corrected_comparison(
 
         policy = build_policy_by_name(entry["name"], **kwargs)
 
-        # Evaluate
         rng = np.random.default_rng(cfg.simulation.seed)
         metrics = evaluate_single_policy(policy, cfg, rng)
 
@@ -213,7 +199,6 @@ def run_corrected_comparison(
 
         log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
 
-        # Save metrics
         append_metrics_jsonl({
             "policy": label,
             "tier": tier,
@@ -266,7 +251,6 @@ def run_corrected_comparison(
     log.info("  Parity Analysis (Corrected Criteria)")
     log.info("=" * 60)
 
-    # Get reference values for tiered comparison
     # Professor's spec at suggestions.md:547-551:
     # GOLD: N-GibbsQ E[Q] ≤ JSSQ E[Q] (matches asymptotic optimum)
     # SILVER: N-GibbsQ E[Q] ≤ fixed-alpha UAS E[Q] (matches empirical softmax baseline)
@@ -283,7 +267,6 @@ def run_corrected_comparison(
         neural_q = neural_result["mean_q_total"]
         log.info(f"N-GibbsQ (Platinum/Greedy): E[Q] = {neural_q:.4f}")
 
-        # Get reference thresholds
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
         sojourn_q = sojourn_result["mean_q_total"] if sojourn_result else float('inf')
         proportional_q = proportional_result["mean_q_total"] if proportional_result else float('inf')
@@ -294,14 +277,13 @@ def run_corrected_comparison(
         log.info(f"  Proportional (Tier 4): E[Q] = {proportional_q:.4f}")
 
         def has_parity(q_agent, se_agent, q_base, se_base):
-            # SG#4 FIX: Parity applies if the Agent performs better OR is within the statistical Margin of Error
+            # Parity applies if the Agent performs better OR is within the statistical Margin of Error
             # We calculate a Confidence limit (configurable via parity_z_score) for the difference of two means
             margin_of_error = cfg.verification.parity_z_score * np.sqrt(se_agent**2 + se_base**2)
             return q_agent <= (q_base + margin_of_error)
 
         se_neural = neural_result["se_q_total"]
 
-        # Safely fetch base queries and exact Standard Errors
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
         jssq_se = jssq_result["se_q_total"] if jssq_result else 0.0
 
@@ -316,7 +298,6 @@ def run_corrected_comparison(
         log.info(f"  UAS (Tier 3): E[Q] = {sojourn_q:.4f} ± {sojourn_se:.4f}")
         log.info(f"  Proportional (Tier 4): E[Q] = {proportional_q:.4f} ± {proportional_se:.4f}")
 
-        # Strict conditional Parity limits
         if has_parity(neural_q, se_neural, jssq_q, jssq_se):
             parity = "GOLD"
             log.info(f"PARITY RESULT: GOLD [OK] (Statistically matches asymptotic optimum JSSQ)")
@@ -330,12 +311,10 @@ def run_corrected_comparison(
             parity = "FAILED"
             log.info(f"PARITY RESULT: FAILED [FAIL] (Statistically inferior to benchmark baselines)")
 
-        # Store parity result
         neural_result["parity"] = parity
     else:
         raise RuntimeError("N-GibbsQ evaluation is required for policy comparison parity analysis.")
 
-    # Generate comparison plot
     _generate_comparison_plot(results, run_dir)
 
     return results
@@ -345,7 +324,6 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     """Generate comparison bar chart with chart-type-aware styling."""
     from gibbsq.analysis.plotting import plot_tier_comparison_bars
 
-    # Sort by tier and E[Q]
     sorted_results = sorted(results.items(), key=lambda x: (x[1]["tier"], x[1]["mean_q_total"]))
 
     labels = [name for name, _ in sorted_results]
@@ -446,7 +424,6 @@ def run_grid_generalization(
         })
         log.info(f"  Idx: {idx:.1f}% | Neural E[Q]: {q_n:.2f} (JSQ: {q_j:.2f})")
 
-    # Save and Plot
     df = pd.DataFrame(results)
     df.to_csv(run_dir / "platinum_grid_results.csv", index=False)
 
@@ -454,7 +431,7 @@ def run_grid_generalization(
     return results
 
 def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
-    """Generate high-fidelity log-scale and index plots with chart-type-aware styling."""
+    """Generate log-scale curves and performance index plots over rho."""
     from gibbsq.analysis.plotting import plot_platinum_grid
 
     plot_path = output_dir / "platinum_grid_analysis"
@@ -487,9 +464,7 @@ def main(raw_cfg: DictConfig):
 
     # Platinum Step: If we have a neural policy, run the full grid generalization sweep
     if results and "N-GibbsQ (Platinum)" in results:
-        # Check for grid flag in the raw Hydra config
         if raw_cfg.get("grid", False):
-            # We already have mu, cfg, run_dir.
             log.info("\n--- Platinum Trigger: Running Grid Generalization Sweep ---")
 
             N = cfg.system.num_servers

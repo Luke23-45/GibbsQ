@@ -26,14 +26,12 @@ from typing import NamedTuple, Dict
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.reinforce_objective import compute_action_interval_returns_jax
 
-
 def compute_poisson_max_steps(arrival_rate: float, service_rates: np.ndarray, sim_time: float, sigma: float = 6.0) -> int:
     """Pure Python helper to safely calculate JAX unroll bounds without XLA tracer leaks."""
     max_rate = float(arrival_rate) + float(np.sum(service_rates))
     expected_events = max_rate * float(sim_time)
     # 6-sigma captures 99.9999998% of the Poisson tail. +100 is an absolute safety floor.
     return int(math.ceil(expected_events + sigma * math.sqrt(expected_events) + 100))
-
 
 class TrajectoryBatchResult(NamedTuple):
     """Batched results from a vectorized JAX SSA simulation."""
@@ -47,7 +45,6 @@ class TrajectoryBatchResult(NamedTuple):
     arrival_count: jax.Array         # [Batch]
     departure_count: jax.Array       # [Batch]
     is_truncated: jax.Array          # [Batch] - True if simulation was cut off by max_steps
-
 
 @jax.jit
 def compute_causal_returns_jax(
@@ -86,7 +83,6 @@ def compute_causal_returns_jax(
     )
     return jnp.where(is_arrival & valid_mask, returns, 0.0)
 
-
 @eqx.filter_jit
 def collect_trajectory_jax(
     policy_net: NeuralRouter,
@@ -110,46 +106,30 @@ def collect_trajectory_jax(
         
         rng_key, key_tau, key_event = jax.random.split(rng_key, 3)
         
-        # --- 1. Routing Logits via Policy Net ---
-        # Encapsulated call: policy_net now handles (Q+1)/mu internally
-        # We do NOT use vmap here, as policy_net expects 1D input for a single step.
-        # Dynamically compute and pass the domain-randomized rho
-        # to ensure the policy network can adapt across capacity regimes.
-        # Also pass service_rates for heterogeneity-aware features.
         rho_val = arrival_rate / jnp.sum(service_rates)
         logits = policy_net(Q, mu=service_rates, rho=rho_val)
-        
-        # Log-sum-exp for numerical stability
+
         log_probs = jax.nn.log_softmax(logits, axis=-1)
         probs = jnp.exp(log_probs)
-        
-        # --- 2. Propensities ---
+
         arr_rates = arrival_rate * probs
         dep_rates = jnp.where(Q > 0, service_rates, 0.0)
         rates = jnp.concatenate([arr_rates, dep_rates])
         
         a0 = jnp.sum(rates)
-        
-        # --- 3. Stochastic Draw ---
-        # Add epsilon to prevent division-by-zero NaN propagation on valid_event=False states
-        safe_a0 = a0 + 1e-12 
+        safe_a0 = a0 + 1e-12
         tau = jax.random.exponential(key_tau) / safe_a0
         
         event_probs = rates / safe_a0
         event = jax.random.choice(key_event, 2 * num_servers, p=event_probs)
         
-        # --- 4. State Update with Horizon Masking ---
         t_new = t + tau
-        
-        # Step is valid only if system is active, within horizon, and not degenerate
         valid_event = is_active & (t_new < sim_time) & (a0 > 1e-8)
         
         is_arrival = event < num_servers
         action = jnp.where(is_arrival, event, -1)
-        # FIXED: Only access log_probs for arrival events, not departure events
         chosen_log_prob = jnp.where(is_arrival, log_probs[event], 0.0)
         
-        # FIX: Prevent array wrap-around negative indexing during tracing phase
         dep_idx = jnp.maximum(0, event - num_servers)
         
         Q_arr = Q.at[event].add(1)
@@ -172,7 +152,6 @@ def collect_trajectory_jax(
         next_carry = (t_next, Q_next, rng_key, valid_event)
         return next_carry, outputs
 
-    # Unroll the simulation loop statically
     init_Q = jnp.zeros(num_servers, dtype=jnp.int32)
     init_carry = (0.0, init_Q, key, True)
     
@@ -183,7 +162,6 @@ def collect_trajectory_jax(
         length=max_steps
     )
     
-    # Extract historical vectors
     valid_mask = outputs["valid_mask"]
     jump_times = outputs["jump_time"]
     post_states = outputs["post_jump_state"]
@@ -192,13 +170,8 @@ def collect_trajectory_jax(
     actions = outputs["action"]
     log_probs = outputs["log_prob"]
     
-    # --- 5. Interval Integration (Area under Q curve) ---
-    # To match Python np.diff(jump_times, append=sim_time), we compute time deltas.
-    # The interval for step i is [t_i, t_{i+1}], bounded by T at the horizon.
     next_jumps = jnp.pad(jump_times[1:], (0, 1), constant_values=sim_time)
     next_mask = jnp.pad(valid_mask[1:], (0, 1), constant_values=False)
-    
-    # The last valid jump links to sim_time, not the next generated jump
     is_last_valid = valid_mask & ~next_mask
     next_jumps = jnp.where(is_last_valid, sim_time, next_jumps)
     
@@ -208,12 +181,8 @@ def collect_trajectory_jax(
     q_integrals = q_totals * dt
     
     total_integrated_queue = jnp.sum(q_integrals)
-    
-    # Safety Check: If the absolute last step is still valid, we ran out of array 
-    # space before crossing the sim_time horizon (Right-Censoring occurred).
     is_truncated = valid_mask[-1]
     
-    # --- 6. Apply Causal Return Tracking ---
     returns = compute_causal_returns_jax(q_integrals, dt, is_arrival, valid_mask, gamma)
     
     return {
@@ -228,7 +197,6 @@ def collect_trajectory_jax(
         "departure_count": jnp.sum(valid_mask & ~is_arrival),
         "is_truncated": is_truncated,
     }
-
 
 @eqx.filter_jit
 def vmap_collect_trajectories(
@@ -260,8 +228,6 @@ def vmap_collect_trajectories(
             gamma
         )
         
-    # Vectorize ONLY over the keys parameter. 
-    # JAX will automatically broadcast the unmapped variables inside the closure.
     batch_outputs = jax.vmap(single_trajectory)(keys)
     
     return TrajectoryBatchResult(

@@ -28,18 +28,15 @@ __all__ = [
     "gelman_rubin_diagnostic",
 ]
 
-
 def _clamp_start_idx(length: int, start_idx: int) -> int:
     if length <= 0:
         return 0
     return min(max(0, int(start_idx)), length - 1)
 
-
 def _trim_burn_in_index(result: SimResult, start_idx: int) -> np.ndarray:
     """Return the states array with samples before `start_idx` discarded."""
     start_idx = _clamp_start_idx(len(result.states), start_idx)
     return result.states[start_idx:]
-
 
 def _trim_burn_in(result: SimResult, fraction: float) -> np.ndarray:
     """Return the states array with the first `fraction` discarded."""
@@ -47,7 +44,6 @@ def _trim_burn_in(result: SimResult, fraction: float) -> np.ndarray:
         raise ValueError(f"burn_in_fraction must be in [0, 1), got {fraction}")
     start_idx = int(len(result.states) * fraction)
     return _trim_burn_in_index(result, start_idx)
-
 
 def time_averaged_queue_lengths(
     result: SimResult,
@@ -64,7 +60,6 @@ def time_averaged_queue_lengths(
     states = _trim_burn_in(result, burn_in_fraction)
     return states.mean(axis=0, dtype=np.float64)
 
-
 def time_averaged_queue_lengths_from_index(
     result: SimResult,
     start_idx: int = 0,
@@ -72,7 +67,6 @@ def time_averaged_queue_lengths_from_index(
     """Compute E[Q_i] using an exact burn-in sample index."""
     states = _trim_burn_in_index(result, start_idx)
     return states.mean(axis=0, dtype=np.float64)
-
 
 def total_queue_trajectory(result: SimResult) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -84,7 +78,6 @@ def total_queue_trajectory(result: SimResult) -> tuple[np.ndarray, np.ndarray]:
     total_q : ndarray, shape (K,)
     """
     return result.times, result.states.sum(axis=1)
-
 
 def running_average(result: SimResult) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -98,12 +91,9 @@ def running_average(result: SimResult) -> tuple[np.ndarray, np.ndarray]:
     cum_avg : ndarray, shape (K,)
     """
     t, q = total_queue_trajectory(result)
-    # Exclude first sample (t=0)
     times = t[1:]
-    # Cumulative sum of samples / number of samples
     cum_avg = q[1:].cumsum() / np.arange(1, len(q))
     return times, cum_avg
-
 
 def queue_length_stats(
     result: SimResult,
@@ -122,7 +112,6 @@ def queue_length_stats(
         "max":   float(q_tot.max()),
         "p99":   float(np.percentile(q_tot, 99)),
     }
-
 
 def gini_coefficient(values: np.ndarray) -> float:
     """
@@ -146,24 +135,20 @@ def gini_coefficient(values: np.ndarray) -> float:
     idx = np.arange(1, n + 1)
     return (2.0 * np.dot(idx, v)) / (n * s) - (n + 1.0) / n
 
-
 def sojourn_time_estimate(
     result: SimResult,
     arrival_rate: float,
     burn_in_fraction: float = 0.2,
 ) -> float:
     """
-    Estimate expected sojourn time E[W] via Little's Law: E[Q] = λ E[W].
+    Estimate expected sojourn time from Little's law.
 
-    NOTE: The effective arrival rate might differ slightly from the specified
-    `arrival_rate` due to finite simulation time, so we use the *empirical*
-    throughput (departures / time) or the theoretical arrival rate.
-    We use the theoretical arrival rate assuming stationarity.
+    Uses the supplied ``arrival_rate`` directly instead of estimating throughput
+    from simulated departures.
     """
     states = _trim_burn_in(result, burn_in_fraction)
     mean_q_tot = states.sum(axis=1).mean()
     return float(mean_q_tot / arrival_rate)
-
 
 def stationarity_diagnostic(
     result: SimResult,
@@ -194,7 +179,6 @@ def stationarity_diagnostic(
         p_value_threshold=p_value_threshold,
     )
 
-
 def stationarity_diagnostic_from_index(
     result: SimResult,
     start_idx: int = 0,
@@ -210,7 +194,6 @@ def stationarity_diagnostic_from_index(
         p_value_threshold=p_value_threshold,
     )
 
-
 def _stationarity_diagnostic_from_states(
     q_tot: np.ndarray,
     num_windows: int,
@@ -220,16 +203,15 @@ def _stationarity_diagnostic_from_states(
 
     n = len(q_tot)
     if n < num_windows:
-        # Too little data to test reliably
         return {
-            "is_stationary": True,  # Fallback
+            "is_stationary": True,
             "slope": 0.0,
             "p_value": 1.0,
             "warning": "Insufficient samples for stationarity test.",
         }
 
     chunk_size = n // num_windows
-    # Truncate slight remainder - ensure integer type for slicing
+    # Drops the remainder so reshape uses equal-length windows.
     q_tot = q_tot[:int(chunk_size * num_windows)]
     windows = q_tot.reshape((int(num_windows), int(chunk_size)))
     means = windows.mean(axis=1)
@@ -248,24 +230,21 @@ def _stationarity_diagnostic_from_states(
         "means":         means.tolist(),
     }
 
-
 def mser5_truncation(trajectory: np.ndarray, batch_size: int = 5) -> int:
     """
-    Compute the Marginal Standard Error Rule (MSER-5) to optimally detect
-    the end of the warm-up period (initialization bias) in a simulation.
+    Compute the MSER-5 truncation index for a one-dimensional trajectory.
 
     Parameters
     ----------
     trajectory : ndarray, shape (T,)
         A single 1D trajectory of a metric (e.g., total queue length) over time.
     batch_size : int, default=5
-        The size of batches to compute MSER. 5 is the standard heuristic.
+        The size of batches used to compute MSER. 5 is the standard heuristic.
 
     Returns
     -------
     int
-        The optimal truncation point index in the original trajectory space.
-        Discard data before this index to remove initialization bias.
+        Truncation index in the original trajectory.
     """
     y = np.asarray(trajectory, dtype=np.float64).flatten()
     n = len(y)
@@ -274,11 +253,10 @@ def mser5_truncation(trajectory: np.ndarray, batch_size: int = 5) -> int:
     if k < 2:
         return 0
 
-    # Truncate to a multiple of batch_size and compute batch means
     y_trunc = y[:k * batch_size]
     z = y_trunc.reshape((k, batch_size)).mean(axis=1)
 
-    # Limit search to ensure at least 5 batches remain for statistical significance
+    # Restricts the search to d values that leave at least 5 batches.
     max_d = max(1, k - 5)
     mser_values = np.zeros(max_d)
     
@@ -288,16 +266,13 @@ def mser5_truncation(trajectory: np.ndarray, batch_size: int = 5) -> int:
         rem_len = len(z_remain)
         mser_values[d] = (var_remain * (rem_len - 1)) / (rem_len ** 2)
 
-    # Optimal d is the minimum MSER
     d_star = int(np.argmin(mser_values))
     
     return d_star * batch_size
 
-
 def gelman_rubin_diagnostic(trajectories: np.ndarray) -> float:
     """
-    Compute the Gelman-Rubin Potential Scale Reduction Factor (R-hat) across 
-    multiple simulation replications to verify convergence to steady-state.
+    Compute the Gelman-Rubin potential scale reduction factor (R-hat).
 
     Parameters
     ----------
@@ -307,8 +282,7 @@ def gelman_rubin_diagnostic(trajectories: np.ndarray) -> float:
     Returns
     -------
     float
-        The R-hat statistic. Values close to 1.0 (typically < 1.1) indicate 
-        that the chains have converged to the same stationary distribution.
+        The R-hat statistic.
     """
     trajectories = np.asarray(trajectories, dtype=np.float64)
     if trajectories.ndim != 2:
@@ -318,17 +292,9 @@ def gelman_rubin_diagnostic(trajectories: np.ndarray) -> float:
     if M < 2 or N < 2:
         return 1.0  # Cannot compute between-chain variance
 
-    # Mean of each chain: shape (M,)
     chain_means = trajectories.mean(axis=1)
-    
-    # Global mean
     global_mean = chain_means.mean()
-
-    # Between-chain variance (B)
     B = (N / (M - 1.0)) * np.sum((chain_means - global_mean) ** 2)
-
-    # Within-chain variance (W)
-    # Variance within each chain, then averaged across chains
     chain_vars = trajectories.var(axis=1, ddof=1)
     W = chain_vars.mean()
 
@@ -336,9 +302,6 @@ def gelman_rubin_diagnostic(trajectories: np.ndarray) -> float:
     if W == 0.0:
         return 1.0 if B == 0.0 else np.inf
 
-    # Pooled variance estimate
     V_hat = ((N - 1.0) / N) * W + (1.0 / N) * B
-
-    # R-hat
     R_hat = np.sqrt(V_hat / W)
     return float(R_hat)

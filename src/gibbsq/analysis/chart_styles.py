@@ -42,11 +42,6 @@ __all__ = [
     "get_semantic_colors",
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-# Chart Type Enum
-# ──────────────────────────────────────────────────────────────
-
 class ChartType(Enum):
     """Enumeration of distinct chart categories in the project.
 
@@ -85,11 +80,6 @@ class ChartType(Enum):
     """Documentation-only status table (check_configs). No chart
     generated."""
 
-
-# ──────────────────────────────────────────────────────────────
-# Colour Palettes (project-wide constants)
-# ──────────────────────────────────────────────────────────────
-
 # Okabe-Ito colorblind-safe palette (8 colours)
 OKABE_ITO: List[str] = [
     "#E69F00",  # Orange
@@ -114,22 +104,15 @@ ABLATION_CASCADE: List[str] = [
     "#999999",  # Gray – Baseline (worst)
 ]
 
-# Training dashboard sub-palettes
 TRAINING_PRIMARY = "#0072B2"    # Blue – primary metric (reward / PI)
 TRAINING_SECONDARY = "#D55E00"  # Vermillion – secondary (loss)
 TRAINING_CRITIC = "#009E73"     # Green – critic quality
 TRAINING_GRADIENT = "#E69F00"   # Orange – gradient norms
 TRAINING_ENTROPY = "#CC79A7"    # Purple – entropy
 
-# Stress-test panel colours
 STRESS_SCALING_COLOR = "#0072B2"     # Blue
 STRESS_CRITICAL_COLORS = [PAIR_NEURAL, PAIR_GIBBSQ]  # dual lines
 STRESS_HETERO_COLORS: List[str] = list(OKABE_ITO[:4])
-
-
-# ──────────────────────────────────────────────────────────────
-# Style Specification Dataclass
-# ──────────────────────────────────────────────────────────────
 
 @dataclass
 class ChartStyleSpec:
@@ -138,7 +121,6 @@ class ChartStyleSpec:
     Fields that are ``None`` signal "use the global theme default".
     """
 
-    # ── Colormap / palette ──────────────────────────────────
     colormap: Optional[str] = None
     """Matplotlib colormap name for continuous colour encoding.
     Set for heatmaps (``RdBu_r``, ``RdYlGn``) and scatter Z-dim
@@ -151,49 +133,38 @@ class ChartStyleSpec:
     palette: List[str] = field(default_factory=lambda: OKABE_ITO.copy())
     """Qualitative discrete palette for categorical series."""
 
-    # ── Markers & lines ─────────────────────────────────────
     marker_style: str = "o"
     marker_size: float = 6.0
     line_width: float = 1.5
     line_alpha: float = 0.9
 
-    # ── Fill / shading ──────────────────────────────────────
     fill_alpha: float = 0.3
     """Alpha for ``fill_between``, violin interiors, etc."""
 
-    # ── Grid ────────────────────────────────────────────────
     grid_visible: bool = True
     grid_style: str = "--"
     grid_alpha: float = 0.25
 
-    # ── Annotations ─────────────────────────────────────────
     annotation_fontsize: int = 9
     value_format: str = ".2f"
     """Format string for cell/bar annotations (e.g. ``'.2f'``)."""
 
-    # ── Error bars ──────────────────────────────────────────
     error_bar_capsize: float = 4.0
 
-    # ── Layout ──────────────────────────────────────────────
     figsize: Tuple[float, float] = (8, 5)
     subplot_layout: Optional[Tuple[int, int]] = None
     """``(nrows, ncols)`` for multi-panel figures."""
 
-    # ── Seaborn ─────────────────────────────────────────────
     use_seaborn: bool = False
     """Whether this chart type benefits from seaborn functions."""
 
     seaborn_style: Optional[str] = None
     """Seaborn context style ('paper', 'notebook', 'talk', 'poster')."""
 
-
-# ──────────────────────────────────────────────────────────────
 # Registry: ChartType → ChartStyleSpec
-# ──────────────────────────────────────────────────────────────
 
 CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
 
-    # ── Scatter (gradient check, drift vs norm) ─────────────
     ChartType.SCATTER: ChartStyleSpec(
         colormap="viridis",            # continuous Z-score colour dim
         colormap_center=None,          # sequential, no midpoint
@@ -212,7 +183,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         figsize=(7, 6),
     ),
 
-    # ── Diverging heatmap (drift landscape, gen_sweep) ──────
     ChartType.HEATMAP_DIVERGING: ChartStyleSpec(
         colormap="RdBu_r",            # default diverging; gen_sweep overrides to RdYlGn
         colormap_center=0.0,           # default centre; gen_sweep overrides to 1.0
@@ -231,7 +201,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         figsize=(7, 6),
     ),
 
-    # ── Bar comparison (baselines, ablation) ────────────────
     ChartType.BAR_COMPARISON: ChartStyleSpec(
         colormap=None,
         colormap_center=None,
@@ -250,7 +219,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         figsize=(10, 5),
     ),
 
-    # ── Line series (alpha sweep, critical load) ────────────
     ChartType.LINE_SERIES: ChartStyleSpec(
         colormap=None,
         colormap_center=None,
@@ -269,7 +237,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         figsize=(9, 6),
     ),
 
-    # ── Training dashboard (4-panel REINFORCE) ──────────────
     ChartType.TRAINING_DASHBOARD: ChartStyleSpec(
         colormap=None,
         colormap_center=None,
@@ -295,7 +262,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         subplot_layout=(2, 2),
     ),
 
-    # ── Raincloud (stats_bench) ─────────────────────────────
     ChartType.RAINCLOUD: ChartStyleSpec(
         colormap=None,
         colormap_center=None,
@@ -316,7 +282,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         seaborn_style="paper",
     ),
 
-    # ── Stress dashboard (3-panel) ──────────────────────────
     ChartType.STRESS_DASHBOARD: ChartStyleSpec(
         colormap="magma",              # sequential for scaling panel
         colormap_center=None,
@@ -336,7 +301,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         subplot_layout=(1, 3),
     ),
 
-    # ── Status table (no chart) ─────────────────────────────
     ChartType.STATUS_TABLE: ChartStyleSpec(
         colormap=None,
         colormap_center=None,
@@ -355,11 +319,6 @@ CHART_STYLES: Dict[ChartType, ChartStyleSpec] = {
         figsize=(0, 0),
     ),
 }
-
-
-# ──────────────────────────────────────────────────────────────
-# Public API
-# ──────────────────────────────────────────────────────────────
 
 def get_chart_style(
     chart_type: ChartType,
@@ -389,7 +348,6 @@ def get_chart_style(
 
     spec = copy.deepcopy(CHART_STYLES[chart_type])
 
-    # Theme-specific overrides
     if theme == "dark":
         spec.grid_alpha = min(spec.grid_alpha, 0.15)
         spec.annotation_fontsize = max(spec.annotation_fontsize, 9)
@@ -397,7 +355,6 @@ def get_chart_style(
         spec.grid_alpha = max(spec.grid_alpha, 0.20)
 
     return spec
-
 
 def resolve_colormap(
     chart_type: ChartType,
@@ -423,7 +380,6 @@ def resolve_colormap(
         return override
     return CHART_STYLES.get(chart_type, ChartStyleSpec()).colormap
 
-
 def get_semantic_colors(chart_type: ChartType) -> Dict[str, object]:
     """Return a mapping of semantic names → hex colours for a chart type.
 
@@ -440,7 +396,6 @@ def get_semantic_colors(chart_type: ChartType) -> Dict[str, object]:
         "tertiary": palette[2] if len(palette) > 2 else "#999999",
     }
 
-    # Chart-type specific semantic colours
     if chart_type == ChartType.RAINCLOUD:
         base["group_a"] = PAIR_GIBBSQ
         base["group_b"] = PAIR_NEURAL

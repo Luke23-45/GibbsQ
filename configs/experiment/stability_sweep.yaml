@@ -1,6 +1,5 @@
 # @package _global_
 
-# High-fidelity parameters for the stability sweep
 simulation:
   num_replications: 50
   ssa:

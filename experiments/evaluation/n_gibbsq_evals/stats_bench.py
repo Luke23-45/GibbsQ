@@ -1,9 +1,8 @@
 """
 N-GibbsQ Phase VII: Statistical Benchmark
------------------------------------------
-Statistical comparison of N-GibbsQ vs GibbsQ over 30 seeds.
 
-SG-D FIX: Both sides now measured on the true Gillespie SSA (not DGA surrogate).
+Statistical comparison of N-GibbsQ vs GibbsQ over 30 seeds.
+Both sides measured on the true Gillespie SSA (not DGA surrogate).
 """
 
 import jax
@@ -63,7 +62,6 @@ class StatsBenchmark:
         self.temperature = float(cfg.simulation.dga.temperature)
         self.sim_steps = cfg.simulation.dga.sim_steps
         
-        # Pull replicates from simulation config.
         self.num_samples = int(cfg.simulation.num_replications)
 
     def execute(self, key: PRNGKeyArray):
@@ -73,7 +71,6 @@ class StatsBenchmark:
         log.info(f"Initiating statistical comparison (n={self.num_samples} seeds).")
         log.info(f"Environment: N={self.num_servers}, rho={self.arrival_rate / jnp.sum(self.service_rates):.2f}")
         
-        # --- 1. Load Model ---
         _PROJECT_ROOT = Path(__file__).resolve().parents[3]
         output_root = self.run_dir.parent.parent
         
@@ -87,14 +84,12 @@ class StatsBenchmark:
         )
         log.info(f"Loaded trained model from {model_path}")
         
-        # SG#16 Fix: Validate that the loaded model matches the current config
         from gibbsq.utils.model_io import validate_neural_model_shape
         try:
             validate_neural_model_shape(model, self.cfg.neural, self.num_servers)
         except ValueError as e:
             raise RuntimeError(f"Model shape mismatch: {e}") from e
         
-        # --- 2. Benchmark on True Gillespie SSA ---
         _sc  = self.cfg.simulation
         _ssa = _sc.ssa
         _max_samples = int(_ssa.sim_time / _ssa.sample_interval) + 1
@@ -183,17 +178,15 @@ class StatsBenchmark:
         self._analyze(neural_data, gibbs_data)
 
     def _analyze(self, neural_data, gibbs_data):
-        """Perform rigorous scientific analysis."""
-        # Descriptive Statistics
+        """Compute t-test and effect size."""
         n_mean, n_std = np.mean(neural_data), np.std(neural_data, ddof=1)
         g_mean, g_std = np.mean(gibbs_data), np.std(gibbs_data, ddof=1)
         
-        # SG#14 FIX: Use independent-samples t-test.
         # GibbsQ (JAX PRNG) and Neural (NumPy PRNG) use different random backends,
         # so samples from matching replication indices are NOT truly paired.
         t_stat, p_val = stats.ttest_ind(neural_data, gibbs_data)
         
-        # SG#14 FIX: Cohen's d for independent samples uses pooled SD
+        # Cohen's d for independent samples uses pooled SD
         _n1, _n2 = len(neural_data), len(gibbs_data)
         _pooled_var = (
             (_n1 - 1) * np.var(neural_data, ddof=1) + (_n2 - 1) * np.var(gibbs_data, ddof=1)
@@ -201,7 +194,6 @@ class StatsBenchmark:
         _pooled_std = float(np.sqrt(_pooled_var))
         cohen_d = float((np.mean(neural_data) - np.mean(gibbs_data)) / _pooled_std) if _pooled_std > 0 else 0.0
         
-        # 3. Confidence Interval for the difference (independent samples)
         _diff_mean = np.mean(neural_data) - np.mean(gibbs_data)
         _diff_se = _pooled_std * np.sqrt(1.0/_n1 + 1.0/_n2)
         _df = _n1 + _n2 - 2
@@ -221,7 +213,6 @@ class StatsBenchmark:
         log.info(f"{int(self.cfg.verification.confidence_interval*100)}% CI (Diff): [{ci_low:.4f}, {ci_high:.4f}]")
         log.info("=" * 60)
         
-        # Assets
         from gibbsq.analysis.plotting import plot_raincloud
 
         plot_path = self.run_dir / "stats_boxplot"

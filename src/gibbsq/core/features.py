@@ -1,19 +1,15 @@
 """
 State representation functions for queueing systems.
 
-This module provides feature transformations for routing policies,
-with a focus on heterogeneity-aware representations that correctly
-handle systems with non-identical service rates.
+This module provides feature transformations for routing policies in
+systems with non-identical service rates.
 
-The primary export is `look_ahead_potential`, which computes the
-expected look-ahead potential representation that is mathematically correct
-for heterogeneous M/M/N queues.
+The primary export is `look_ahead_potential`.
 """
 
 import numpy as np
 import jax.numpy as jnp
 from jaxtyping import Array, Float
-
 
 def look_ahead_potential(
     Q: Float[Array, "..."],
@@ -31,7 +27,7 @@ def look_ahead_potential(
     This represents the expected time spent waiting (Q_i jobs ahead)
     plus service time (1/μ_i), under FCFS discipline.
     
-    **Why this representation is correct:**
+    **Why this representation is used:**
     
     1. **Scale-invariant**: A server with μ=10 and Q=9 has the same
        look-ahead potential as a server with μ=1 and Q=0. Raw queue lengths
@@ -41,7 +37,7 @@ def look_ahead_potential(
        between servers, eliminating the "Heterogeneity Trap" where
        JSQ routes equally to fast and slow servers.
     
-    3. **Mathematically grounded**: The optimal routing policy for
+    3. **Heavy-traffic motivation**: The routing policy that minimizes expected
        M/M/N heterogeneous queues in heavy traffic minimizes expected
        sojourn time (Halfin-Whitt, 1981; Atar, Mandelbaum & Reiman, 2004).
     
@@ -90,14 +86,9 @@ def look_ahead_potential(
            Scheduling a multi-class queue with many exponential servers.
            Annals of Applied Probability.
     """
-    # Convert to JAX array if needed (works with numpy too via jnp)
     Q_arr = jnp.asarray(Q)
     mu_arr = jnp.asarray(mu)
-    
-    # Compute look-ahead potential: (Q_i + 1) / μ_i
-    # The +1 accounts for the arriving job's own service time
     return (Q_arr + 1.0) / mu_arr
-
 
 def look_ahead_potential_numpy(
     Q: np.ndarray,
@@ -122,7 +113,6 @@ def look_ahead_potential_numpy(
         Look-ahead potential features, same shape as Q.
     """
     return (Q.astype(np.float64) + 1.0) / mu.astype(np.float64)
-
 
 def softmax_on_potential(
     Q: Float[Array, "..."],
@@ -163,14 +153,11 @@ def softmax_on_potential(
     array([0.0024...])  # Probability heavily weighted to server 3
     """
     s = look_ahead_potential(Q, mu)
-    
-    # Log-sum-exp trick for numerical stability
     logits = -alpha * s
-    logits = logits - jnp.max(logits)  # shift for stability
+    logits = logits - jnp.max(logits)
     weights = jnp.exp(logits)
     
     return weights / jnp.sum(weights)
-
 
 def softmax_on_potential_numpy(
     Q: np.ndarray,
@@ -183,14 +170,11 @@ def softmax_on_potential_numpy(
     See `softmax_on_potential` for full documentation.
     """
     s = look_ahead_potential_numpy(Q, mu)
-    
-    # Log-sum-exp trick for numerical stability
     logits = -alpha * s
     logits = logits - np.max(logits)
     weights = np.exp(logits)
     
     return weights / np.sum(weights)
-
 
 def softmax_on_potential_uas(
     Q: Float[Array, "..."],
@@ -230,15 +214,11 @@ def softmax_on_potential_uas(
     array([...])  # Probability weighted by capacity
     """
     s = look_ahead_potential(Q, mu)
-    
-    # Log-sum-exp trick for numerical stability
-    # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
     logits = -alpha * s + jnp.log(mu)
-    logits = logits - jnp.max(logits)  # shift for stability
+    logits = logits - jnp.max(logits)
     weights = jnp.exp(logits)
     
     return weights / jnp.sum(weights)
-
 
 def softmax_on_potential_uas_numpy(
     Q: np.ndarray,
@@ -251,15 +231,11 @@ def softmax_on_potential_uas_numpy(
     See `softmax_on_potential_uas` for full documentation.
     """
     s = look_ahead_potential_numpy(Q, mu)
-    
-    # Log-sum-exp trick for numerical stability
-    # UAS adds log(μ_i) to logits = μ_i * exp(...) in log space
     logits = -alpha * s + np.log(mu)
     logits = logits - np.max(logits)
     weights = np.exp(logits)
     
     return weights / np.sum(weights)
-
 
 def compute_advantage(
     Q: Float[Array, "N"],
@@ -298,14 +274,8 @@ def compute_advantage(
         Advantage estimate for this routing decision.
     """
     s = look_ahead_potential(Q, mu)
-    # Negative because we want to minimize sojourn time
     immediate_cost = -s[server_idx]
     return immediate_cost + value_estimate
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Module exports
-# ─────────────────────────────────────────────────────────────────────────────
 
 __all__ = [
     "look_ahead_potential",

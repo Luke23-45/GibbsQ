@@ -2,7 +2,7 @@
 Self-contained FAST BC + Evaluation comparison for softmax variant experts.
 
 Generates synthetic expert data (random queue states + expert labels) to avoid
-running 9 slow SSA simulations in collect_robust_expert_data.
+running 9 slow SSA simulations in ``collect_robust_expert_data``.
 
 Usage:
     python -m experiments.testing.compare_rl_variants
@@ -20,7 +20,6 @@ from gibbsq.core.features import sojourn_time_features
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
 
-# ── Expert Definitions ──────────────────────────────────────────
 class RawQueueExpert(RoutingPolicy):
     """p_i ∝ exp(-α Q_i)  — Paper formulation."""
     __slots__ = ("_mu", "_alpha")
@@ -52,13 +51,11 @@ class SojournTimeExpert(RoutingPolicy):
         logits -= logits.max()
         w = np.exp(logits); return w / w.sum()
 
-# ── Fast Synthetic BC Training ──────────────────────────────────
 def fast_bc_train(expert_cls, mu, num_servers, key, num_steps=200):
     """Train a neural policy via BC using SYNTHETIC expert data (no SSA)."""
     rng = np.random.default_rng(42)
     expert = expert_cls(mu, alpha=1.0)
 
-    # Generate synthetic training data: random queue states + expert labels
     n_samples = 2000
     states, rhos, probs, mus_arr = [], [], [], []
     for _ in range(n_samples):
@@ -78,7 +75,6 @@ def fast_bc_train(expert_cls, mu, num_servers, key, num_steps=200):
     Y = jnp.array(probs, dtype=jnp.float32)
     MU = jnp.array(mus_arr, dtype=jnp.float32)
 
-    # Build neural policy
     neu_cfg = NeuralConfig(hidden_size=64, preprocessing="log1p", use_rho=False)
     key, actor_key = jax.random.split(key)
     policy_net = NeuralRouter(
@@ -86,7 +82,6 @@ def fast_bc_train(expert_cls, mu, num_servers, key, num_steps=200):
         service_rates=jnp.array(mu), key=actor_key,
     )
 
-    # Train BC
     optimizer = optax.adamw(3e-3, weight_decay=1e-4)
     opt_state = optimizer.init(eqx.filter(policy_net, eqx.is_array))
 
@@ -115,7 +110,6 @@ def fast_bc_train(expert_cls, mu, num_servers, key, num_steps=200):
     log.info(f"    BC completed in {time.time()-t0:.1f}s")
     return policy_net
 
-# ── Neural Policy Wrapper (Pure NumPy — no JAX per event) ───────
 class NeuralPolicyWrapper:
     """Pure NumPy forward pass using extracted weights. No JAX overhead per event."""
     def __init__(self, net, mu):
@@ -129,7 +123,6 @@ class NeuralPolicyWrapper:
         Q = np.asarray(Q, dtype=np.float64)
         # Apply sojourn-time features to match training (line 95 uses sojourn_time_features)
         sojourn = (Q + 1.0) / self.mu
-        # Preprocessing
         if self.preprocessing == "log1p":
             x = np.log1p(sojourn)
         elif self.preprocessing == "linear_min_max":
@@ -140,20 +133,17 @@ class NeuralPolicyWrapper:
         mu_sum = np.sum(self.service_rates)
         mu_norm = self.service_rates / max(mu_sum, 1.0)
         x = np.concatenate([x, mu_norm])
-        # Forward pass through layers
         for i, (w, b) in enumerate(self.params):
             x = x @ w.T  # Linear: weight shape is (out, in)
             if b is not None:
                 x = x + b
             if i < len(self.params) - 1:  # ReLU on all but last
                 x = np.maximum(x, 0.0)
-        # Softmax → probabilities
         x = x - x.max()
         probs = np.exp(x)
         probs /= probs.sum()
         return probs
 
-# ── Evaluation ──────────────────────────────────────────────────
 def eval_policy(name, policy, mu, num_servers, sim_time=500.0, n_reps=3):
     """Evaluate a policy via short SSA runs."""
     rng = np.random.default_rng(123)
@@ -173,7 +163,6 @@ def eval_policy(name, policy, mu, num_servers, sim_time=500.0, n_reps=3):
     log.info(f"  {name:35s} → E[Q] = {mean_q:.2f} ± {std_q:.2f}")
     return mean_q
 
-# ── Main ────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log.info("=" * 60)
     log.info("  SOFTMAX VARIANT COMPARISON (FAST)")
@@ -183,12 +172,10 @@ if __name__ == "__main__":
     mu = np.array([1.0, 2.0, 4.0, 8.0, 16.0])
     key = jax.random.PRNGKey(42)
 
-    # 1. Analytical baselines (no NN)
     log.info("\n--- Analytical Expert Baselines ---")
     q_raw_an = eval_policy("Raw Queue Expert", RawQueueExpert(mu), mu, N)
     q_soj_an = eval_policy("Sojourn Time Expert", SojournTimeExpert(mu), mu, N)
 
-    # 2. Neural BC pipelines
     log.info("\n--- Neural BC Pipelines ---")
     log.info("  Training BC from Raw Queue Expert...")
     k1, k2, key = jax.random.split(key, 3)
@@ -200,7 +187,6 @@ if __name__ == "__main__":
     q_raw_nn = eval_policy("Neural (BC from Raw Queue)", NeuralPolicyWrapper(raw_net, mu), mu, N)
     q_soj_nn = eval_policy("Neural (BC from Sojourn Time)", NeuralPolicyWrapper(soj_net, mu), mu, N)
 
-    # 3. Summary
     log.info(f"\n{'='*60}")
     log.info(f"  FINAL SUMMARY")
     log.info(f"{'='*60}")

@@ -1,5 +1,5 @@
 # @package _global_
 
-# Stats bench overlay — 30 replications for statistical power
+# Stats bench overlay — 30 replications
 simulation:
   num_replications: 30

@@ -48,9 +48,6 @@ from gibbsq.utils.progress import create_progress, iter_progress
 log = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Trajectory Collection Result
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TrajectoryResult(NamedTuple):
     """Result from a single SSA trajectory with routing decisions."""
@@ -60,11 +57,9 @@ class TrajectoryResult(NamedTuple):
     total_integrated_queue: float  # Integrated queue length over time (True Reward)
     arrival_count: int
     departure_count: int
-    # New fields for causal returns-to-go computation
     jump_times: list[float]  # Time of each SSA event
     action_step_indices: list[int]  # Indices where routing decisions were made
     all_states: list[np.ndarray]  # All states (not just at decision points)
-    # PATCH-DR: Store sampled rho for domain randomization
     rho: float = 0.4  # Load factor used during trajectory collection
 
 
@@ -73,7 +68,7 @@ def compute_causal_returns_to_go(
     jump_times: list[float],
     action_step_indices: list[int],
     sim_time: float,
-    gamma: float = 0.99  # CRITICAL UPDATE: Stationary Discounting
+    gamma: float = 0.99
 ) -> np.ndarray:
     """Computes Discounted Causal Returns, stripping non-stationary time dependence."""
     return compute_action_interval_returns_from_trajectory_numpy(
@@ -105,7 +100,7 @@ def compute_gae(
     """
     Compute Generalized Advantage Estimation (GAE) for CTMC trajectories.
 
-    PATCH-P1: Implements Schulman et al. (2015) GAE for continuous-time queueing.
+    Implements Schulman et al. (2015) GAE for continuous-time queueing.
 
     GAE balances bias-variance tradeoff in advantage estimation:
     - λ=0: Low variance, high bias (TD(0))
@@ -242,19 +237,11 @@ def compute_performance_index(
     cfg: ExperimentConfig
 ) -> float:
     """Computes Performance Index where 0% = Random and 100% = JSQ."""
-    # Use the same robust denominator as the original training loop
     fixed_random = max(jsq_limit * 1.01, random_limit, random_empirical)
     denom = max(cfg.neural_training.perf_index_min_denom, jsq_limit * cfg.neural_training.perf_index_jsq_margin, fixed_random - jsq_limit)
     perf_index = 100.0 * (fixed_random - mean_queue) / denom
     return perf_index
 
-
-# ValueNetwork moved to gibbsq.core.neural_policies
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SSA Trajectory Collection with Routing Decisions
-# ─────────────────────────────────────────────────────────────────────────────
 
 def collect_trajectory_ssa(
     policy_net: NeuralRouter,
@@ -264,8 +251,8 @@ def collect_trajectory_ssa(
     sim_time: float,
     rng: np.random.Generator,
     use_jsq: bool = False,
-    rho: float | None = None,  # PI-V4: Optional load factor for neural policy
-    deterministic: bool = False, # PI-V5: Support for deterministic evaluation
+    rho: float | None = None,
+    deterministic: bool = False,
 ) -> TrajectoryResult:
     """
     Run one Gillespie SSA trajectory, recording routing decisions and queue evolution.
@@ -297,11 +284,9 @@ def collect_trajectory_ssa(
     lam = float(arrival_rate)
     mu = np.asarray(service_rates, dtype=np.float64)
 
-    # State
     Q = np.zeros(N, dtype=np.int64)
     t = 0.0
 
-    # Recording
     log_probs = []
     states = []  # States at decision points (arrivals)
     actions = []
@@ -309,17 +294,14 @@ def collect_trajectory_ssa(
     arrival_count = 0
     departure_count = 0
 
-    # New: Track all states and jump times for causal returns
     jump_times = []  # Time of each SSA event
     action_step_indices = []  # Indices where routing decisions were made
     all_states = []  # All states (not just at decision points)
     step_counter = 0  # Global step counter for indexing
 
-    # Pre-allocated work arrays
     rates = np.empty(2 * N, dtype=np.float64)
     jsq_policy = JSQRouting() if use_jsq else None
 
-    # Main event loop
     while t < sim_time:
         if use_jsq:
             # Reuse the shared JSQ implementation so tie handling matches the rest
@@ -328,54 +310,42 @@ def collect_trajectory_ssa(
         else:
             probs = compute_numpy_policy_probs(policy_net, Q, mu, rho, deterministic=deterministic)
 
-        # 2. Build event-rate vector
         # [arrival_to_0, ..., arrival_to_{N-1}, departure_from_0, ..., departure_from_{N-1}]
         rates[:N] = lam * probs
         rates[N:] = mu * (Q > 0).astype(np.float64)
 
-        # 3. Total propensity
         a0 = rates.sum()
         if a0 <= constants.RATE_GUARD_EPSILON:
             break  # Degenerate—no events possible
 
-        # 4. Draw holding time ~ Exp(a0)
         tau = rng.exponential(1.0 / a0)
         t += tau
         if t >= sim_time:
             break
 
-        # 5. Select event via inverse CDF
         u = rng.uniform(0.0, a0)
         cumrates = np.cumsum(rates)
         event = int(np.searchsorted(cumrates, u, side='right'))
         event = min(event, 2 * N - 1)  # Safety clamp
 
-        # 6. Apply transition
         if event < N:
-            # Arrival: record state BEFORE decision
             states.append(Q.copy())
             actions.append(int(event))
 
-            # Record log probability of routing decision
             log_probs.append(float(np.log(probs[event] + constants.NUMERICAL_STABILITY_EPSILON)))
             Q[event] += 1
             arrival_count += 1
 
-            # Track this as a routing decision point
             action_step_indices.append(step_counter)
         else:
-            # Departure
             srv = event - N
             Q[srv] -= 1
             departure_count += 1
 
-        # Record state and time for causal returns computation
         jump_times.append(t)
         all_states.append(Q.copy())
         step_counter += 1
 
-    # Compute reward: total integrated queue (Patch 1: area under the curve)
-    # We use jump_times and all_states to get the true area from t1 to T
     if jump_times:
         jump_times_arr = np.array(jump_times)
         dt = np.diff(jump_times_arr, append=sim_time)
@@ -384,7 +354,6 @@ def collect_trajectory_ssa(
     else:
         integrated_queue = 0.0
 
-    # PATCH-DR: Use provided rho or compute from arrival_rate
     effective_rho = rho if rho is not None else (lam / np.sum(mu))
 
     return TrajectoryResult(
@@ -397,20 +366,14 @@ def collect_trajectory_ssa(
         jump_times=jump_times,
         action_step_indices=action_step_indices,
         all_states=all_states,
-        rho=effective_rho,  # PATCH-DR: Store sampled rho
+        rho=effective_rho,  # Store sampled rho
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# REINFORCE Gradient Computation
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Training Loop
-# ─────────────────────────────────────────────────────────────────────────────
 
 class ReinforceTrainer:
     """
@@ -436,15 +399,13 @@ class ReinforceTrainer:
         self.service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
         self.service_rates_jax = jnp.array(self.service_rates)
 
-        # Hyperparameters are read directly from cfg in execute()
-        self.batch_size = cfg.batch_size  # PI-V4.1: Support config override
+        self.batch_size = cfg.batch_size
         self.sim_time = cfg.simulation.ssa.sim_time
 
     def bootstrap_from_expert(self, policy_net, value_net, key, jsq_limit, random_limit, denom):
-        """Pretrain the neural network using centralized Ultra-Robust BC logic."""
+        """Pretrain the neural network using centralized BC logic."""
         from gibbsq.core.pretraining import train_robust_bc_policy, train_robust_bc_value
 
-        # 1. Train Policy (Behavior Cloning)
         policy_net = train_robust_bc_policy(
             policy_net=policy_net,
             service_rates=self.service_rates,
@@ -457,7 +418,6 @@ class ReinforceTrainer:
             label_smoothing=self.cfg.neural_training.bc_label_smoothing
         )
 
-        # 2. Train Value (Critic Warming)
         # Initializes the baseline to expert performance level to prevent early gradient noise
         value_net, _ = train_robust_bc_value(
             value_net=value_net,
@@ -475,13 +435,11 @@ class ReinforceTrainer:
             squash_threshold=self.cfg.neural_training.squash_threshold
         )
 
-        log.info(f"--- Bootstrapping Complete (Actor-Critic Warmed) ---")
         return policy_net, value_net
 
     def execute(self, key: PRNGKeyArray, n_epochs: int = 100):
         """Execute the REINFORCE training loop."""
 
-        # Initialize networks
         key, actor_key, critic_key = jax.random.split(key, 3)
 
         policy_net = NeuralRouter(
@@ -490,7 +448,6 @@ class ReinforceTrainer:
             service_rates=self.service_rates,
             key=actor_key,
         )
-        # SHAKE WEIGHTS to break zero-init symmetry
         shake_key = jax.random.PRNGKey(self.cfg.simulation.seed + 99999)
         params, static = eqx.partition(policy_net, eqx.is_array)
         flat_params, unravel = jax.flatten_util.ravel_pytree(params)
@@ -507,7 +464,6 @@ class ReinforceTrainer:
             key=critic_key,
         )
 
-        # PI-V4.3: Refined Global Norm Clipping
         policy_opt = optax.chain(
             optax.clip_by_global_norm(self.cfg.neural.clip_global_norm),
             optax.adamw(learning_rate=self.cfg.neural.actor_lr, weight_decay=self.cfg.neural.weight_decay)
@@ -520,11 +476,6 @@ class ReinforceTrainer:
         policy_state = policy_opt.init(eqx.filter(policy_net, eqx.is_array))
         value_state = value_opt.init(eqx.filter(value_net, eqx.is_array))
 
-        # PATCH H#1: Compute JSQ baseline BEFORE bootstrapping
-        # This ensures the policy is still random (zero-initialized) for any
-        # empirical random baseline measurement.
-        # PATCH H#5: Use analytical random baseline (more reliable than empirical)
-        log.info("Computing JSQ baseline (before bootstrapping)...")
         jsq_queues = []
         with create_progress(total=3, desc="reinforce: setup", unit="stage", leave=False) as setup_bar:
             for _ in iter_progress(
@@ -549,9 +500,8 @@ class ReinforceTrainer:
 
             jsq_limit = np.mean(jsq_queues)
 
-            # PATCH H#5: Use analytical random baseline (asymmetric M/M/1 sum)
+            # Mean queue under uniform random routing when lambda / N < mu_i.
             # E[Q_random] = sum_i (lambda / N) / (mu_i - lambda / N)
-            # This is mathematically proven and avoids bootstrap ordering issues
             q_rand_analytical = 0.0
             is_unstable = False
             lam_i = self.cfg.system.arrival_rate / self.num_servers
@@ -566,23 +516,20 @@ class ReinforceTrainer:
             else:
                 analytical_random_limit = q_rand_analytical
 
-            # Use analytical as the primary random baseline (H#5)
             random_limit = analytical_random_limit
             random_queue = analytical_random_limit  # For consistency with logging
 
             log.info(f"  JSQ Mean Queue (Target): {jsq_limit:.4f}")
             log.info(f"  Random Mean Queue (Analytical): {analytical_random_limit:.4f}")
 
-            # Compute denom for SOTA Critic Pretraining
             fixed_random = max(jsq_limit * 1.01, random_limit, random_queue)
             denom = max(self.cfg.neural_training.perf_index_min_denom, jsq_limit * self.cfg.neural_training.perf_index_jsq_margin, fixed_random - jsq_limit)
 
-            # Bootstrapping (Phase 0) - NOW happens AFTER baseline computation
+            # Uses pre-bootstrap baselines when computing the initial denominator.
             key, bootstrap_key = jax.random.split(key)
             policy_net, value_net = self.bootstrap_from_expert(policy_net, value_net, bootstrap_key, jsq_limit, random_limit, denom)
             setup_bar.update(1)
 
-            # Re-initialize states after bootstrapping
             policy_state = policy_opt.init(eqx.filter(policy_net, eqx.is_array))
             value_state = value_opt.init(eqx.filter(value_net, eqx.is_array))
 
@@ -597,13 +544,12 @@ class ReinforceTrainer:
         history_loss = []
         history_reward = []
 
-        # Periodic Checkpointing helper
         def save_checkpoint(epoch_idx):
             ckpt_path = self.run_dir / f"policy_net_epoch_{epoch_idx:03d}.eqx"
             eqx.tree_serialise_leaves(ckpt_path, policy_net)
             log.info(f"  [Checkpoint] Saved epoch {epoch_idx} model to {ckpt_path.name}")
 
-            # SG#11: Update pointer in real-time for comparison scripts via model_io
+            # Update pointer in real-time for comparison scripts via model_io
             if getattr(self, "save_global_pointer", True):
                 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
                 pointer_dir = self.run_dir.parent.parent
@@ -614,20 +560,17 @@ class ReinforceTrainer:
                     pointer_name="latest_reinforce_weights.txt"
                 )
 
-        # PI-V4.3: Exponential Moving Averages for stable diagnostics
         ema_base_idx = 0.0
         ema_corr = 0.0
         ema_ev = 0.0
         alpha = 0.33  # ~Window 5
 
-        # ZERO-TOLERANCE PATCH: Learning Rate Schedule for Actor stability
         base_actor_lr = self.cfg.neural.actor_lr
 
-        # PATCH H#2: Track training state for recovery
         training_complete = False
         last_successful_epoch = -1
 
-        # SG-3 FIX: Create optimizer ONCE to preserve Adam momentum/variance.
+        # Create optimizer ONCE to preserve Adam momentum/variance.
         # Use inject_hyperparams so we can update LR each epoch without resetting state.
         policy_opt = optax.chain(
             optax.clip_by_global_norm(self.cfg.neural.clip_global_norm),
@@ -644,15 +587,10 @@ class ReinforceTrainer:
                     # Apply Adaptive Linear Decay to Actor LR (prevents unlearning)
                     epoch_actor_lr = base_actor_lr * (1.0 - (epoch / n_epochs) * self.cfg.neural.lr_decay_rate)
 
-                    # SG-3 FIX: Update LR in-place via inject_hyperparams state.
-                    # policy_state is (clip_state, adamw_inject_state). The second
-                    # element exposes .hyperparams["learning_rate"].
                     policy_state[1].hyperparams["learning_rate"] = jnp.asarray(
                         epoch_actor_lr, dtype=jnp.float32
                     )
 
-                    # PATCH-P4: Entropy Annealing - decay from initial to final
-                    # Early exploration (high entropy) -> Late exploitation (low entropy)
                     entropy_anneal_epochs = n_epochs  # Decay over full training
                     entropy_final = self.cfg.neural.entropy_final
                     entropy_initial = self.cfg.neural.entropy_bonus
@@ -661,16 +599,12 @@ class ReinforceTrainer:
                         current_entropy_coef = entropy_initial * (1.0 - progress) + entropy_final * progress
                     else:
                         current_entropy_coef = entropy_final
-                    # Save checkpoint
                     if epoch > 0 and epoch % self.cfg.neural_training.checkpoint_freq == 0:
                         save_checkpoint(epoch)
 
-                    # Collect batch of trajectories
                     trajectories = []
                     epoch_rewards = []
 
-                    # PATCH-P2: Domain Randomization - sample rho from curriculum
-                    # This prevents overfitting to a single load factor
                     dr_cfg = getattr(self.cfg, 'domain_randomization', None)
                     if dr_cfg and getattr(dr_cfg, 'enabled', False):
                         if hasattr(dr_cfg, 'phases') and len(dr_cfg.phases) > 0:
@@ -717,14 +651,11 @@ class ReinforceTrainer:
                         trajectories.append(traj)
                         epoch_rewards.append(traj.total_integrated_queue)
 
-                    # Base-regime diagnostic only: this index uses the fixed config
-                    # baseline and is not a mixed-rho training reward.
                     mean_queue = np.mean(epoch_rewards) / self.sim_time
                     base_regime_index = compute_performance_index(
                         mean_queue, jsq_limit, random_limit, random_queue, self.cfg
                     )
 
-                    # Robust denominator for G_idx advantage signal
                     fixed_random = max(jsq_limit * 1.01, random_limit, random_queue)
                     denom = max(self.cfg.neural_training.perf_index_min_denom, jsq_limit * self.cfg.neural_training.perf_index_jsq_margin, fixed_random - jsq_limit)
 
@@ -733,7 +664,6 @@ class ReinforceTrainer:
                     use_gae = gae_lambda > 0.0 and gae_lambda < 1.0
 
                     for traj in trajectories:
-                        # Always evaluate raw returns (Performance Index base)
                         G_raw = compute_causal_returns_to_go(
                             traj.all_states, traj.jump_times, traj.action_step_indices,
                             sim_time=self.sim_time,
@@ -741,7 +671,6 @@ class ReinforceTrainer:
                         )
 
                         if use_gae:
-                            # SOTA PATCH: Use Dense Native Centered GAE extraction
                             gae_adv, gae_ret = compute_gae(
                                 traj.all_states, traj.jump_times, traj.action_step_indices,
                                 sim_time=self.sim_time,
@@ -761,21 +690,18 @@ class ReinforceTrainer:
                         else:
                             all_advantages.append((G_raw, None, None))
 
-                    # 1. O(1) FLATTENING AND SHAPE CONTROL
                     batch_S = []
                     batch_A = []
                     batch_G = []
-                    batch_G_raw = []  # PATCH: Track raw returns for GAE Critic Target
+                    batch_G_raw = []  # Track raw returns for GAE Critic Target
                     batch_gae_adv = []
                     batch_rho = []
                     batch_traj_indices = []
 
-                    batch_Ret = []  # Added for SOTA tracking
+                    batch_Ret = []
                     for i, traj in enumerate(trajectories):
                         G_raw, gae_adv, gae_ret = all_advantages[i]
                         if len(G_raw) > 0:
-                            # 3. PI-V3: Time-Normalized Advantage Calculation
-                            # Normalize integral returns by exact remaining simulation time (T-t_k)
                             t_actions = np.array([traj.jump_times[idx] for idx in traj.action_step_indices])
                             t_rem = np.maximum(1e-3, self.sim_time - t_actions)
 
@@ -789,15 +715,12 @@ class ReinforceTrainer:
                                 batch_gae_adv.extend(np.atleast_1d(gae_adv).tolist())
                                 batch_Ret.extend(np.atleast_1d(gae_ret).tolist())
 
-                            # PATCH-DR: Use trajectory's sampled rho (not fixed config)
                             batch_rho.extend([traj.rho] * int(np.array(G_idx).size))
                             batch_traj_indices.extend([i] * int(np.array(G_idx).size))
 
-                    # SG#1 FIX: Initialize losses before conditional to prevent UnboundLocalError
-                    # when batch_G is empty (all trajectories have no actions)
                     policy_loss = 0.0
                     value_loss = 0.0
-                    avg_entropy = 0.0  # Bug #2 fix: Initialize to prevent UnboundLocalError
+                    avg_entropy = 0.0
                     policy_aux = {"entropy": 0.0, "mean_logp": 0.0, "mean_adv": 0.0}
 
                     if len(batch_G) > 0:
@@ -808,13 +731,8 @@ class ReinforceTrainer:
                         rho_tensor = jnp.asarray(batch_rho, dtype=jnp.float32)
                         idx_tensor = jnp.asarray(batch_traj_indices, dtype=jnp.int32)
 
-                        # Target Tanh-Squashing: Prevent exploding V-loss from extreme episodes
-                        # SG#4 FIX: Remove tanh squashing for training targets
-                        # Previously: G_scaled = self.cfg.neural_training.squash_scale * jnp.tanh(G_tensor / self.cfg.neural_training.squash_threshold)
                         G_scaled = G_tensor
 
-                        # Precompute Critic Baselines detachably (Rho-Aware)
-                        # Use Raw Q. broadcast mu using in_axes=(0, None, None)
                         v_preds = jax.lax.stop_gradient(
                             jax.vmap(value_net, in_axes=(0, None, 0))(
                                 S_tensor, self.service_rates_jax, rho_tensor
@@ -822,40 +740,29 @@ class ReinforceTrainer:
                         )
 
                         if use_gae:
-                            # SOTA PATCH: GAE directly provides the centered advantage and returns
                             raw_adv = jnp.asarray(batch_gae_adv, dtype=jnp.float32)
-                            # SOTA PATCH: Critic target must perfectly match un-squashed actual continuous-time native returns
                             Ret_tensor = jnp.asarray(batch_Ret, dtype=jnp.float32)
                             critic_target = Ret_tensor
                         else:
-                            # Fallback for episodic training (Not used in SOTA)
                             raw_adv = G_scaled - v_preds
                             critic_target = G_scaled
 
-                        # PI-V5: PROJECT ALIGNMENT - EXPLICIT ADVANTAGE NORMALIZATION
                         def advantage_norm_fn(advs):
-                            # Global normalization across the batch for variance reduction
                             return (advs - jnp.mean(advs)) / (jnp.std(advs) + 1e-8)
 
                         norm_adv = advantage_norm_fn(raw_adv)
 
-                        # Acting (PI-V4.1: Include Entropy Bonus)
                         def policy_loss_fn(model, Q_feat, mu_feat, rho_feat, actions, advs, traj_indices, ent_coef):
-                            # Use Raw Q + mu. broadcast mu across batch of Qs
                             logits = jax.vmap(model, in_axes=(0, None, 0))(Q_feat, mu_feat, rho_feat)
 
                             log_probs = jax.nn.log_softmax(logits, axis=-1)
                             chosen_log_probs = log_probs[jnp.arange(len(actions)), actions]
 
-                            # Policy Gradient term
-                            # Use the exact sampled policy distribution from collect_trajectory_ssa.
                             action_signals = chosen_log_probs * advs
 
-                            # Entropy term (PI-V4.1: Numerically stable formulation)
                             probs = jax.nn.softmax(logits, axis=-1)
                             entropy = -jnp.sum(probs * log_probs, axis=-1)
 
-                            # Trajectory-Averaged Loss (Equal weight to each sampled load factor)
                             num_trajs = self.batch_size
                             traj_sums = jax.ops.segment_sum(action_signals, traj_indices, num_segments=num_trajs)
                             traj_counts = jax.ops.segment_sum(
@@ -869,20 +776,15 @@ class ReinforceTrainer:
                                 entropy, traj_indices, num_segments=num_trajs
                             ) / jnp.maximum(1.0, traj_counts)
 
-                            # Maximize (Utility + ent_coef * Entropy) -> Minimize -(Utility) - ent_coef * Entropy
-                            # PATCH: Correct entropy bonus formulation
                             total_loss = -jnp.mean(traj_means) - ent_coef * jnp.mean(traj_entropy)
 
-                            # PI-V4.3: Corrected Correlation Metric [Corr(-logp, adv)]
                             def corr_fn(logp, advantages):
                                 neg_logp = -logp.flatten()
                                 adv_flat = advantages.flatten()
-                                # Use jnp.corrcoef for standard peer-reviewed alignment check
                                 return jnp.corrcoef(jnp.stack([neg_logp, adv_flat]))[0, 1]
 
                             corr = corr_fn(chosen_log_probs, advs)
 
-                            # Critic Quality Metric
                             def explained_variance(y_true, y_pred):
                                 var_y = jnp.var(y_true)
                                 ev = 1.0 - jnp.var(y_true - y_pred) / (var_y + 1e-8)
@@ -913,7 +815,6 @@ class ReinforceTrainer:
                             idx_tensor,
                             current_entropy_coef,
                         )
-                        # Calculate Actor Gradient Norm
                         policy_grad_norm = jnp.sqrt(
                             sum(
                                 jnp.sum(jnp.square(g))
@@ -927,10 +828,7 @@ class ReinforceTrainer:
                         )
                         policy_net = eqx.apply_updates(policy_net, updates)
 
-                        # 4. PURE VECTORIZED CRITIC GRAPH
-                        # SOTA PATCH: Value Loss computes difference against G_scaled (Expected Return)
                         def value_loss_fn(model, Q_feat, mu_feat, rho_feat, g_targets):
-                            # Use Raw Q + mu. broadcast mu across batch of Qs
                             preds = jax.vmap(model, in_axes=(0, None, 0))(Q_feat, mu_feat, rho_feat)
                             return jnp.mean((preds - g_targets) ** 2)
 
@@ -938,7 +836,6 @@ class ReinforceTrainer:
                             value_net, S_tensor, self.service_rates_jax, rho_tensor, critic_target
                         )
 
-                        # Calculate Critic Gradient Norm
                         value_grad_norm = jnp.sqrt(
                             sum(
                                 jnp.sum(jnp.square(g))
@@ -952,7 +849,6 @@ class ReinforceTrainer:
                         )
                         value_net = eqx.apply_updates(value_net, updates)
 
-                        # Diagnostic Alignment Check (Sign Test)
                         if epoch % 10 == 0:
                             avg_ent = policy_aux["entropy"]
                             mean_logp = policy_aux["mean_logp"]
@@ -965,7 +861,6 @@ class ReinforceTrainer:
                                 f"    [Grad Check] P-Grad Norm: {policy_grad_norm:.4f} | V-Grad Norm: {value_grad_norm:.4f}"
                             )
 
-                # Update EMAs
                 if epoch == 0:
                     ema_base_idx, ema_corr, ema_ev = base_regime_index, float(policy_aux.get("corr", 0.0)), float(policy_aux.get("ev", 0.0))
                 else:
@@ -973,10 +868,8 @@ class ReinforceTrainer:
                     ema_corr = alpha * float(policy_aux.get("corr", 0.0)) + (1 - alpha) * ema_corr
                     ema_ev = alpha * float(policy_aux.get("ev", 0.0)) + (1 - alpha) * ema_ev
 
-                # Record metrics
                 history_loss.append(float(policy_loss))
                 history_reward.append(base_regime_index)
-                # Log progress
                 if epoch % 5 == 0:
                     log.info(f"Epoch {epoch:4d} | mean_queue: {mean_queue:5.3f} | base_regime_index: {base_regime_index:6.1f}% (EMA: {ema_base_idx:6.1f}%) | "
                             f"Loss: {float(policy_loss):.4f} | V-Loss: {float(value_loss):.4f}")
@@ -997,7 +890,6 @@ class ReinforceTrainer:
                     "random_analytical": float(random_limit),
                     "random_empirical": float(random_queue),
                     "arrival_count": int(np.mean([t.arrival_count for t in trajectories])),
-                    # Added diagnostics for research alignment
                     "mean_adv": float(policy_aux.get("mean_adv", 0.0)),
                     "mean_logp": float(policy_aux.get("mean_logp", 0.0)),
                     "policy_grad_norm": float(policy_grad_norm) if 'policy_grad_norm' in locals() else 0.0,
@@ -1017,21 +909,17 @@ class ReinforceTrainer:
                 )
                 epoch_bar.update(1)
 
-                # PATCH H#2: Track successful epoch for recovery
                 last_successful_epoch = epoch
 
-            # PATCH H#2: Training completed successfully
             training_complete = True
 
         except Exception as e:
-            # PATCH H#2: Save checkpoint on error
             log.error(f"Training interrupted at epoch {last_successful_epoch}: {e}")
             if last_successful_epoch >= 0:
                 save_checkpoint(last_successful_epoch)
                 log.info(f"Saved emergency checkpoint at epoch {last_successful_epoch}")
             raise
 
-        # Save model and evaluate
         self._save_assets(policy_net, value_net, history_loss, history_reward, jsq_limit, random_limit, random_queue)
 
     def _save_assets(
@@ -1049,18 +937,15 @@ class ReinforceTrainer:
         from gibbsq.analysis.theme import apply_theme, THEMES
         from gibbsq.utils.chart_exporter import save_chart
 
-        # Save weights
         policy_path = self.run_dir / "n_gibbsq_reinforce_weights.eqx"
         eqx.tree_serialise_leaves(policy_path, policy_net)
 
         value_path = self.run_dir / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
-        # Apply publication theme and plot training dashboard
         from gibbsq.analysis.plotting import plot_training_dashboard
         import json
 
-        # Read back accumulated metrics from JSONL for the full dashboard
         metrics_path = self.run_dir / "reinforce_metrics.jsonl"
         dashboard_metrics: dict = {
             "epoch": [], "base_regime_index": [], "base_regime_index_ema": [],
@@ -1086,8 +971,6 @@ class ReinforceTrainer:
         )
         plt.close(fig)
 
-        # Write pointer
-        # SG#4 FIX: Write to output_dir from config instead of hardcoded "outputs/small"
         pointer_dir = self.run_dir.parent.parent
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
         save_model_pointer(
@@ -1155,9 +1038,6 @@ class ReinforceTrainer:
         log.info(f"Value weights: {value_path}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry Point
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main(raw_cfg: DictConfig):
     """Main entry point for REINFORCE training."""

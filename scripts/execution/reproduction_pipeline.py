@@ -19,7 +19,6 @@ from gibbsq.utils.progress import create_progress
 
 
 def run_experiment(experiment, hydra_args=None, dry_run: bool = False, progress_mode: str = "auto"):
-    """Run a single experiment using the unified experiment_runner.py script."""
     if hydra_args is None:
         hydra_args = []
     
@@ -45,7 +44,6 @@ def _format_pipeline_step(label: str, step_idx: int | None, total_steps: int) ->
     return f"[{step_idx}/{total_steps}] {label}"
 
 def main():
-    """Run the complete paper experiment pipeline."""
     import argparse
     
     parser = argparse.ArgumentParser(

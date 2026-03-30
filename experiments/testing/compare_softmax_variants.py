@@ -1,6 +1,5 @@
 """
 Empirical comparison of Softmax Routing Variants.
-Resolves Theory vs Implementation mismatch (SG#5 & SG#7).
 
 Variants tested:
 1. Raw Queue (Paper docs/gibbsq.md): exp(-alpha * Q)
@@ -41,7 +40,6 @@ def softmax_probs_normalized(Q, alpha, mu):
 
 def main():
     num_servers = 10
-    # Highly heterogeneous servers
     mu = jnp.array([1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0])
     total_capacity = jnp.sum(mu)
     rho = 0.95
@@ -84,7 +82,7 @@ def main():
         for r in range(num_replications):
             _np_times = np.array(times[r])
             _np_states = np.array(states[r])
-            # Truncate invalid trailing JAX buffer slots (SG#5 fix)
+            # Truncate invalid trailing JAX buffer slots
             _valid_mask = _np_times > 0
             _valid_mask[0] = True
             _vl = int(np.sum(_valid_mask))
@@ -99,7 +97,7 @@ def main():
                 final_time=float(_np_times[-1]),
                 num_servers=num_servers
             )
-            q_avg = time_averaged_queue_lengths(res, 0.2) # drops first 20%
+            q_avg = time_averaged_queue_lengths(res, 0.2)
             q_totals.append(q_avg.sum())
             q_per_server.append(q_avg)
             
@@ -108,7 +106,6 @@ def main():
         mean_q_per_server = np.mean(q_per_server, axis=0)
         max_q = float(np.max(mean_q_per_server))
         
-        # Calculate max-min queue imbalance
         imbalance = max_q - float(np.min(mean_q_per_server))
         
         log.info(f"Result: E[Q_total] = {mean_q:.2f} ± {std_q:.2f}")

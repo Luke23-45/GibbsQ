@@ -1,7 +1,7 @@
 """
 Data export utilities (Parquet, JSONL).
 
-Replaces inefficient CSVs with Apache Parquet for numeric trajectory data.
+Uses Apache Parquet for numeric trajectory data.
 Parquet provides:
 1. ~20x compression via dictionary encoding.
 2. Type preservation (float64 and int64).
@@ -29,7 +29,6 @@ __all__ = [
     "append_metrics_jsonl",
 ]
 
-
 def save_trajectory_parquet(res: SimResult, file_path: str | Path, compression: str = "snappy") -> None:
     """
     Save the dense Gillespie simulation trajectory |Q(t)| to a highly-compressed Parquet file.
@@ -42,24 +41,18 @@ def save_trajectory_parquet(res: SimResult, file_path: str | Path, compression: 
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Pre-allocate column data
     data = {"time": res.times}
     
-    # Add individual queues
     N = res.num_servers
     for i in range(N):
         data[f"q_{i}"] = res.states[:, i]
         
-    # Add scalar total if they need it for quick processing
     data["total_q"] = res.states.sum(axis=1)
     
-    # Create DataFrame and instantly encode
     df = pd.DataFrame(data)
     
-    # Write to parquet natively
     df.to_parquet(path, engine="pyarrow", compression=compression, index=False)
     log.debug(f"Saved trajectory to {path} ({path.stat().st_size / 1024:.1f} KB)")
-
 
 def append_metrics_jsonl(metrics: dict[str, Any], file_path: str | Path) -> None:
     """
@@ -70,7 +63,6 @@ def append_metrics_jsonl(metrics: dict[str, Any], file_path: str | Path) -> None
     path = Path(file_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Convert any raw NumPy scalars inside the dict to native Python types for JSON compatibility
     clean_metrics = {}
     for k, v in metrics.items():
         if isinstance(v, (np.generic, np.ndarray)):

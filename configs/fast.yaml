@@ -14,7 +14,7 @@ simulation:
   burn_in_fraction: 0.2
   export_trajectories: false
   ssa:
-    sim_time: 1000.0  # FAST: Reduced from 5000 for speed (5x faster)
+    sim_time: 1000.0
     sample_interval: 1.0
   dga:
     sim_steps: 1000
@@ -49,18 +49,18 @@ neural_training:
   min_temperature: 0.3
   gamma: 0.99
   gae_lambda: 0.95
-  # FAST: Single-phase curriculum with short sim_time
+
   curriculum:
     - [20, 1000]  # 20 epochs at 1000s (vs 3 phases at up to 3000s)
-  eval_batches: 1           # FAST: Reduced from 2
-  eval_trajs_per_batch: 3   # FAST: Reduced from 5 (3 vs 10 eval trajs)
+  eval_batches: 1
+  eval_trajs_per_batch: 3
   perf_index_min_denom: 0.5
   perf_index_jsq_margin: 0.05
-  bc_num_steps: 200         # FAST: Reduced from 1000 (sufficient for small network)
+  bc_num_steps: 200
   bc_lr: 0.002
   bc_label_smoothing: 0.1
   shake_scale: 0.01
-  checkpoint_freq: 10       # FAST: More frequent checkpoints for short runs
+  checkpoint_freq: 10
   squash_scale: 100.0
   squash_threshold: 500.0
 
@@ -74,11 +74,10 @@ wandb:
   enabled: false
   project: GibbsQ-Fast
 
-# FAST: Reduced batch size for speed
-batch_size: 16  # Reduced from 64 (4x faster per epoch)
+batch_size: 16
 
 neural:
-  hidden_size: 64   # FAST: Reduced from 128 (smaller network, faster training)
+  hidden_size: 64
   preprocessing: log1p
   init_type: zero_final
   use_rho: true
@@ -86,13 +85,12 @@ neural:
   entropy_bonus: 0.01
   entropy_final: 0.001
   clip_global_norm: 0.5
-  actor_lr: 0.001   # FAST: Slightly higher for faster convergence
-  critic_lr: 0.005  # FAST: Higher critic LR for faster baseline
+  actor_lr: 0.001
+  critic_lr: 0.005
   lr_decay_rate: 0.9
   weight_decay: 0.0001
 
-# FAST: Much fewer epochs for quick validation
-train_epochs: 30  # Reduced from 100 (3x faster total)
+train_epochs: 30
 
 # Domain Randomization enabled for generalization testing
 domain_randomization:
@@ -110,7 +108,7 @@ verification:
   confidence_interval: 0.95
   stationarity_threshold: 1.0
   parity_z_score: 1.96
-  gradient_check_chunk_size: 100  # FAST: Reduced for speed
+  gradient_check_chunk_size: 100
   gradient_check_max_steps: 50
   gradient_check_n_test: 50
   gradient_check_hidden_size: 128

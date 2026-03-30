@@ -21,7 +21,7 @@ class NeuralRouter(eqx.Module):
     large queue lengths) and a 3-layer MLP. Final layer is zero-initialized
     so initial output is uniform: softmax(0) = 1/N.
     
-    PATCH P2 (H5): Heterogeneity-aware routing - includes normalized service rates
+    Heterogeneity-aware routing: includes normalized service rates
     as input features so the policy can learn to prefer faster servers.
     """
     layers: list[eqx.Module]
@@ -48,18 +48,15 @@ class NeuralRouter(eqx.Module):
             
         keys = jax.random.split(key, 3)
         
-
         self.config = config
         self.num_servers = num_servers
         
-        # PATCH P2: Store service rates for heterogeneity-aware features
         if service_rates is None:
             self.service_rates = jnp.ones(num_servers)
         else:
             self.service_rates = jnp.asarray(service_rates)
         
         hidden_size = config.hidden_size
-        # SG#13: Heterogeneity awareness (Patch P2) appends normalized mu to features
         input_dim = num_servers
         if config.use_service_rates:
             input_dim += num_servers
@@ -69,7 +66,6 @@ class NeuralRouter(eqx.Module):
         l2 = eqx.nn.Linear(hidden_size, hidden_size, key=keys[1])
         l3 = eqx.nn.Linear(hidden_size, num_servers, key=keys[2])
         
-        # Optional Zero-initialization for final layer stability (defaults to zero_final)
         if config.init_type == "zero_final":
             l3 = eqx.tree_at(lambda l: l.weight, l3, jnp.zeros_like(l3.weight))
             if l3.bias is not None:
@@ -84,15 +80,9 @@ class NeuralRouter(eqx.Module):
         rho: Float[Array, "..."] = None
     ) -> Float[Array, "..."]:
         """Forward pass. Returns routing logits."""
-        # Dispatch to _single_forward which handles all preprocessing.
-        # Batched inputs are handled via vmap.
         is_batched = Q.ndim > 1
         
         if is_batched:
-            # Robust vmap dispatch: Map over leading dimension of Q.
-            # Only map over mu/rho if they have the same batch dimension as Q.
-            # Otherwise, use None to broadcast them.
-            
             mu_axis = 0 if (mu is not None and mu.ndim == Q.ndim) else None
             rho_axis = 0 if (rho is not None and jnp.ndim(rho) > 0 and rho.shape[0] == Q.shape[0]) else None
             
@@ -102,12 +92,9 @@ class NeuralRouter(eqx.Module):
     
     def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
-        # Standardize state features (Look-Ahead Potential)
         effective_mu = mu if mu is not None else self.service_rates
-        # SOTA: Always use Look-Ahead Potential features for neural policies
         s_feat = (Q + 1.0) / effective_mu
-        
-        # Preprocessing selection based on config
+
         if self.config.preprocessing == "log1p":
             x = jnp.log1p(s_feat)
         elif self.config.preprocessing == "linear_min_max":
@@ -119,19 +106,16 @@ class NeuralRouter(eqx.Module):
         else:
             x = s_feat
         
-        # PATCH P2: Append normalized service rates for heterogeneity awareness
         if self.config.use_service_rates:
             effective_mu = mu if mu is not None else self.service_rates
             mu_sum = jnp.sum(effective_mu, axis=-1, keepdims=True)
             mu_normalized = effective_mu / jnp.where(mu_sum > 0, mu_sum, 1.0)
             
-            # Match batch dimensions if x is batched but mu is not
             if x.ndim > mu_normalized.ndim:
                 mu_normalized = jnp.broadcast_to(mu_normalized, x.shape)
             
             x = jnp.concatenate([x, mu_normalized], axis=-1)
         
-        # Append rho feature
         if self.config.use_rho:
             if rho is None:
                 rho_feat = jnp.zeros((1,), dtype=x.dtype)
@@ -177,14 +161,11 @@ class NeuralRouter(eqx.Module):
         
         num_servers = Q.shape[-1] if hasattr(Q, 'shape') else len(Q)
         
-        # FIX SG#3: Safely resolve mu, catching legacy 'service_rates' kwargs
         effective_mu = mu if mu is not None else (service_rates if service_rates is not None else np.ones(num_servers) / num_servers)
         effective_mu = np.asarray(effective_mu, dtype=np.float64)
         
-        # 1. Base Feature Representation (Look-Ahead Potential)
         s_feat = (Q + 1.0) / effective_mu
 
-        # 2. Preprocessing
         if config.preprocessing == "log1p":
             x = np.log1p(s_feat)
         elif config.preprocessing == "linear_min_max":
@@ -196,7 +177,6 @@ class NeuralRouter(eqx.Module):
         else:
             x = np.asarray(s_feat, dtype=np.float64)
 
-        # PATCH P2: Append normalized service rates only when the model was built with them.
         if getattr(config, "use_service_rates", True):
             mu_sum = np.sum(effective_mu)
             mu_normalized = effective_mu / np.where(mu_sum > 0, mu_sum, 1.0)
@@ -204,13 +184,10 @@ class NeuralRouter(eqx.Module):
                 mu_normalized = np.broadcast_to(mu_normalized, x.shape)
             x = np.concatenate([x, mu_normalized], axis=-1)
         
-        # PI-V4: Append rho
         if config.use_rho:
-            # PATCH: Safe conversion that handles numpy/JAX arrays properly
             rho_val = 0.0 if rho is None else float(np.asarray(rho).item())
             rho_feat = np.array([rho_val * config.rho_input_scale], dtype=np.float64)
             
-            # PATCH: Ensure proper dimensionality for all cases
             if x.ndim > 1:
                 if rho_feat.ndim == 1:  # scalar rho
                     rho_feat = np.repeat(rho_feat[np.newaxis, :], x.shape[0], axis=0)
@@ -220,7 +197,6 @@ class NeuralRouter(eqx.Module):
                     raise ValueError(f"rho shape {rho_feat.shape} incompatible with x shape {x.shape}")
             x = np.concatenate([x, rho_feat], axis=-1)
 
-        # MLP layers
         for i, (w, b) in enumerate(params):
             x = x @ w.T
             if b is not None:
@@ -228,8 +204,6 @@ class NeuralRouter(eqx.Module):
             if i < len(params) - 1:
                 x = np.maximum(0, x)  # ReLU
         
-        # FIX SG#5: Return RAW LOGITS for training-sampling parity.
-        # (Previously x = x - np.max(x); return np.exp(x) / np.sum(np.exp(x)))
         return x
 
 class ValueNetwork(eqx.Module):
@@ -258,7 +232,6 @@ class ValueNetwork(eqx.Module):
             key = jax.random.PRNGKey(0)
         
         self.config = config
-        # PI-V4: Append rho to features if enabled
         input_dim = num_servers + (1 if (config is not None and config.use_rho) else 0)
         
         keys = jax.random.split(key, 3)
@@ -275,37 +248,22 @@ class ValueNetwork(eqx.Module):
         rho: Float[Array, ""] = None,
         **kwargs
     ) -> Float[Array, ""]:
-        """Forward pass. Returns scalar value estimate V(s, rho).
-        
-        ROBUST FIX: Handle both single and batched inputs correctly.
-        Single input: s shape (N,), rho scalar or None
-        Batched input: s shape (batch, N), rho shape (batch,) or scalar
-        Equinox Linear layers require single inputs, so batched calls use internal vmap.
-        """
-        # 1. Feature Representation (Sojourn Time Proxy)
-        # Safely resolve mu during JAX tracing
+        """Forward pass. Returns scalar value estimate V(s, rho)."""
         effective_mu = mu if mu is not None else getattr(self, 'service_rates', 1.0)
         s = (Q + 1.0) / effective_mu
         
         is_batched = s.ndim > 1
         
         if is_batched:
-            # Batched input: use vmap with correct in_axes
-            # BROADCAST mu: Every state in the batch uses the same service_rates_jax
             return jax.vmap(self._single_forward, in_axes=(0, None, None))(Q, mu, rho)
         else:
-            # Single input: direct call
             return self._single_forward(Q, mu, rho)
     
     def _single_forward(self, Q, mu, rho):
         """Process a single (non-batched) input."""
-        # 1. Base Feature Representation (Look-Ahead Potential)
-        # S_i = (Q_i + 1) / mu_i
-        # mu is required for ValueNetwork consistency
         effective_mu = mu if mu is not None else jnp.ones_like(Q)
         s_feat = (Q + 1.0) / effective_mu
 
-        # Preprocessing selection based on config
         if self.config.preprocessing == "log1p":
             x = jnp.log1p(s_feat)
         elif self.config.preprocessing == "linear_min_max":
@@ -316,20 +274,13 @@ class ValueNetwork(eqx.Module):
         if self.config is not None and self.config.use_rho:
             rho_val = rho if rho is not None else 0.0
             rho_feat = jnp.atleast_1d(rho_val) * self.config.rho_input_scale
-            # For single input, rho_feat is (1,) and x is (num_servers,)
-            # Concatenate along the last axis
             if rho_feat.ndim > 1:
-                rho_feat = rho_feat[:1]  # Take first element if somehow batched
+                rho_feat = rho_feat[:1]
             x = jnp.concatenate([x, rho_feat], axis=-1)
 
         for layer in self.layers[:-1]:
             x = jax.nn.relu(layer(x))
         return self.layers[-1](x).squeeze()
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PATCH P4: Adaptive Temperature for Load-Dependent Routing
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_adaptive_alpha(rho: float, base_alpha: float = 1.0) -> float:
     """

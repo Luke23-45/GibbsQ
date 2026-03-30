@@ -24,11 +24,9 @@ def main(raw_cfg: DictConfig):
     cfg = hydra_to_config(raw_cfg)
     validate(cfg)
     
-    # Use standard run config
     run_dir, run_id = get_run_config(cfg, "bc_train", raw_cfg)
     setup_wandb(cfg, raw_cfg, default_group="pretraining", run_id=run_id, run_dir=run_dir)
-    
-    # Initialize policy
+
     key = jax.random.PRNGKey(cfg.simulation.seed)
     key, actor_key = jax.random.split(key)
     
@@ -39,7 +37,6 @@ def main(raw_cfg: DictConfig):
         key=actor_key,
     )
     
-    # Execute robust training
     policy_net = train_robust_bc_policy(
         policy_net=policy_net,
         service_rates=np.asarray(cfg.system.service_rates, dtype=np.float32),
@@ -52,14 +49,12 @@ def main(raw_cfg: DictConfig):
         alpha=cfg.system.alpha,
     )
     
-    # Save assets
     model_path = run_dir / "n_gibbsq_platinum_bc_weights.eqx"
     jax.tree_util.tree_map(lambda x: x.block_until_ready() if hasattr(x, "block_until_ready") else x, policy_net)
     import equinox as eqx
     eqx.tree_serialise_leaves(model_path, policy_net)
     log.info(f"\n[DONE] Platinum BC Weights saved to {model_path}")
     
-    # Update pointer for evaluation via centralized model_io
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
     pointer_dir = run_dir.parent.parent
     save_model_pointer(

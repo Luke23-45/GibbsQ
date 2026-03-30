@@ -1,11 +1,8 @@
 """
-Tests for ComponentRegistry and Builders functionality.
+Tests for ComponentRegistry and Builders.
 
-These tests verify the correct operation of the decorator-based policy
-registration system and the builder functions that depend on it.
-
-IMPORTANT: Tests that call ComponentRegistry.clear() must restore the
-original registrations afterward to avoid breaking other tests.
+Tests that call ComponentRegistry.clear() must restore the
+original registrations afterward.
 """
 
 import pytest
@@ -14,33 +11,27 @@ import sys
 
 
 def _get_registered_policies():
-    """Snapshot of current registry state."""
     from gibbsq.core.registry import ComponentRegistry
     return dict(ComponentRegistry._policies)
 
 
 def _restore_registered_policies(snapshot):
-    """Restore registry to previous state."""
     from gibbsq.core.registry import ComponentRegistry
     ComponentRegistry._policies.clear()
     ComponentRegistry._policies.update(snapshot)
 
 
 class TestRegistryImportOrder:
-    """Critical tests for the import order dependency bug.
-    
-    The registry uses decorator-based registration. If builders.py is imported
-    without first importing policies.py, the registry will be empty and
-    build_policy_by_name() will fail.
+    """
+    Tests for the import order dependency: builders.py must not be 
+    imported before policies.py, otherwise the decorator-based registry 
+    remains empty.
     """
 
     def test_registry_populated_after_policies_import(self):
-        """Verify that importing policies.py populates the registry."""
-        # Import policies to trigger registration
         from gibbsq.core import policies as policies_module
         from gibbsq.core.registry import ComponentRegistry
         
-        # Check that all expected policies are registered
         registered = ComponentRegistry.list_policies()
         
         expected_policies = [
@@ -55,11 +46,9 @@ class TestRegistryImportOrder:
             )
 
     def test_build_policy_by_name_works_after_policies_import(self):
-        """Verify build_policy_by_name works after policies are imported."""
         from gibbsq.core.builders import build_policy_by_name
         from gibbsq.core.registry import ComponentRegistry
         
-        # This should NOT raise KeyError if import chain is correct
         policy = build_policy_by_name("softmax", alpha=1.0)
         assert policy is not None
         
@@ -68,33 +57,26 @@ class TestRegistryImportOrder:
 
 
 class TestRegistryStandaloneImport:
-    """Test what happens when importing builders without policies.
-    
-    This simulates the bug scenario where stability_sweep.py imports
+    """
+    Simulates the bug scenario where stability_sweep.py imports
     builders.py directly without first importing policies.
     """
     
     def test_builders_import_without_policies_fails(self, tmp_path):
-        """Verify that importing builders alone does NOT auto-register policies.
-        
-        This test creates an isolated Python subprocess to verify the bug.
-        """
         import subprocess
         
-        # Create a test script that imports builders without policies
         test_script = '''
-import sys
-# Simulate the problematic import order from stability_sweep.py
-from gibbsq.core.builders import build_policy_by_name
+        import sys
+        from gibbsq.core.builders import build_policy_by_name
 
-try:
-    policy = build_policy_by_name("softmax", alpha=1.0)
-    print("SUCCESS")
-except KeyError as e:
-    print(f"KEYERROR: {e}")
-except Exception as e:
-    print(f"ERROR: {type(e).__name__}: {e}")
-'''
+        try:
+            policy = build_policy_by_name("softmax", alpha=1.0)
+            print("SUCCESS")
+        except KeyError as e:
+            print(f"KEYERROR: {e}")
+        except Exception as e:
+            print(f"ERROR: {type(e).__name__}: {e}")
+        '''
         
         result = subprocess.run(
             [sys.executable, "-c", test_script],
@@ -103,12 +85,8 @@ except Exception as e:
             cwd=tmp_path
         )
         
-        # If the bug exists, this will print KEYERROR
-        # If fixed, it should print SUCCESS
         output = result.stdout.strip()
         
-        # Document current behavior - this SHOULD fail with the current bug
-        # After fix, this should pass
         if "KEYERROR" in output:
             pytest.fail(
                 f"Import order bug confirmed: build_policy_by_name fails when "
@@ -117,13 +95,10 @@ except Exception as e:
 
 
 class TestComponentRegistry:
-    """Tests for ComponentRegistry class functionality."""
 
     def test_register_policy_decorator(self):
-        """Test the register_policy decorator."""
         from gibbsq.core.registry import ComponentRegistry
         
-        # Snapshot and restore pattern
         snapshot = _get_registered_policies()
         
         try:
@@ -137,10 +112,8 @@ class TestComponentRegistry:
                 def __call__(self, Q, rng):
                     return np.ones(len(Q)) / len(Q)
             
-            # Verify registration
             assert "test_policy" in ComponentRegistry.list_policies()
             
-            # Verify we can build it
             policy = ComponentRegistry.build_policy("test_policy")
             assert isinstance(policy, TestPolicy)
             assert policy.value == 1
@@ -148,7 +121,6 @@ class TestComponentRegistry:
             _restore_registered_policies(snapshot)
 
     def test_duplicate_registration_raises(self):
-        """Test that duplicate registration raises ValueError."""
         from gibbsq.core.registry import ComponentRegistry
         
         snapshot = _get_registered_policies()
@@ -168,10 +140,8 @@ class TestComponentRegistry:
             _restore_registered_policies(snapshot)
 
     def test_unknown_policy_raises_keyerror(self):
-        """Test that unknown policy name raises KeyError with helpful message."""
         from gibbsq.core.registry import ComponentRegistry
         
-        # Import policies first to ensure registry is populated
         import gibbsq.core.policies  # noqa: F401
         
         with pytest.raises(KeyError, match="Unknown policy"):

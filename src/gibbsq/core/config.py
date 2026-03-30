@@ -45,11 +45,6 @@ __all__ = [
     "critical_load_sim_time",
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-#  Enum for policy selection  (type-safe, IDE-completable)
-# ──────────────────────────────────────────────────────────────
-
 class PolicyName(str, Enum):
     """Supported routing policies."""
 
@@ -60,11 +55,6 @@ class PolicyName(str, Enum):
     POWER_OF_D    = "power_of_d"
     JSSQ          = "jssq"
     UAS           = "uas"
-
-
-# ──────────────────────────────────────────────────────────────
-#  Sub-configurations
-# ──────────────────────────────────────────────────────────────
 
 @dataclass
 class SystemConfig:
@@ -88,7 +78,6 @@ class SystemConfig:
     service_rates: List[float] = MISSING
     alpha:         float       = MISSING
 
-
 @dataclass
 class SSAConfig:
     """
@@ -105,7 +94,6 @@ class SSAConfig:
     sim_time:        float = 5000.0
     sample_interval: float = 1.0
 
-
 @dataclass
 class DGAConfig:
     """
@@ -121,7 +109,6 @@ class DGAConfig:
 
     sim_steps:   int   = 5000
     temperature: float = 0.5
-
 
 @dataclass
 class SimulationConfig:
@@ -150,7 +137,6 @@ class SimulationConfig:
     ssa:  SSAConfig = field(default_factory=SSAConfig)
     dga:  DGAConfig = field(default_factory=DGAConfig)
 
-
 @dataclass
 class PolicyConfig:
     """
@@ -163,7 +149,6 @@ class PolicyConfig:
     name: str = PolicyName.SOFTMAX.value
     d:    int = 2
 
-
 @dataclass
 class DriftConfig:
     """
@@ -175,7 +160,6 @@ class DriftConfig:
 
     q_max:    int  = 50
     use_grid: bool = True
-
 
 @dataclass
 class JAXEngineConfig:
@@ -190,16 +174,16 @@ class JAXEngineConfig:
 class NeuralConfig:
     """Neural routing architecture & preprocessing."""
     hidden_size: int = 64
-    preprocessing: str = "log1p"  # Phase 10: Superior for scale-invariance
+    preprocessing: str = "log1p"
     capacity_bound: float = constants.NEURAL_LINEAR_CAPACITY_BOUND
-    init_type: str = "zero_final" # Standard safety requirement
-    use_rho: bool = True          # PI-V4: Append rho to state features
-    use_service_rates: bool = True # SG#13 FIX: Restore heterogeneity awareness
-    rho_input_scale: float = 10.0  # PI-V4.1: Increased scale for better feature saliency
-    entropy_bonus: float = 0.01    # PI-V4.1: Prevent premature determinism
+    init_type: str = "zero_final"
+    use_rho: bool = True
+    use_service_rates: bool = True
+    rho_input_scale: float = 10.0
+    entropy_bonus: float = 0.01
     entropy_final: float = 0.001
-    clip_global_norm: float = 1.0  # PI-V4.1: Prevent loss explosions
-    actor_lr: float = 3e-4         # PI-V4.1: Separate LRs for stability
+    clip_global_norm: float = 1.0
+    actor_lr: float = 3e-4
     critic_lr: float = 1e-3
     lr_decay_rate: float = 0.9
     weight_decay: float = 1e-4     # L2 regularization for AdamW
@@ -208,15 +192,12 @@ class NeuralConfig:
 class VerificationThresholds:
     """Research success boundaries."""
     parity_threshold_percent: float = 25.0
-    # SG#3 FIX: Reverted dangerous 10% tolerance for gradient checks.
-    # With the softer DGA steepness (Constants.DGA_INDICATOR_STEEPNESS = 5.0),
-    # the finite-difference check passes reliably at the mathematically sound 5% threshold.
+    # DGA_INDICATOR_STEEPNESS=5.0 allows finite-difference gradient checks at 5% tolerance.
     jacobian_rel_tol: float = 0.05
     stationarity_threshold: float = 1.0
     alpha_significance: float = 0.05
     confidence_interval: float = 0.95
     parity_z_score: float = 1.96  # Z-score for parity margins
-    # Gradient Analysis Constants
     gradient_check_chunk_size: int = 1500
     gradient_check_max_steps: int = 300
     gradient_check_n_test: int = 50
@@ -242,7 +223,6 @@ class WandbConfig:
     mode:     str = "online"   # online, offline, or disabled
     run_name: str | None = None
 
-
 @dataclass
 class JAXConfig:
     """
@@ -265,13 +245,11 @@ class JAXConfig:
     precision:       str  = "float64"
     fallback_to_cpu: bool = True
 
-
 @dataclass
 class GeneralizationConfig:
     rho_boundary_vals: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98, 0.99])
     scale_vals: List[float] = field(default_factory=lambda: [0.5, 1.0, 2.0, 5.0, 10.0])
     rho_grid_vals: List[float] = field(default_factory=lambda: [0.5, 0.7, 0.85, 0.95, 0.98])
-
 
 @dataclass
 class StressConfig:
@@ -279,7 +257,6 @@ class StressConfig:
     critical_rhos: list[float] = field(default_factory=lambda: [0.95, 0.98, 0.99])
     mu_het: list[float] = field(default_factory=lambda: [100.0, 1.0, 1.0, 1.0])
     
-    # Phase 3 Hardcode Extractions
     sample_interval: float = 1.0
     massive_n_rho: float = 0.8
     massive_n_sim_time: float = 500.0
@@ -289,28 +266,24 @@ class StressConfig:
     heterogeneity_rho: float = 0.5
     heterogeneity_sim_time: float = 1000.0
 
-
 @dataclass
 class StabilitySweepConfig:
-    # SOTA defaults from Phase 1 verification (ledger/01_sota_targets.md)
-    # Alpha sweep: Full temperature sensitivity [0.01, 100]
-    # Rho sweep: Heavy-traffic regime [0.80, 0.98]
+    # Alpha sweep: [0.01, 100], Rho sweep: [0.80, 0.98]
     alpha_vals: List[float] = field(default_factory=lambda: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0])
     rho_vals: List[float] = field(default_factory=lambda: [0.80, 0.85, 0.90, 0.95, 0.98])
-
 
 @dataclass
 class NeuralTrainingConfig:
     learning_rate: float = 3e-3
     weight_decay: float = 1e-4
     dga_learning_rate: float = 0.5
-    min_temperature: float = 0.1   # SG-1 FIX: was in YAML but missing from dataclass
-    gamma: float = 0.99            # HP-2 FIX: avoid hardcoded discount
-    gae_lambda: float = 0.95       # PATCH-P1: GAE λ for bias-variance tradeoff (Schulman 2015)
+    min_temperature: float = 0.1
+    gamma: float = 0.99
+    gae_lambda: float = 0.95  # GAE λ (Schulman 2015)
     curriculum: List[List[int]] = field(default_factory=lambda: [[20, 500], [30, 2000], [50, 5000]])
-    eval_batches: int = 5          # Extracted from train_reinforce.py
-    eval_trajs_per_batch: int = 10 # Extracted from train_reinforce.py
-    bc_num_steps: int = 1000       # Extracted from pretrain_bc.py
+    eval_batches: int = 5
+    eval_trajs_per_batch: int = 10
+    bc_num_steps: int = 1000
     bc_lr: float = 0.002
     bc_label_smoothing: float = 0.1
     perf_index_min_denom: float = 0.5
@@ -319,8 +292,6 @@ class NeuralTrainingConfig:
     checkpoint_freq: int = 25
     squash_scale: float = 100.0
     squash_threshold: float = 500.0
-
-
 
 @dataclass
 class ReinforceConfig:
@@ -352,16 +323,13 @@ class ReinforceConfig:
     n_epochs: int = 100
     sim_time: float = 5000.0
 
-
 @dataclass
 class DomainRandomizationPhase:
     """Single phase of domain randomization curriculum."""
-    # SOTA: Start from higher load for critical regime training
     rho_min: float = 0.60
     rho_max: float = 0.85
     epochs: int = 20
-    horizon: int = 1000  # INCREASED: Longer horizons for stability
-
+    horizon: int = 1000
 
 @dataclass
 class DomainRandomizationConfig:
@@ -391,12 +359,6 @@ class DomainRandomizationConfig:
         ]
     )
 
-
-
-# ──────────────────────────────────────────────────────────────
-#  Top-level experiment config
-# ──────────────────────────────────────────────────────────────
-
 @dataclass
 class ExperimentConfig:
     """
@@ -423,12 +385,6 @@ class ExperimentConfig:
     train_epochs: int              = 30
     batch_size:   int              = 16
 
-
-# ──────────────────────────────────────────────────────────────
-#  Validation  (fail-fast with precise diagnostics)
-# ──────────────────────────────────────────────────────────────
-
-
 def _normalize_service_rates(system_cfg: dict) -> dict:
     """Expand scalar service-rate shorthand to match num_servers when needed."""
     cfg = dict(system_cfg)
@@ -437,7 +393,6 @@ def _normalize_service_rates(system_cfg: dict) -> dict:
     if isinstance(rates, list) and len(rates) == 1 and isinstance(num_servers, int) and num_servers > 1:
         cfg["service_rates"] = rates * num_servers
     return cfg
-
 
 def _validate_jax_config(jax_cfg: JAXConfig) -> None:
     """Validate JAX backend config values."""
@@ -452,20 +407,17 @@ def _validate_jax_config(jax_cfg: JAXConfig) -> None:
             f"jax.precision must be one of {sorted(valid_precisions)}, got '{jax_cfg.precision}'"
         )
 
-
 def _validate_rho_list(name: str, values: Sequence[float]) -> None:
     """Validate that every configured load factor is strictly within (0, 1)."""
     for i, rho in enumerate(values):
         if not (0.0 < float(rho) < 1.0):
             raise ValueError(f"{name}[{i}] must be in (0, 1), got {rho}")
 
-
 def _validate_positive_list(name: str, values: Sequence[float]) -> None:
     """Validate that every configured scalar is strictly positive."""
     for i, x in enumerate(values):
         if not (float(x) > 0.0):
             raise ValueError(f"{name}[{i}] must be > 0, got {x}")
-
 
 def validate(cfg: ExperimentConfig) -> None:
     """
@@ -476,7 +428,6 @@ def validate(cfg: ExperimentConfig) -> None:
     """
     s = cfg.system
 
-    # ── Structural ────────────────────────────────────────────
     if s.num_servers < 1:
         raise ValueError(f"num_servers must be ≥ 1, got {s.num_servers}")
     if len(s.service_rates) != s.num_servers:
@@ -484,7 +435,6 @@ def validate(cfg: ExperimentConfig) -> None:
             f"|service_rates| = {len(s.service_rates)} ≠ num_servers = {s.num_servers}"
         )
 
-    # ── Positivity ────────────────────────────────────────────
     if s.arrival_rate <= 0:
         raise ValueError(f"arrival_rate (λ) must be > 0, got {s.arrival_rate}")
     if s.alpha <= 0:
@@ -493,7 +443,7 @@ def validate(cfg: ExperimentConfig) -> None:
         if mu_i <= 0:
             raise ValueError(f"service_rates[{i}] (μ_{i+1}) must be > 0, got {mu_i}")
 
-    # ── Capacity condition  Λ > λ  ────────────────────────────
+    # Capacity condition: Λ > λ
     cap = math.fsum(s.service_rates)          # Kahan-accurate sum
     if cap <= s.arrival_rate:
         raise ValueError(
@@ -501,7 +451,6 @@ def validate(cfg: ExperimentConfig) -> None:
             f"Λ = Σμ_i = {cap} must be strictly > λ = {s.arrival_rate}"
         )
 
-    # ── Simulation bounds ─────────────────────────────────────
     sim = cfg.simulation
     if sim.num_replications < 1:
         raise ValueError(f"num_replications must be ≥ 1, got {sim.num_replications}")
@@ -510,7 +459,6 @@ def validate(cfg: ExperimentConfig) -> None:
             f"burn_in_fraction must be in [0, 1), got {sim.burn_in_fraction}"
         )
 
-    # ── SSA engine bounds ─────────────────────────────────────
     ssa = sim.ssa
     if ssa.sim_time <= 0:
         raise ValueError(f"ssa.sim_time must be > 0, got {ssa.sim_time}")
@@ -524,7 +472,6 @@ def validate(cfg: ExperimentConfig) -> None:
             f"(sim_time={ssa.sim_time}/sample_interval={ssa.sample_interval}). "
             f"Consider increasing sample_interval.")
 
-    # ── DGA engine bounds ─────────────────────────────────────
     dga = sim.dga
     if dga.sim_steps < 1:
         raise ValueError(f"dga.sim_steps must be ≥ 1, got {dga.sim_steps}")
@@ -536,7 +483,6 @@ def validate(cfg: ExperimentConfig) -> None:
     if not (0 < dga.temperature <= 10.0):
         raise ValueError(f"dga.temperature must be in (0, 10], got {dga.temperature}")
 
-    # ── Policy name ───────────────────────────────────────────
     valid_names = {e.value for e in PolicyName}
     if cfg.policy.name not in valid_names:
         raise ValueError(
@@ -546,7 +492,6 @@ def validate(cfg: ExperimentConfig) -> None:
     if cfg.policy.name == PolicyName.POWER_OF_D.value and cfg.policy.d < 1:
         raise ValueError(f"policy.d must be >= 1 for power_of_d, got {cfg.policy.d}")
 
-    # ── Neural architecture bounds ────────────────────────────
     neu = cfg.neural
     if neu.hidden_size < 1:
         raise ValueError(f"neural.hidden_size must be ≥ 1, got {neu.hidden_size}")
@@ -556,7 +501,6 @@ def validate(cfg: ExperimentConfig) -> None:
     if neu.capacity_bound <= 0:
         raise ValueError(f"neural.capacity_bound must be > 0, got {neu.capacity_bound}")
     
-    # ── New neural configuration validation (PI-V4) ────────────────────────────
     if neu.use_rho and not isinstance(neu.use_rho, bool):
         raise ValueError(f"neural.use_rho must be boolean, got {type(neu.use_rho)}")
     if neu.rho_input_scale <= 0:
@@ -582,12 +526,10 @@ def validate(cfg: ExperimentConfig) -> None:
     if neu.weight_decay > 1.0:
         raise ValueError(f"neural.weight_decay must be <= 1.0, got {neu.weight_decay}")
     
-    # PATCH: Validate gamma (discount factor) is in valid range
     ntc = cfg.neural_training
     if not (0 <= ntc.gamma <= 1):
         raise ValueError(f"neural_training.gamma must be in [0, 1], got {ntc.gamma}")
 
-    # ── JAX engine safety bounds ──────────────────────────────
     jen = cfg.jax_engine
     if jen.max_events_safety_multiplier < 1.0:
         raise ValueError(f"jax_engine.max_events_safety_multiplier must be ≥ 1.0, got {jen.max_events_safety_multiplier}")
@@ -596,7 +538,6 @@ def validate(cfg: ExperimentConfig) -> None:
     if jen.scan_sampling_chunk < 1:
         raise ValueError(f"jax_engine.scan_sampling_chunk must be ≥ 1, got {jen.scan_sampling_chunk}")
 
-    # ── Verification thresholds ───────────────────────────────
     ver = cfg.verification
     if not (0 < ver.parity_threshold_percent < 100):
         raise ValueError(f"verification.parity_threshold_percent must be in (0, 100), got {ver.parity_threshold_percent}")
@@ -609,7 +550,6 @@ def validate(cfg: ExperimentConfig) -> None:
     if not (0.5 < ver.confidence_interval < 1.0):
         raise ValueError(f"verification.confidence_interval must be in (0.5, 1.0), got {ver.confidence_interval}")
 
-    # ── Domain Randomization ──────────────────────────────────
     dr = cfg.domain_randomization
     if dr.enabled:
         if dr.phases:
@@ -619,14 +559,12 @@ def validate(cfg: ExperimentConfig) -> None:
                 if phase.epochs < 1:
                     raise ValueError(f"DR phase {i} must have epochs ≥ 1, got {phase.epochs}")
         else:
-            # SG#1 PATCH: Validate top-level rho bounds when phases are absent
             if not (0 < dr.rho_min < dr.rho_max < 1.0):
                 raise ValueError(
                     f"domain_randomization has invalid rho range "
                     f"[{dr.rho_min}, {dr.rho_max}]; need 0 < rho_min < rho_max < 1"
                 )
 
-    # ── Sweep/generalization/stress domain guards ─────────────
     # These values are transformed into λ = ρ·Λ in experiment loops,
     # so invalid ρ would bypass the strict capacity condition (Λ > λ).
     _validate_rho_list("stability_sweep.rho_vals", cfg.stability_sweep.rho_vals)
@@ -659,20 +597,13 @@ def validate(cfg: ExperimentConfig) -> None:
 
     _validate_jax_config(cfg.jax)
 
-
-# ──────────────────────────────────────────────────────────────
-#  Derived quantities  (from the proof, §2)
-# ──────────────────────────────────────────────────────────────
-
 def total_capacity(cfg: ExperimentConfig) -> float:
     """Λ = Σ_{i=1}^{N} μ_i"""
     return math.fsum(cfg.system.service_rates)
 
-
 def load_factor(cfg: ExperimentConfig) -> float:
     """ρ = λ / Λ   ∈ (0, 1)  under the capacity condition."""
     return cfg.system.arrival_rate / total_capacity(cfg)
-
 
 def drift_constant_R(cfg: ExperimentConfig) -> float:
     """
@@ -689,7 +620,6 @@ def drift_constant_R(cfg: ExperimentConfig) -> float:
         C1 = (s.arrival_rate + total_capacity(cfg)) / 2.0
     return (s.arrival_rate * math.log(s.num_servers)) / s.alpha + C1
 
-
 def drift_rate_epsilon(cfg: ExperimentConfig) -> float:
     """
     ε = min( (Λ − λ) / N,  min_i μ_i )   > 0    [proof, Step 5]
@@ -705,7 +635,6 @@ def drift_rate_epsilon(cfg: ExperimentConfig) -> float:
         min(s.service_rates),
     )
 
-
 def compact_set_radius(cfg: ExperimentConfig) -> float:
     """
     |Q|₁  threshold defining the "compact set" C in the Foster criterion.
@@ -716,7 +645,6 @@ def compact_set_radius(cfg: ExperimentConfig) -> float:
     eps = drift_rate_epsilon(cfg)
     return math.ceil((R + 1.0) / eps)
 
-
 def critical_load_required_sim_time(
     *,
     base_sim_time: float,
@@ -725,7 +653,6 @@ def critical_load_required_sim_time(
 ) -> float:
     """Return the uncapped simulation horizon required by the critical-load scaling rule."""
     return base_sim_time * max(1.0, ((1.0 - base_rho) / max(1.0 - rho, 1e-6)))
-
 
 def critical_load_sim_time(cfg: ExperimentConfig, rho: float) -> float:
     """Return a fail-closed critical-load horizon derived from the active config."""
@@ -743,19 +670,14 @@ def critical_load_sim_time(cfg: ExperimentConfig, rho: float) -> float:
         )
     return required
 
-
-# ──────────────────────────────────────────────────────────────
-#  Hydra conversion
-# ──────────────────────────────────────────────────────────────
-
 def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
     """Build SimulationConfig with nested SSA/DGA from a flat or nested dict."""
     sim_dict = dict(sim_dict)  # shallow copy
     ssa_raw = sim_dict.pop("ssa", {})
     dga_raw = sim_dict.pop("dga", {})
-    # SG-1 FIX: max_events was removed from SSAConfig; pop it from any YAML that
-    # still carries it so SSAConfig(**ssa_raw) does not raise TypeError on upgrade.
-    # SG-6 PATCH: Emit deprecation warning instead of silently dropping.
+    # max_events was removed from SSAConfig; pop it from any YAML that
+    # still carries it so SSAConfig(**ssa_raw) does not raise TypeError.
+    # Emit deprecation warning instead of silently dropping.
     if "max_events" in ssa_raw:
         import logging as _lg
         _lg.getLogger(__name__).warning(
@@ -774,20 +696,16 @@ def _build_simulation_config(sim_dict: dict) -> SimulationConfig:
 def _build_dr_config(dr_dict: dict) -> DomainRandomizationConfig:
     """Build DomainRandomizationConfig from YAML dict.
 
-    SG#1 PATCH: When 'phases' is absent from the YAML, explicitly set
-    phases=[] so the dataclass default curriculum is NOT injected.
-    This ensures the top-level rho_min/rho_max are honored by the
-    training loop.  When 'phases' IS present, parse and pass them
-    through (existing behavior).
+    When 'phases' is absent from the YAML, explicitly set phases=[]
+    so the dataclass default curriculum is NOT injected.
     """
     dr_dict = dict(dr_dict)  # shallow copy
     phases_raw = dr_dict.pop("phases", None)
     if phases_raw is not None:
         phases = [DomainRandomizationPhase(**p) for p in phases_raw]
         return DomainRandomizationConfig(**dr_dict, phases=phases)
-    # SG#1 PATCH: Pass phases=[] to prevent dataclass default injection
+    # Pass phases=[] to prevent dataclass default injection
     return DomainRandomizationConfig(**dr_dict, phases=[])
-
 
 def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
     """
@@ -812,18 +730,13 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         generalization=GeneralizationConfig(**d.get("generalization", {})),
         stress=StressConfig(**d.get("stress", {})),  # type: ignore[arg-type]
         stability_sweep=StabilitySweepConfig(**d.get("stability_sweep", {})),
-        domain_randomization=_build_dr_config(d.get("domain_randomization", {})),  # SG-1 FIX
+        domain_randomization=_build_dr_config(d.get("domain_randomization", {})),
         neural_training=NeuralTrainingConfig(**d.get("neural_training", {})),
         output_dir=d.get("output_dir", "outputs"),
         log_dir=d.get("log_dir", "logs"),
         train_epochs=d.get("train_epochs", 30),
         batch_size=d.get("batch_size", 16),
     )
-
-
-# ──────────────────────────────────────────────────────────────
-#  Register with Hydra's ConfigStore
-# ──────────────────────────────────────────────────────────────
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=ExperimentConfig)

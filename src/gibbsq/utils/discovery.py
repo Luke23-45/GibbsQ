@@ -1,8 +1,4 @@
-"""
-Run Discovery Utilities
-----------------------
-Functions for finding and loading experiment 'Run Capsules' from the output directory.
-"""
+"""Run Discovery Utilities: Functions for finding and loading experiment Run Capsules."""
 
 import json
 from pathlib import Path
@@ -17,8 +13,6 @@ def find_latest_run(base_dir: Path, experiment_type: str) -> Path | None:
     if not exp_dir.exists():
         return None
     
-    # Run capsules are named like: run_YYYYMMDD_HHMMSS
-    # or follow the wandb run name if overridden
     runs = sorted([d for d in exp_dir.iterdir() if d.is_dir()], key=lambda x: x.name, reverse=True)
     return runs[0] if runs else None
 

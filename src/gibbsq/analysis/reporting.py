@@ -1,9 +1,4 @@
-"""
-Analysis Reporting Utilities
-----------------------------
-
-Reporting logic for GibbsQ experiment results.
-"""
+"""Analysis Reporting Utilities: Reporting logic for GibbsQ experiment results."""
 
 from pathlib import Path
 import pandas as pd
@@ -23,7 +18,6 @@ def report_stability_sweep(run_dir: Path) -> None:
         print("[!] No metrics found in capsule.")
         return
 
-    # 1. Overall Stationarity
     total_runs = len(df)
     stationary_runs = df["is_stationary"].sum()
     threshold = float(df["stationarity_threshold"].iloc[0]) if "stationarity_threshold" in df else float("nan")
@@ -42,7 +36,6 @@ def report_stability_sweep(run_dir: Path) -> None:
         failed = df[~df["is_stationary"]]
         print(f"  -> Critical Instability Boundary: rho >= {failed['rho'].min():.2f}")
 
-    # 2. Entropy Bound Verification (Q_total vs 1/alpha)
     max_stable_rho = df[df["is_stationary"]]["rho"].max()
     sub_df = df[(df["rho"] == max_stable_rho) & (df["is_stationary"])]
 
@@ -55,7 +48,6 @@ def report_stability_sweep(run_dir: Path) -> None:
             print(f"{alpha:8.2f} | {1.0/alpha:10.2f} | {q_tot:12.2f} | {slope:10.4f}")
 
     print("\nConclusion: Gibbs Bound Verified. E[Q] scales with 1/Alpha.")
-
 
 def report_policy_comparison(run_dir: Path) -> None:
     """Print a performance comparison report across different routing policies."""
@@ -82,7 +74,6 @@ def report_policy_comparison(run_dir: Path) -> None:
         print(f"{i:4d} | {lbl:>25} | {q:12.2f} | {se:8.2f} | {w:8.2f} | {gini:8.4f}")
 
     print("\nConclusion: Softmax policies achieve Gini coefficients competitive with exact JSQ.")
-
 
 def report_drift(run_dir: Path) -> None:
     """Print theoretical drift verification results."""

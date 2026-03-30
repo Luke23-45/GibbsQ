@@ -14,7 +14,6 @@ from typing import NamedTuple
 from dataclasses import dataclass
 import numpy as np
 
-
 from gibbsq.core import constants
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 
@@ -30,7 +29,6 @@ POLICY_NAME_TO_TYPE = {
     "uas": 6,
 }
 
-
 def policy_name_to_type(name: str) -> int:
     """Map a public policy name onto the compiled JAX policy selector id."""
     try:
@@ -40,7 +38,6 @@ def policy_name_to_type(name: str) -> int:
             f"Unsupported JAX policy name '{name}'. "
             f"Expected one of {sorted(POLICY_NAME_TO_TYPE)}."
         ) from exc
-
 
 def compute_configured_max_events(
     arrival_rate: float,
@@ -55,7 +52,6 @@ def compute_configured_max_events(
     expected_events = (float(arrival_rate) + float(np.sum(service_rates))) * float(sim_time)
     configured_bound = int(np.ceil(expected_events * float(max_events_multiplier))) + int(max_events_buffer)
     return max(poisson_bound, configured_bound)
-
 
 def _validate_inputs(
     *,
@@ -102,10 +98,6 @@ def _validate_inputs(
     if not bool(jnp.all(service_rates > 0)):
         raise ValueError("service_rates must be strictly positive")
 
-# ──────────────────────────────────────────────────────────────
-#  State & Configuration
-# ──────────────────────────────────────────────────────────────
-
 class SimState(NamedTuple):
     """Immutable state for the JAX lax.scan."""
     t:               jnp.ndarray    # scalar float
@@ -116,7 +108,6 @@ class SimState(NamedTuple):
     sample_idx:      jnp.ndarray    # scalar int — index of next sample slot to write
     times_buf:       jnp.ndarray    # shape (max_samples,) — accumulated sample times
     states_buf:      jnp.ndarray    # shape (max_samples, N) — accumulated sample states
-
 
 @dataclass(frozen=True)
 class SimParams:
@@ -133,17 +124,9 @@ class SimParams:
     max_samples:     int = 1        # Static bound for sample buffer
     scan_sampling_chunk: int = 16   # Max events recorded per step
 
-
-# ──────────────────────────────────────────────────────────────
-#  Routing Logic (compiled)
-# ──────────────────────────────────────────────────────────────
-
 def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp.ndarray:
     """Policy selector using static branch resolution."""
-    # Because policy_type is in static_argnames, it is evaluated at compile time.
-    # Using Python conditionals forces XLA to compile ONLY the active branch.
-    
-    if params.policy_type == 0:    # Uniform
+    if params.policy_type == 0:
         return jnp.ones(params.num_servers) / params.num_servers
         
     elif params.policy_type == 1:  # Proportional
@@ -162,11 +145,10 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)
         
-    elif params.policy_type == 4:  # Power-of-d
+    elif params.policy_type == 4:
         N = params.num_servers
         d_actual = min(params.d, N)
         perm = jax.random.permutation(key, N)
-        # Static slice is cleanly supported by JAX without dynamic_slice overhead
         candidates = perm[:d_actual]
         candidate_queues = Q[candidates]
         winner_local = jnp.argmin(candidate_queues)
@@ -179,31 +161,21 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         mask = is_min.astype(params.service_rates.dtype)
         return mask / jnp.sum(mask)
         
-    elif params.policy_type == 6:  # UAS (Unified Archimedean Softmax)
-        # UAS formula: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
-        # The μ_i weighting provides capacity-aware routing
+    elif params.policy_type == 6:
         potential = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
         logits = -params.alpha * potential
-        # Add log(μ_i) to logits = μ_i * exp(...) in log space
         logits = logits + jnp.log(params.service_rates)
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)
         
     else:
-        # Fallback to avoid compilation errors
         return jnp.ones(params.num_servers) / params.num_servers
-
-
-# ──────────────────────────────────────────────────────────────
-#  Gillespie Step (Scan Body)
-# ──────────────────────────────────────────────────────────────
 
 def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     """Single Gillespie event logic for lax.scan."""
     k1, k2, k3, k4 = jax.random.split(state.key, 4)
     
-    # 1. Probabilities & Rates
     probs = get_probs(state.Q, params, k4)
     arrival_rates = params.arrival_rate * probs
     departure_rates = params.service_rates * (state.Q > 0).astype(jnp.float32)
@@ -212,23 +184,14 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     a0 = jnp.sum(rates)
     safe_a0 = jnp.maximum(a0, RATE_EPSILON)
     
-    # 2. Time update
     tau = jax.random.exponential(k1) / safe_a0
     new_t = state.t + tau
     
-    # Mathematical Boundary Condition:
-    # State updates ONLY if the event completes inside the simulation window.
     in_window = (new_t <= params.sim_time) & (a0 > RATE_EPSILON)
-    # Time always advances so we cleanly cross the boundary and halt.
     time_advances = (state.t < params.sim_time) & (a0 > RATE_EPSILON)
     
-    # 3. State update
     u = jax.random.uniform(k2) * safe_a0
     cumrates = jnp.cumsum(rates)
-    # SG-5 FIX: Clamp event index to [0, 2N−1] before branching.
-    # When a0 ≤ RATE_EPSILON, safe_a0 > a0 so u can exceed cumrates[-1],
-    # making jnp.sum(cumrates < u) = 2N (out-of-bounds). The minimum
-    # eliminates the latent OOB scatter and the silent JAX index clamp.
     event = jnp.minimum(jnp.sum(cumrates < u), 2 * params.num_servers - 1)
     
     is_arrival = event < params.num_servers
@@ -239,7 +202,6 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
     new_arrival_count = state.arrival_count + jnp.where(is_arrival, 1, 0)
     new_departure_count = state.departure_count + jnp.where(is_arrival, 0, 1)
     
-    # 4. Mask updates safely
     final_t = jnp.where(time_advances, new_t, state.t)
     final_Q = jnp.where(in_window, new_Q, state.Q)
     final_arrival_count = jnp.where(in_window, new_arrival_count, state.arrival_count)
@@ -256,11 +218,6 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
         states_buf=state.states_buf,
     )
     
-    # ── Online sample recording ────────────────────────────────────────────
-    # Write the state BEFORE this event for any sample boundary that final_t crossed.
-    # At typical Gillespie rates (large N, high event density), tau << sample_interval,
-    # so at most one boundary is crossed per step. A fori_loop handles the rare
-    # multi-boundary case without dynamic shapes.
     def _write_one(carry, _):
         idx, t_buf, s_buf = carry
         sample_t = idx.astype(jnp.float32) * params.sample_interval
@@ -274,8 +231,6 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
         new_idx = idx + jnp.where(should, 1, 0)
         return (new_idx, t_buf, s_buf), None
 
-    # Bound the inner loop to scan_sampling_chunk iterations — handles bursts of crossings
-    # per step.
     (new_sample_idx, new_times_buf, new_states_buf), _ = lax.scan(
         _write_one,
         (next_state.sample_idx, next_state.times_buf, next_state.states_buf),
@@ -293,7 +248,6 @@ def scan_body(state: SimState, _, params: SimParams) -> tuple[SimState, None]:
         states_buf=new_states_buf,
     )
     return next_state, None
-
 
 def _fill_remaining_samples(state: SimState, params: SimParams) -> SimState:
     """Fill the flat terminal tail so the sampled grid reaches sim_time."""
@@ -327,7 +281,6 @@ def _fill_remaining_samples(state: SimState, params: SimParams) -> SimState:
         states_buf=filled_states,
     )
 
-
 def _truncate_unused_samples(state: SimState) -> SimState:
     """Zero out unused sample slots so truncated runs fail closed downstream."""
 
@@ -355,11 +308,6 @@ def _truncate_unused_samples(state: SimState) -> SimState:
         states_buf=cleared_states,
     )
 
-
-# ──────────────────────────────────────────────────────────────
-#  Public API
-# ──────────────────────────────────────────────────────────────
-
 @partial(jax.jit, static_argnames=("num_servers", "max_samples", "max_events", "policy_type", "d", "scan_sampling_chunk"))
 def _simulate_jax_impl(
     num_servers:     int,
@@ -375,7 +323,7 @@ def _simulate_jax_impl(
     d:               int = 2,
     scan_sampling_chunk: int = 16
 ):
-    """Hardware-accelerated simulation of the GibbsQ network using SOTA scan+search."""
+    """Simulate the GibbsQ network with the JAX scan/search implementation."""
     params = SimParams(
         num_servers=num_servers,
         arrival_rate=arrival_rate,
@@ -390,7 +338,6 @@ def _simulate_jax_impl(
         scan_sampling_chunk=scan_sampling_chunk
     )
     
-    # Pre-allocate sample buffers in init_state (O(max_samples × N), not O(max_events × N))
     init_state = SimState(
         t=0.0,
         Q=jnp.zeros(num_servers, dtype=jnp.int32),
@@ -402,8 +349,6 @@ def _simulate_jax_impl(
         states_buf=jnp.zeros((max_samples, num_servers), dtype=jnp.int32),
     )
     
-    # O(E): Advance the CTMC; samples are recorded into carry-state buffers inline.
-    # Per-step scan outputs are None — no O(max_events × N) array is ever materialised.
     final_state, _ = lax.scan(
         lambda s, _: scan_body(s, _, params),
         init_state,
@@ -419,13 +364,10 @@ def _simulate_jax_impl(
         final_state,
     )
 
-    # Extract the inline-recorded sample buffers directly from carry state.
-    # Memory used: O(max_samples × N) — a ~5500x reduction for N=1024 vs prior design.
     query_times    = final_state.times_buf
     sampled_states = final_state.states_buf
     
     return query_times, sampled_states, (final_state.arrival_count, final_state.departure_count), is_valid
-
 
 def simulate_jax(
     num_servers:     int,
@@ -485,7 +427,6 @@ def simulate_jax(
         
     return times, states, counts
 
-
 @partial(jax.jit, static_argnames=("num_replications", "num_servers", "max_samples", "max_events", "policy_type", "d", "scan_sampling_chunk"))
 def _run_replications_jax_impl(
     num_replications: int,
@@ -521,7 +462,6 @@ def _run_replications_jax_impl(
     )
 
     return jax.vmap(v_sim)(keys)
-
 
 def run_replications_jax(
     num_replications: int,
@@ -580,9 +520,7 @@ def run_replications_jax(
         scan_sampling_chunk=scan_sampling_chunk
     )
     
-    # VRAM footprint safety check: Extract boolean back to Host
     import warnings
-    # Verify that all replications ran to completion successfully
     if not np.all(np.asarray(is_valid)):
         warnings.warn(f"JAX lax.scan MaxEvents truncation limit reached! Some paths did not finish sim_time={sim_time}. Increase the multiplier (current={max_events_multiplier}x).", RuntimeWarning, stacklevel=2)
         

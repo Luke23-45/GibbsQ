@@ -8,28 +8,19 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 def run_reconciliation_benchmark():
-    # 1. Setup an Extreme Heterogeneous System
-    # Server 0: Lightning Fast (mu=100.0)
-    # Server 1: Tortoise Slow (mu=1.0)
-    # Total capacity = 101.0
     mu = np.array([100.0, 1.0])
     rho = 0.8
-    lam = rho * np.sum(mu) # 80.8 jobs/sec
+    lam = rho * np.sum(mu)
     
     sim_time = 100.0
     alpha = 1.0
     
     log.info(f"System: mu={mu}, lambda={lam:.2f}, rho={rho}")
     
-    # 2. Policy A: Raw Queue (The "Math" Policy)
-    # Stable? Yes. Efficient? No.
     policy_raw = SoftmaxRouting(alpha=alpha)
     
-    # 3. Policy B: UAS (The "Neural" Policy - with capacity weighting)
-    # Stable? Empirical. Efficient? Yes.
     policy_uas = UASRouting(mu=mu, alpha=alpha)
     
-    # 4. Run Simulations
     res_raw = simulate(
         num_servers=2,
         arrival_rate=lam,
@@ -49,7 +40,6 @@ def run_reconciliation_benchmark():
     )
     
     # 5. Measure "Mean Wait" (Little's Law: E[W] = E[Q] / lambda)
-    # This is the metric the Professor and the User care about.
     q_raw = np.mean(res_raw.states.sum(axis=1))
     q_uas = np.mean(res_uas.states.sum(axis=1))
     wait_raw = q_raw / lam

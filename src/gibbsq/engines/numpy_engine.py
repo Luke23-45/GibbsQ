@@ -41,7 +41,6 @@ __all__ = [
 
 log = logging.getLogger(__name__)
 
-
 def _validate_simulation_inputs(
     *,
     num_servers: int,
@@ -76,11 +75,6 @@ def _validate_simulation_inputs(
         )
     return mu
 
-
-# ──────────────────────────────────────────────────────────────
-#  Result container
-# ──────────────────────────────────────────────────────────────
-
 @dataclass(frozen=True, slots=True)
 class SimResult:
     """
@@ -108,11 +102,6 @@ class SimResult:
     departure_count: int
     final_time:      float
     num_servers:     int
-
-
-# ──────────────────────────────────────────────────────────────
-#  Core simulator
-# ──────────────────────────────────────────────────────────────
 
 def simulate(
     *,
@@ -167,16 +156,13 @@ def simulate(
         sample_interval=sample_interval,
     )
 
-    # ── State ──
     Q = np.zeros(N, dtype=np.int64)
     t = 0.0
 
-    # ── Output buffers ──
     max_samples = int(sim_time / sample_interval) + 2
     times_buf   = np.empty(max_samples, dtype=np.float64)
     states_buf  = np.empty((max_samples, N), dtype=np.int64)
 
-    # Initial snapshot
     times_buf[0]  = 0.0
     states_buf[0] = Q.copy()
     sample_idx = 1
@@ -185,17 +171,13 @@ def simulate(
     arrival_count   = 0
     departure_count = 0
 
-    # ── Pre-allocated work arrays ──
     rates = np.empty(2 * N, dtype=np.float64)
 
-    # ── Progress tracking ──
     next_log = log_interval if log_interval > 0 else sim_time + 1.0
 
-    # ── Main event loop ──
     total_events = 0
     while t < sim_time:
 
-        # 1.  Routing probabilities
         probs = np.asarray(policy(Q, rng), dtype=np.float64)
         if probs.shape != (N,):
             raise ValueError(
@@ -212,39 +194,33 @@ def simulate(
                 f"policy probabilities must sum to 1.0, got {probs_sum}"
             )
 
-        # 2.  Build event-rate vector
         #     [arrival_to_0 … arrival_to_{N-1}, departure_from_0 … departure_from_{N-1}]
         rates[:N] = lam * probs
         np.multiply(mu, (Q > 0).astype(np.float64), out=rates[N:])
 
-        # 3.  Total propensity
         a0 = rates.sum()
         if a0 <= constants.RATE_GUARD_EPSILON:
-            break                # degenerate — no events possible
+            break
 
-        # 4.  Draw holding time  ~ Exp(a0)
         tau = rng.exponential(1.0 / a0)
         t  += tau
         if t >= sim_time:
             break
 
-        # 5.  Select event via inverse CDF
         u = rng.uniform(0.0, a0)
         cumrates = rates.cumsum()
         event = int(np.searchsorted(cumrates, u, side="right"))
-        event = min(event, 2 * N - 1)               # safety clamp
+        event = min(event, 2 * N - 1)
 
-        # 6.  Apply transition
         pre_event_Q = Q.copy()
         if event < N:
             Q[event] += 1
             arrival_count += 1
         else:
             srv = event - N
-            Q[srv] -= 1                              # safe: rate is 0 if Q=0
+            Q[srv] -= 1
             departure_count += 1
 
-        # 6b. Enforce max_events ceiling (SG-1.2 fix)
         total_events += 1
         if max_events is not None and total_events >= max_events:
             import warnings
@@ -256,14 +232,12 @@ def simulate(
             )
             break
 
-        # 7.  Record snapshots at fixed intervals
         while next_sample <= t and sample_idx < max_samples:
             times_buf[sample_idx]  = next_sample
             states_buf[sample_idx] = pre_event_Q
             sample_idx  += 1
             next_sample += sample_interval
 
-        # 8.  Optional progress log
         if t >= next_log:
             pct = 100.0 * t / sim_time
             log.info(
@@ -287,11 +261,6 @@ def simulate(
         final_time=min(t, sim_time),
         num_servers=N,
     )
-
-
-# ──────────────────────────────────────────────────────────────
-#  Multi-replication driver
-# ──────────────────────────────────────────────────────────────
 
 def run_replications(
     *,

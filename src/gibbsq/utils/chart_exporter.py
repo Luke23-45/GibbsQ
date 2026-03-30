@@ -30,11 +30,6 @@ __all__ = [
     "DataConfig",
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-# Configuration Classes
-# ──────────────────────────────────────────────────────────────
-
 @dataclass
 class ChartConfig:
     """Configuration for chart export."""
@@ -45,12 +40,10 @@ class ChartConfig:
     metadata: Dict[str, str] = field(default_factory=dict)
     
     def __post_init__(self):
-        # Default metadata - only use valid PDF metadata keys
         if not self.metadata:
             self.metadata = {
                 "Creator": "GibbsQ Chart Exporter",
             }
-
 
 @dataclass
 class DataConfig:
@@ -59,11 +52,6 @@ class DataConfig:
     compress: bool = False  # For NPZ
     include_index: bool = True  # For CSV
     metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-# ──────────────────────────────────────────────────────────────
-# Chart Export Functions
-# ──────────────────────────────────────────────────────────────
 
 def save_chart(
     fig: mfig.Figure,
@@ -95,7 +83,6 @@ def save_chart(
     output_dir = output_path.parent
     base_name = output_path.stem
     
-    # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
     
     saved_paths = []
@@ -124,7 +111,6 @@ def save_chart(
     
     return saved_paths
 
-
 def save_chart_with_data(
     fig: mfig.Figure,
     data: Dict[str, Any],
@@ -151,25 +137,17 @@ def save_chart_with_data(
     """
     output_path = Path(output_path)
     
-    # Save charts
     chart_paths = save_chart(fig, output_path, chart_formats, chart_config, close_fig=False)
     
-    # Save data
     data_path = output_path.parent / f"{output_path.stem}_data"
     data_paths = [save_data(data, data_path, data_format, data_config)]
     
-    # Now close the figure
     plt.close(fig)
     
     return {
         "charts": chart_paths,
         "data": data_paths,
     }
-
-
-# ──────────────────────────────────────────────────────────────
-# Data Export Functions
-# ──────────────────────────────────────────────────────────────
 
 def save_data(
     data: Dict[str, Any],
@@ -195,10 +173,8 @@ def save_data(
     output_path = Path(output_path)
     format = format.lower().lstrip('.')
     
-    # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Add extension if not present
     file_path = output_path.with_suffix(f".{format}")
     
     if format == "csv":
@@ -213,30 +189,23 @@ def save_data(
     log.debug(f"Saved data: {file_path}")
     return file_path
 
-
 def _save_csv(data: Dict[str, Any], file_path: Path, config: DataConfig) -> None:
     """Save data as CSV file."""
     import pandas as pd
     
-    # Convert to DataFrame
     df = pd.DataFrame(data)
     
-    # Add metadata as comments if present
     if config.metadata:
-        # Write metadata header
         with open(file_path, 'w') as f:
             for key, value in config.metadata.items():
                 f.write(f"# {key}: {value}\n")
         
-        # Append data
         df.to_csv(file_path, mode='a', index=config.include_index)
     else:
         df.to_csv(file_path, index=config.include_index)
 
-
 def _save_json(data: Dict[str, Any], file_path: Path, config: DataConfig) -> None:
     """Save data as JSON file."""
-    # Convert numpy arrays to lists for JSON serialization
     serializable_data = {}
     for key, value in data.items():
         if isinstance(value, np.ndarray):
@@ -246,17 +215,14 @@ def _save_json(data: Dict[str, Any], file_path: Path, config: DataConfig) -> Non
         else:
             serializable_data[key] = value
     
-    # Add metadata
     if config.metadata:
         serializable_data["_metadata"] = config.metadata
     
     with open(file_path, 'w') as f:
         json.dump(serializable_data, f, indent=config.indent)
 
-
 def _save_npz(data: Dict[str, Any], file_path: Path, config: DataConfig) -> None:
     """Save data as NPZ file (numpy compressed)."""
-    # Convert lists to numpy arrays
     np_data = {}
     for key, value in data.items():
         if isinstance(value, list):
@@ -264,18 +230,12 @@ def _save_npz(data: Dict[str, Any], file_path: Path, config: DataConfig) -> None
         elif isinstance(value, np.ndarray):
             np_data[key] = value
         else:
-            # Store scalars as arrays
             np_data[key] = np.array(value)
     
     if config.compress:
         np.savez_compressed(file_path, **np_data)
     else:
         np.savez(file_path, **np_data)
-
-
-# ──────────────────────────────────────────────────────────────
-# Batch Export Functions
-# ──────────────────────────────────────────────────────────────
 
 def export_experiment_results(
     output_dir: Union[str, Path],
@@ -310,7 +270,6 @@ def export_experiment_results(
     all_chart_paths = []
     all_data_paths = []
     
-    # Export figures
     if figures:
         for name, fig in figures.items():
             chart_path = output_dir / name
@@ -318,7 +277,6 @@ def export_experiment_results(
             all_chart_paths.extend(paths)
             plt.close(fig)
     
-    # Export data
     if data:
         for name, data_dict in data.items():
             data_path = output_dir / f"{name}_data"
@@ -330,11 +288,6 @@ def export_experiment_results(
         "data": all_data_paths,
     }
 
-
-# ──────────────────────────────────────────────────────────────
-# Utility Functions
-# ──────────────────────────────────────────────────────────────
-
 def get_default_chart_config() -> ChartConfig:
     """Get default chart configuration for publication."""
     return ChartConfig(
@@ -344,7 +297,6 @@ def get_default_chart_config() -> ChartConfig:
         pad_inches=0.1,
     )
 
-
 def get_default_data_config() -> DataConfig:
     """Get default data configuration."""
     return DataConfig(
@@ -353,12 +305,10 @@ def get_default_data_config() -> DataConfig:
         include_index=True,
     )
 
-
 def ensure_output_dir(output_path: Union[str, Path]) -> Path:
     """Ensure output directory exists and return path."""
     output_path = Path(output_path)
     if output_path.suffix:
-        # It's a file path, get parent
         output_dir = output_path.parent
     else:
         output_dir = output_path

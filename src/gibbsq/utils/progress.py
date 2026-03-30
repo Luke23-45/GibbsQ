@@ -15,7 +15,6 @@ except Exception:  # pragma: no cover - exercised via monkeypatch in tests
 PROGRESS_ENV_VAR = "GIBBSQ_PROGRESS"
 VALID_PROGRESS_MODES = {"auto", "on", "off"}
 
-
 def normalize_progress_mode(mode: str | None) -> str:
     """Normalize progress mode values and reject unsupported ones."""
     normalized = (mode or "auto").strip().lower()
@@ -26,13 +25,11 @@ def normalize_progress_mode(mode: str | None) -> str:
         )
     return normalized
 
-
 def get_progress_mode(mode: str | None = None) -> str:
     """Resolve progress mode from an explicit override or environment."""
     if mode is not None:
         return normalize_progress_mode(mode)
     return normalize_progress_mode(os.environ.get(PROGRESS_ENV_VAR))
-
 
 def configure_progress_mode(mode: str | None, env: dict[str, str] | None = None) -> str:
     """Persist a progress mode into an environment mapping."""
@@ -40,7 +37,6 @@ def configure_progress_mode(mode: str | None, env: dict[str, str] | None = None)
     target_env = os.environ if env is None else env
     target_env[PROGRESS_ENV_VAR] = resolved
     return resolved
-
 
 def progress_enabled(
     mode: str | None = None,
@@ -66,7 +62,6 @@ def progress_enabled(
     target_stream = stream if stream is not None else sys.stderr
     is_tty = getattr(target_stream, "isatty", None)
     return bool(is_tty and is_tty())
-
 
 class NullProgress:
     """No-op progress object with the subset of tqdm's interface we use."""
@@ -106,7 +101,6 @@ class NullProgress:
         self.close()
         return False
 
-
 def _default_progress_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     merged = {
         "dynamic_ncols": True,
@@ -114,7 +108,6 @@ def _default_progress_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     }
     merged.update(kwargs)
     return merged
-
 
 def create_progress(
     *,
@@ -130,7 +123,6 @@ def create_progress(
 
     tqdm_kwargs = _default_progress_kwargs(kwargs)
     return _tqdm(iterable=iterable, total=total, desc=desc, **tqdm_kwargs)
-
 
 def iter_progress(
     iterable: Iterable[Any],
@@ -148,7 +140,6 @@ def iter_progress(
         mode=mode,
         **kwargs,
     )
-
 
 @contextmanager
 def managed_progress(

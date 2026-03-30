@@ -48,7 +48,6 @@ __all__ = [
     "plot_policy_comparison",
     "plot_alpha_sweep",
     "plot_convergence",
-    # New chart-type-aware functions
     "plot_gradient_scatter",
     "plot_stress_dashboard",
     "plot_training_dashboard",
@@ -57,10 +56,6 @@ __all__ = [
     "plot_ablation_bars",
     "plot_critical_load",
 ]
-
-# ──────────────────────────────────────────────────────────────
-#  Theme-Aware Plotting Helper
-# ──────────────────────────────────────────────────────────────
 
 def _get_plot_colors(theme: str) -> dict:
     """Get color palette based on theme (legacy compatibility)."""
@@ -79,7 +74,6 @@ def _get_plot_colors(theme: str) -> dict:
         "text": config.text_color,
     }
 
-
 def _get_chart_style(
     chart_type: ChartType,
     theme: Optional[str] = None,
@@ -94,7 +88,6 @@ def _get_chart_style(
     contour_color = "white" if theme == "dark" else "black"
     return spec, theme, contour_color
 
-
 def _setup_plot(theme: Optional[str] = None) -> str:
     """Set up plot with appropriate theme."""
     if theme is None:
@@ -102,15 +95,9 @@ def _setup_plot(theme: Optional[str] = None) -> str:
     apply_theme(theme)
     return theme
 
-
 def _apply_theme() -> None:
     """Legacy function for backward compatibility. Applies dark theme."""
     apply_theme("dark")
-
-
-# ──────────────────────────────────────────────────────────────
-#  Plots
-# ──────────────────────────────────────────────────────────────
 
 def plot_trajectory(
     result: SimResult,
@@ -137,7 +124,6 @@ def plot_trajectory(
 
     t, q_tot = total_queue_trajectory(result)
 
-    # Subsample if too large for sensible plotting
     max_pts = 10000
     if len(t) > max_pts:
         step = len(t) // max_pts
@@ -149,7 +135,6 @@ def plot_trajectory(
     ax.set_xlabel("Time (t)")
     ax.set_ylabel(r"$|Q(t)|_1$")
 
-    # Add marginal histogram
     ax_hist = ax.inset_axes([1.02, 0, 0.2, 1], sharey=ax)
     ax_hist.hist(q_tot, bins=40, orientation="horizontal", color=colors["histogram"], alpha=0.5)
     ax_hist.axis("off")
@@ -158,7 +143,6 @@ def plot_trajectory(
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
 
 def plot_drift_landscape(
     drift_res: DriftResult,
@@ -188,7 +172,6 @@ def plot_drift_landscape(
     if states.shape[1] != 2:
         raise ValueError("Heatmap only supported for N=2 systems.")
 
-    # Infer grid dimensions
     q_max = int(states.max())
     grid_shape = (q_max + 1, q_max + 1)
     drift_grid = drift_res.exact_drifts.reshape(grid_shape)
@@ -204,7 +187,6 @@ def plot_drift_landscape(
     )
     cbar = plt.colorbar(im, ax=ax, label=r"Generator Drift ${\cal L}V(Q)$")
     
-    # Adjust colorbar label color for theme
     cbar.ax.yaxis.label.set_color(colors["text"])
     cbar.ax.tick_params(colors=colors["text"])
 
@@ -212,14 +194,12 @@ def plot_drift_landscape(
     ax.set_xlabel(r"$Q_1$")
     ax.set_ylabel(r"$Q_2$")
 
-    # Region of positive drift contour
     ax.contour(drift_grid.T, levels=[0.0], colors=colors["contour"], linewidths=2.0)
 
     if save_path:
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
 
 def plot_drift_vs_norm(
     drift_res: DriftResult,
@@ -252,7 +232,6 @@ def plot_drift_vs_norm(
     norms = drift_res.norms
     drifts = drift_res.exact_drifts
 
-    # Random subsample to avoid overplotting if trajectory-based
     max_pts = 5000
     if len(norms) > max_pts:
         idx = np.random.choice(len(norms), max_pts, replace=False)
@@ -261,7 +240,6 @@ def plot_drift_vs_norm(
 
     ax.scatter(norms, drifts, color=colors["scatter"], s=10, alpha=0.5, label="Exact Drift")
 
-    # Theoretical line
     x_line = np.array([0, float(norms.max())])
     y_line = -eps * x_line + R
     ax.plot(x_line, y_line, color=colors["error"], linewidth=2.5, 
@@ -278,7 +256,6 @@ def plot_drift_vs_norm(
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
 
 def plot_policy_comparison(
     results_dict: dict[str, list[float]],
@@ -311,7 +288,6 @@ def plot_policy_comparison(
 
     x = np.arange(len(labels))
     
-    # Use colorblind-safe palette for bars
     palette = THEMES[theme].color_palette
     bar_colors = [palette[i % len(palette)] for i in range(len(labels))]
     
@@ -323,7 +299,6 @@ def plot_policy_comparison(
     ax.set_ylabel(metric_name)
     ax.set_title(f"Policy Comparison: {metric_name}")
 
-    # Value annotations
     for bar in bars:
         h = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2, h * 1.05, f"{h:.2f}",
@@ -333,7 +308,6 @@ def plot_policy_comparison(
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
 
 def plot_alpha_sweep(
     alpha_values: np.ndarray,
@@ -361,7 +335,6 @@ def plot_alpha_sweep(
     
     fig, ax = plt.subplots(figsize=(9, 6))
 
-    # Use colorblind-safe palette
     palette = THEMES[theme].color_palette
     
     for i, rho_label in enumerate(rho_labels):
@@ -379,7 +352,6 @@ def plot_alpha_sweep(
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
 
 def plot_convergence(
     result: SimResult,
@@ -405,7 +377,6 @@ def plot_convergence(
     fig, ax = plt.subplots(figsize=(8, 4))
     t, cum_avg = running_average(result)
 
-    # Subsample points
     if len(t) > 5000:
         step = len(t) // 5000
         t = t[::step]
@@ -416,7 +387,6 @@ def plot_convergence(
     ax.set_xlabel("Time (t)")
     ax.set_ylabel(r"$\frac{1}{t}\int_0^t |Q(s)|_1 ds$")
 
-    # Draw final average line
     final_val = cum_avg[-1]
     ax.axhline(final_val, color=colors["contour"], linestyle="--", alpha=0.5,
                label=rf"Final: {final_val:.2f}")
@@ -426,11 +396,6 @@ def plot_convergence(
         save_chart(fig, Path(save_path), formats or ['png'])
     
     return fig
-
-
-# ──────────────────────────────────────────────────────────────
-#  NEW: Chart-Type-Aware Plot Functions
-# ──────────────────────────────────────────────────────────────
 
 def plot_gradient_scatter(
     fd_grads: np.ndarray,
@@ -462,7 +427,6 @@ def plot_gradient_scatter(
 
     fig, ax = plt.subplots(figsize=spec.figsize)
 
-    # Colour dimension
     c = z_scores if z_scores is not None else np.abs(rf_grads - fd_grads)
     sc = ax.scatter(
         fd_grads, rf_grads,
@@ -471,7 +435,6 @@ def plot_gradient_scatter(
     )
     plt.colorbar(sc, ax=ax, label="Z-score magnitude" if z_scores is not None else "|error|")
 
-    # Identity line
     lims = [
         min(fd_grads.min(), rf_grads.min()),
         max(fd_grads.max(), rf_grads.max()),
@@ -483,7 +446,6 @@ def plot_gradient_scatter(
     ax.set_title("Gradient Estimator Agreement")
     ax.legend(loc="upper left")
 
-    # Scoreboard annotation
     if summary_stats:
         text_parts = []
         if "cosine_similarity" in summary_stats:
@@ -503,7 +465,6 @@ def plot_gradient_scatter(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_stress_dashboard(
     scaling_data: dict,
@@ -531,7 +492,6 @@ def plot_stress_dashboard(
 
     fig, axes = plt.subplots(1, 3, figsize=spec.figsize)
 
-    # Panel A: Scaling (E[Q] vs N)
     ax_a = axes[0]
     ax_a.plot(
         scaling_data["n_values"], scaling_data["mean_q"],
@@ -543,7 +503,6 @@ def plot_stress_dashboard(
     ax_a.set_title("(a) Scaling Test")
     ax_a.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
-    # Panel B: Critical load (E[Q] vs ρ, log scale)
     ax_b = axes[1]
     rho = critical_data["rho_values"]
     eq = critical_data["mean_q"]
@@ -557,7 +516,6 @@ def plot_stress_dashboard(
     ax_b.set_title("(b) Critical Load")
     ax_b.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
-    # Panel C: Heterogeneity (bar chart)
     ax_c = axes[2]
     x_pos = np.arange(len(hetero_data["scenario_names"]))
     bar_colors = [spec.palette[i % len(spec.palette)] for i in range(len(x_pos))]
@@ -576,7 +534,6 @@ def plot_stress_dashboard(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_training_dashboard(
     metrics: dict,
@@ -612,7 +569,6 @@ def plot_training_dashboard(
     perf_ema_key = "base_regime_index_ema" if "base_regime_index_ema" in metrics else "performance_index_ema"
     epochs = metrics.get("epoch", list(range(len(metrics.get(perf_key, [])))))
 
-    # Panel A: Base-regime performance proxy (%)
     ax_a = axes[0, 0]
     if perf_key in metrics:
         ax_a.plot(epochs, metrics[perf_key],
@@ -629,7 +585,6 @@ def plot_training_dashboard(
     ax_a.legend(loc="lower right", fontsize=7)
     ax_a.grid(True, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
-    # Panel B: Loss Curves
     ax_b = axes[0, 1]
     if "policy_loss" in metrics:
         ax_b.plot(epochs, metrics["policy_loss"], linewidth=spec.line_width,
@@ -645,7 +600,6 @@ def plot_training_dashboard(
     ax_b.set_title("(b) Loss Curves")
     ax_b.grid(True, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
-    # Panel C: Critic Quality
     ax_c = axes[1, 0]
     if "ev_ema" in metrics:
         ax_c.plot(epochs, metrics["ev_ema"], linewidth=spec.line_width,
@@ -659,7 +613,6 @@ def plot_training_dashboard(
     ax_c.legend(loc="lower right", fontsize=7)
     ax_c.grid(True, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
-    # Panel D: Gradient Health
     ax_d = axes[1, 1]
     if "policy_grad_norm" in metrics:
         ax_d.plot(epochs, metrics["policy_grad_norm"], linewidth=spec.line_width,
@@ -686,7 +639,6 @@ def plot_training_dashboard(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_raincloud(
     group_a_data: np.ndarray,
@@ -733,7 +685,6 @@ def plot_raincloud(
     for i, (data, label, pos) in enumerate(zip(data_groups, labels, positions)):
         color = colors[i]
 
-        # Half-violin (seaborn) or simple histogram fallback
         if _has_seaborn:
             parts = ax.violinplot(
                 data, positions=[pos], showmeans=False,
@@ -741,7 +692,6 @@ def plot_raincloud(
                 widths=0.6,
             )
             for body in parts["bodies"]:
-                # Make half-violin by clipping
                 m = np.mean(body.get_paths()[0].vertices[:, 0])
                 body.get_paths()[0].vertices[:, 0] = np.clip(
                     body.get_paths()[0].vertices[:, 0],
@@ -752,7 +702,6 @@ def plot_raincloud(
                 body.set_edgecolor(contour)
                 body.set_alpha(spec.fill_alpha)
 
-        # Jittered scatter (raw data points)
         jitter = np.random.default_rng(42).uniform(-0.08, 0.08, size=len(data))
         offset = 0.15 if i == 0 else -0.15
         ax.scatter(
@@ -761,7 +710,6 @@ def plot_raincloud(
             edgecolors="white", linewidth=0.5, zorder=3,
         )
 
-        # Mini boxplot
         bp = ax.boxplot(
             data, positions=[pos], widths=0.12,
             patch_artist=True, showfliers=False,
@@ -777,7 +725,6 @@ def plot_raincloud(
     ax.set_title(f"{group_a_label} vs {group_b_label}: Distribution Comparison")
     ax.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha, axis="y")
 
-    # Statistical annotation bracket
     if stats:
         y_max = max(group_a_data.max(), group_b_data.max())
         bracket_y = y_max * 1.08
@@ -802,7 +749,6 @@ def plot_raincloud(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_improvement_heatmap(
     grid: np.ndarray,
@@ -836,7 +782,6 @@ def plot_improvement_heatmap(
 
     fig, ax = plt.subplots(figsize=spec.figsize)
 
-    # Diverging normalisation centred at break-even
     vmax = max(abs(grid.max() - center), abs(grid.min() - center))
     norm = mcolors.TwoSlopeNorm(vmin=center - vmax, vcenter=center, vmax=center + vmax)
 
@@ -846,7 +791,6 @@ def plot_improvement_heatmap(
     )
     cbar = plt.colorbar(im, ax=ax, label="Improvement Ratio (GibbsQ / Neural)")
 
-    # Cell annotations
     for i in range(grid.shape[0]):
         for j in range(grid.shape[1]):
             val = grid[i, j]
@@ -868,7 +812,6 @@ def plot_improvement_heatmap(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_ablation_bars(
     variant_names: List[str],
@@ -899,7 +842,6 @@ def plot_ablation_bars(
     fig, ax = plt.subplots(figsize=spec.figsize)
     x = np.arange(len(variant_names))
 
-    # Use ablation cascade colours (extend if more than 4 variants)
     palette = spec.palette
     bar_colors = [palette[i % len(palette)] for i in range(len(variant_names))]
 
@@ -909,17 +851,14 @@ def plot_ablation_bars(
         alpha=spec.fill_alpha, edgecolor=contour,
     )
 
-    # Delta-% annotations relative to best (first) variant
     best_val = mean_values[0]
     for i, bar in enumerate(bars):
         h = bar.get_height()
-        # Value annotation
         ax.text(
             bar.get_x() + bar.get_width() / 2, h + se_values[i] + 0.02 * best_val,
             f"{h:{spec.value_format}}",
             ha="center", va="bottom", fontsize=spec.annotation_fontsize,
         )
-        # Delta annotation (skip first)
         if i > 0 and best_val > 0:
             delta = ((h - best_val) / best_val) * 100
             sign = "+" if delta > 0 else ""
@@ -945,7 +884,6 @@ def plot_ablation_bars(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_critical_load(
     rho_values: np.ndarray,
@@ -975,7 +913,6 @@ def plot_critical_load(
 
     fig, ax = plt.subplots(figsize=spec.figsize)
 
-    # Dual lines with distinct markers
     ax.plot(rho_values, gibbs_eq,
             marker="o", markersize=spec.marker_size,
             linewidth=spec.line_width, color=PAIR_GIBBSQ,
@@ -990,7 +927,6 @@ def plot_critical_load(
     ax.set_ylabel(r"$\mathbb{E}[|Q|_1]$ (log scale)")
     ax.set_title(r"Critical Load: E[Q] vs $\rho$ Near Stability Boundary")
 
-    # Shaded near-critical region
     ax.axvspan(critical_rho, rho_values.max() * 1.01,
                alpha=0.08, color="#D55E00", label=f"Near-critical (ρ > {critical_rho})")
 
@@ -1003,7 +939,6 @@ def plot_critical_load(
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
 
     return fig
-
 
 def plot_tier_comparison_bars(
     labels: List[str],
@@ -1031,7 +966,6 @@ def plot_tier_comparison_bars(
     spec, theme, contour = _get_chart_style(ChartType.BAR_COMPARISON, theme)
     palette = spec.palette
     
-    # Map tier to color (Tier 1 is best/green, etc., fallback to gray)
     tier_colors = {
         1: palette[min(7, len(palette) - 1)],
         2: palette[min(1, len(palette) - 1)],
@@ -1065,7 +999,6 @@ def plot_tier_comparison_bars(
         
     return fig
 
-
 def plot_platinum_grid(
     rho_values: np.ndarray,
     uniform_eq: np.ndarray,
@@ -1086,7 +1019,6 @@ def plot_platinum_grid(
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
-    # Panel 1: Log-scale Expected Queue
     ax1.plot(rho_values, uniform_eq, linestyle='--', marker='x', color='#95a5a6',
              linewidth=spec.line_width, label='Uniform')
     ax1.plot(rho_values, neural_eq, linestyle='-', marker='o',
@@ -1100,7 +1032,6 @@ def plot_platinum_grid(
     ax1.legend()
     ax1.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha)
     
-    # Panel 2: Performance Index
     ax2.plot(rho_values, performance_index, linestyle='-', marker='D',
              linewidth=spec.line_width + 0.5, color=spec.palette[0])
     ax2.axhline(100, color=PAIR_GIBBSQ, linestyle='--', alpha=0.5, label='JSQ Parity')

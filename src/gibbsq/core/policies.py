@@ -38,11 +38,6 @@ __all__ = [
     "make_policy",
 ]
 
-
-# ──────────────────────────────────────────────────────────────
-#  Protocol
-# ──────────────────────────────────────────────────────────────
-
 @runtime_checkable
 class RoutingPolicy(Protocol):
     """
@@ -66,11 +61,6 @@ class RoutingPolicy(Protocol):
         Q: np.ndarray,
         rng: np.random.Generator,
     ) -> np.ndarray: ...
-
-
-# ──────────────────────────────────────────────────────────────
-#  Implementations
-# ──────────────────────────────────────────────────────────────
 
 @ComponentRegistry.register_policy("softmax")
 class SoftmaxRouting:
@@ -114,7 +104,6 @@ class SoftmaxRouting:
     def __repr__(self) -> str:
         return f"SoftmaxRouting(α={self._alpha})"
 
-
 @ComponentRegistry.register_policy("uniform")
 class UniformRouting:
     """
@@ -132,14 +121,13 @@ class UniformRouting:
     def __repr__(self) -> str:
         return "UniformRouting()"
 
-
 @ComponentRegistry.register_policy("proportional")
 class ProportionalRouting:
     """
     Proportional-to-capacity routing:  p_i = μ_i / Λ.
 
-    State-independent.  Throughput-optimal under the strict capacity
-    condition when servers are heterogeneous.
+    State-independent. Under the strict capacity condition, this routing rule
+    matches service capacity fractions across heterogeneous servers.
 
     Parameters
     ----------
@@ -165,7 +153,6 @@ class ProportionalRouting:
     def __repr__(self) -> str:
         return f"ProportionalRouting(N={len(self._probs)})"
 
-
 @ComponentRegistry.register_policy("jsq")
 class JSQRouting:
     """
@@ -186,7 +173,6 @@ class JSQRouting:
 
     def __repr__(self) -> str:
         return "JSQRouting()"
-
 
 @ComponentRegistry.register_policy("power_of_d")
 class PowerOfDRouting:
@@ -228,7 +214,6 @@ class PowerOfDRouting:
     def __repr__(self) -> str:
         return f"PowerOfDRouting(d={self._d})"
 
-
 @ComponentRegistry.register_policy("jssq")
 class JSSQRouting:
     """
@@ -241,9 +226,8 @@ class JSSQRouting:
     This represents the expected time a newly arriving job would spend at server i
     (waiting + service), assuming FCFS discipline.
     
-    This policy is **asymptotically optimal** for M/M/N heterogeneous queues in
-    heavy traffic (Halfin-Whitt regime), unlike JSQ which fails catastrophically
-    in heterogeneous systems.
+    Heavy-traffic motivation follows the heterogeneous-server results cited in
+    the project notes for the Halfin-Whitt regime.
     
     Parameters
     ----------
@@ -273,18 +257,12 @@ class JSSQRouting:
         Q: np.ndarray,
         rng: np.random.Generator,
     ) -> np.ndarray:
-        # Compute look-ahead potential: (Q + 1) / μ
         potential = (Q.astype(np.float64) + 1.0) / self._mu
-        
-        # Route to minimum potential
         mask = (potential == potential.min()).astype(np.float64)
         return mask / mask.sum()
     
     def __repr__(self) -> str:
         return f"JSSQRouting(N={len(self._mu)})"
-
-
-
 
 @ComponentRegistry.register_policy("uas")
 class UASRouting:
@@ -339,24 +317,18 @@ class UASRouting:
         Q: np.ndarray,
         rng: np.random.Generator,
     ) -> np.ndarray:
-        # UAS formula: p_i ∝ μ_i * exp(-α * (Q_i + 1) / μ_i)
         potential = (Q.astype(np.float64) + 1.0) / self._mu
         logits = -self._alpha * potential
         
-        # Add log(μ_i) to logits = μ_i * exp(...) in log space
+
         logits = logits + np.log(self._mu)
         
-        logits = logits - logits.max()  # log-sum-exp trick for stability
+        logits = logits - logits.max()  
         weights = np.exp(logits)
         return weights / weights.sum()
     
     def __repr__(self) -> str:
         return f"UASRouting(α={self._alpha}, N={len(self._mu)})"
-
-
-# ──────────────────────────────────────────────────────────────
-#  Factory
-# ──────────────────────────────────────────────────────────────
 
 def make_policy(
     name: str,

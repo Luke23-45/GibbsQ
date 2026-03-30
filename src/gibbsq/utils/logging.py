@@ -49,7 +49,6 @@ def get_run_config(
     tuple[Path, str]
         (run_dir, run_id)
     """
-    # Initialize hardware acceleration if enabled (must be done early)
     setup_jax(cfg.jax)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -59,15 +58,10 @@ def get_run_config(
     run_dir = Path(cfg.output_dir) / experiment_type / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # ── File logging ────────────────────────────────────
-    # Write logs to a file inside the run directory.
     capsule_log_dir = run_dir / "logs"
     capsule_log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = capsule_log_dir / "run.log"
-    # SG#18 FIX: Guard against duplicate FileHandler accumulation.
-    # If get_run_config is called multiple times in the same process, each call
-    # would add another FileHandler to the root logger, causing duplicate log lines.
     _root = logging.getLogger()
     _existing_log_files = {
         h.baseFilename for h in _root.handlers
@@ -80,7 +74,6 @@ def get_run_config(
         ))
         _root.addHandler(file_handler)
     
-    # Persist the resolved experiment config into the capsule for absolute traceability
     config_path = run_dir / "config.yaml"
     if raw_cfg is not None:
         OmegaConf.save(raw_cfg, config_path, resolve=True)
@@ -119,7 +112,6 @@ def setup_wandb(
     if not cfg.wandb.enabled or wandb is None:
         return None
 
-    # Handle Offline Mode
     if cfg.wandb.mode == "offline":
         os.environ["WANDB_MODE"] = "offline"
         log.info("[Logging] WandB offline mode.")
@@ -129,13 +121,11 @@ def setup_wandb(
     else:
         os.environ["WANDB_MODE"] = "online"
 
-    # Resolve configuration
     if raw_cfg is not None:
         full_config = OmegaConf.to_container(raw_cfg, resolve=True)
     else:
         full_config = OmegaConf.to_container(OmegaConf.create(cfg), resolve=True)
 
-    # Use existing run_id or fallback to cfg
     final_run_name = run_id or cfg.wandb.run_name
 
     run = wandb.init(

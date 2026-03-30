@@ -11,7 +11,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-
 def compute_action_interval_returns_from_trajectory_numpy(
     states: list[np.ndarray],
     jump_times: list[float],
@@ -37,7 +36,6 @@ def compute_action_interval_returns_from_trajectory_numpy(
         gamma=gamma,
     )
     return extract_action_returns_numpy(step_returns, is_action)
-
 
 def compute_action_interval_returns_numpy(
     q_integrals: np.ndarray,
@@ -79,7 +77,6 @@ def compute_action_interval_returns_numpy(
 
     return returns
 
-
 @jax.jit
 def compute_action_interval_returns_jax(
     q_integrals: jax.Array,
@@ -115,7 +112,6 @@ def compute_action_interval_returns_jax(
     )
     return step_returns
 
-
 def extract_action_returns_numpy(
     step_returns: np.ndarray,
     is_action: np.ndarray,
@@ -126,7 +122,6 @@ def extract_action_returns_numpy(
     if valid_mask is not None:
         is_action = is_action & np.asarray(valid_mask, dtype=bool)
     return np.asarray(step_returns, dtype=np.float64)[is_action]
-
 
 @jax.jit
 def extract_first_action_returns_jax(

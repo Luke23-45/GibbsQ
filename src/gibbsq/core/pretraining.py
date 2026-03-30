@@ -1,8 +1,7 @@
 """
-Ultra-Robust Behavior Cloning (BC) Utilities.
+Behavior Cloning (BC) utilities.
 
-This module centralizes the foundational pretraining logic for N-GibbsQ,
-incorporating Platinum-grade robustness patches:
+This module centralizes the pretraining logic for N-GibbsQ:
 1. Steady-State Expert Sampling
 2. Noisy State Augmentation
 3. Label Smoothing (CE Loss)
@@ -29,7 +28,6 @@ from gibbsq.utils.progress import create_progress
 
 log = logging.getLogger(__name__)
 
-
 def compute_value_bootstrap_targets(
     queue_totals: jnp.ndarray,
     random_limit: float,
@@ -54,12 +52,9 @@ def collect_robust_expert_data(
     all_states = []
     all_rhos = []
     all_probs = []
-    all_q_targets = []  # Target for Value Network (Mean Queue)
-    all_mus = []        # PATCH: Store corresponding mu for generalization training
+    all_q_targets = []
+    all_mus = []
     
-    # PATCH: Domain Randomization mapping not just rho, but also scaling factors for mu!
-    # To generalize better, we'll aggressively downscale and upscale capacities
-    # to prevent value hallucination out of bounds.
     mu_scales = [0.5, 1.0, 2.0]
     samples_per_variant = max(100, samples_per_rho // len(mu_scales))
     
@@ -79,7 +74,6 @@ def collect_robust_expert_data(
                 sample_interval=1.0,
                 rng=rng
             )
-            # Take steady-state samples (second half)
             states = res.states[len(res.states)//2:]
             
             if len(states) > samples_per_variant:
@@ -87,14 +81,12 @@ def collect_robust_expert_data(
                 states = states[indices]
                 
             for s in states:
-                # 1. Original
                 all_states.append(s)
                 all_rhos.append(rho)
                 all_probs.append(expert(s, rng))
                 all_q_targets.append(np.sum(s))
                 all_mus.append(scaled_service_rates)
                 
-                # 2. Noisy Augmentation
                 noise = rng.integers(-1, 2, size=num_servers)
                 s_aug = np.maximum(0, s + noise)
                 all_states.append(s_aug)
@@ -122,7 +114,6 @@ def train_robust_bc_policy(
     alpha: float = 1.0,
 ):
     """Trains a neural policy using Ultra-Robust BC logic."""
-    # Extract num_servers from the model's final layer
     num_servers = policy_net.layers[-1].weight.shape[0]
     
     X, R, Y, G, MU = collect_robust_expert_data(
@@ -132,24 +123,17 @@ def train_robust_bc_policy(
         alpha=alpha,
     )
     
-    # Optimizer
     optimizer = optax.adamw(lr, weight_decay=weight_decay)
     opt_state = optimizer.init(eqx.filter(policy_net, eqx.is_array))
     
     @eqx.filter_jit
     def loss_fn(model, x, r, target_probs, mu_batch):
-        # PATCH: Use local mu_batch so generated features match the domain randomization
-        # SG#2: Pass raw Q and explicit kwargs. 
-        # Use lambda to perfectly bind the vmap axes and protect the XLA tracer.
         logits = jax.vmap(lambda q, m, rh: model(q, mu=m, rho=rh))(x, mu_batch, r)
-        
-        # Softmax over expert exact probability mass
         soft_labels = target_probs * (1.0 - label_smoothing) + (label_smoothing / num_servers)
         
         log_probs = jax.nn.log_softmax(logits, axis=-1)
         ce_loss = -jnp.mean(jnp.sum(soft_labels * log_probs, axis=-1))
         
-        # Entropy bonus
         probs = jax.nn.softmax(logits, axis=-1)
         entropy = -jnp.sum(probs * log_probs, axis=-1)
         ent_loss = -entropy_bonus * jnp.mean(entropy)
@@ -194,7 +178,6 @@ def train_robust_bc_value(
     alpha: float = 1.0,
 ):
     """Trains a value network (critic) to estimate steady-state queue lengths."""
-    # Extract num_servers from the model's layers
     num_servers = len(service_rates)
     
     X, R, Y, G, MU = collect_robust_expert_data(
@@ -207,8 +190,6 @@ def train_robust_bc_value(
     optimizer = optax.adamw(lr, weight_decay=weight_decay)
     opt_state = optimizer.init(eqx.filter(value_net, eqx.is_array))
 
-    # Warm-start the critic on the same linear PI scale that the online
-    # REINFORCE loop uses for its dense reward shaping.
     G_scaled = compute_value_bootstrap_targets(
         queue_totals=G,
         random_limit=random_limit,
@@ -217,8 +198,6 @@ def train_robust_bc_value(
 
     @eqx.filter_jit
     def loss_fn(model, x, r, g, mu_batch):
-        # PATCH: Use local mu_batch so generated features match the domain randomization
-        # SG#2 Fix for Value Network: Pass raw Q and explicit kwargs.
         preds = jax.vmap(lambda q, m, rh: model(q, mu=m, rho=rh))(x, mu_batch, r)
         loss = jnp.mean((preds - g)**2)
         return loss

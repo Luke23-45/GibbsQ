@@ -1,4 +1,3 @@
-# Final publication-grade configuration
 # Usage: python scripts/execution/experiment_runner.py <experiment> --config-name final_experiment
 
 system:

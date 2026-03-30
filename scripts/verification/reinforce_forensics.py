@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Forensic reproduction harness for REINFORCE objective mismatches.
 

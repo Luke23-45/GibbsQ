@@ -1,15 +1,3 @@
-"""
-Hardened test suite for gibbsq.engines.jax_engine — Robustness Loop Stage 2.
-
-Categories:
-- A: Correctness Tests
-- B: Invariant Tests
-- C: Edge Case Tests
-- D: Numerical Stability Tests
-- E: Gradient Flow Tests (covered in test_dga.py)
-- F: Regression Tests
-"""
-
 import pytest
 import jax
 import jax.numpy as jnp
@@ -21,16 +9,8 @@ from gibbsq.engines.jax_engine import (
 )
 from gibbsq.core.policies import JSSQRouting
 
-
-# ============================================================
-# CATEGORY A: CORRECTNESS TESTS
-# ============================================================
-
 class TestGetProbsCorrectness:
-    """Verify routing probability functions."""
-    
     def test_uniform_probs(self):
-        """Uniform policy should return equal probabilities."""
         Q = jnp.array([5, 10, 15])
         params = SimParams(
             num_servers=3,
@@ -40,7 +20,7 @@ class TestGetProbsCorrectness:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=0,  # Uniform
+            policy_type=0,
             d=2,
         )
         key = jax.random.PRNGKey(42)
@@ -51,7 +31,6 @@ class TestGetProbsCorrectness:
         np.testing.assert_allclose(probs, expected, rtol=1e-6)
     
     def test_proportional_probs(self):
-        """Proportional policy should return probabilities proportional to service rates."""
         Q = jnp.array([5, 5, 5])
         params = SimParams(
             num_servers=3,
@@ -61,7 +40,7 @@ class TestGetProbsCorrectness:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=1,  # Proportional
+            policy_type=1,
             d=2,
         )
         key = jax.random.PRNGKey(42)
@@ -72,7 +51,6 @@ class TestGetProbsCorrectness:
         np.testing.assert_allclose(probs, expected, rtol=1e-6)
     
     def test_jsq_probs(self):
-        """JSQ should route to shortest queue."""
         Q = jnp.array([10, 5, 20])
         params = SimParams(
             num_servers=3,
@@ -82,7 +60,7 @@ class TestGetProbsCorrectness:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=2,  # JSQ
+            policy_type=2,
             d=2,
         )
         key = jax.random.PRNGKey(42)
@@ -93,7 +71,6 @@ class TestGetProbsCorrectness:
         np.testing.assert_allclose(probs, expected, rtol=1e-6)
     
     def test_softmax_probs(self):
-        """Softmax should prefer shorter queues."""
         Q = jnp.array([0, 10])
         params = SimParams(
             num_servers=2,
@@ -103,20 +80,18 @@ class TestGetProbsCorrectness:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=3,  # Softmax
+            policy_type=3,
             d=2,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # Server 0 should have higher probability
         assert probs[0] > probs[1]
         assert probs[0] > 0.99
     
     def test_power_of_d_probs(self):
-        """Power-of-d should return one-hot at winner."""
-        Q = jnp.array([10, 5, 20])  # Server 1 has minimum
+        Q = jnp.array([10, 5, 20])
         params = SimParams(
             num_servers=3,
             arrival_rate=1.0,
@@ -125,31 +100,28 @@ class TestGetProbsCorrectness:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=4,  # Power-of-d
-            d=3,  # Sample all servers
+            policy_type=4,
+            d=3,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # With d=3, all servers sampled, should route to server 1 (minimum)
-        # But due to random permutation, need to check it's one-hot
         assert jnp.sum(probs == 1.0) == 1
         assert jnp.sum(probs == 0.0) == 2
 
     def test_jssq_probs_match_shared_policy_contract(self):
-        """JAX JSSQ must match the shared NumPy JSSQRouting semantics exactly."""
         Q = jnp.array([5, 0], dtype=jnp.int32)
         mu = jnp.array([10.0, 1.0], dtype=jnp.float32)
         params = SimParams(
             num_servers=2,
             arrival_rate=1.0,
             service_rates=mu,
-            alpha=7.0,  # Should be ignored by JSSQ
+            alpha=7.0,
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=5,  # JSSQ
+            policy_type=5,
             d=2,
         )
 
@@ -158,12 +130,8 @@ class TestGetProbsCorrectness:
 
         np.testing.assert_allclose(probs, expected, rtol=1e-6, atol=1e-6)
 
-
 class TestSimulateJaxCorrectness:
-    """Verify JAX simulation produces correct outputs."""
-    
     def test_simulation_returns_valid_shapes(self):
-        """Output shapes should match input parameters."""
         times, states, (arrivals, departures) = simulate_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -175,13 +143,12 @@ class TestSimulateJaxCorrectness:
             max_samples=20,
         )
         
-        assert states.shape[1] == 2  # num_servers
+        assert states.shape[1] == 2
         assert times.shape[0] == states.shape[0]
-        assert arrivals.shape == ()  # scalar
-        assert departures.shape == ()  # scalar
+        assert arrivals.shape == ()
+        assert departures.shape == ()
     
     def test_queues_never_negative(self):
-        """Queue lengths must never be negative."""
         times, states, counts = simulate_jax(
             num_servers=3,
             arrival_rate=2.0,
@@ -196,7 +163,6 @@ class TestSimulateJaxCorrectness:
         assert (states >= 0).all()
     
     def test_initial_state_is_zero(self):
-        """Simulation must start with all queues at zero."""
         times, states, counts = simulate_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -211,7 +177,6 @@ class TestSimulateJaxCorrectness:
         np.testing.assert_array_equal(states[0], [0, 0])
 
     def test_final_sample_reaches_sim_time(self):
-        """Valid samples should include the terminal sampling point."""
         sim_time = 10.0
         times, states, counts = simulate_jax(
             num_servers=2,
@@ -230,7 +195,6 @@ class TestSimulateJaxCorrectness:
         assert valid_times[-1] == pytest.approx(sim_time)
 
     def test_terminal_sample_matches_event_counts(self):
-        """The final valid sample should satisfy queue conservation exactly."""
         times, states, (arrivals, departures) = simulate_jax(
             num_servers=2,
             arrival_rate=1.5,
@@ -248,7 +212,6 @@ class TestSimulateJaxCorrectness:
         assert final_state.sum() == int(arrivals) - int(departures)
 
     def test_truncated_runs_fail_closed_in_sample_buffers(self):
-        """Early max-event truncation must not fabricate a full sampling grid."""
         from gibbsq.engines.jax_engine import _simulate_jax_impl
 
         times, states, counts, is_valid = _simulate_jax_impl(
@@ -274,12 +237,8 @@ class TestSimulateJaxCorrectness:
         assert np.all(np_times[~valid_mask] == 0.0)
         assert np.all(np.asarray(states)[~valid_mask] == 0)
 
-
 class TestRunReplicationsJaxCorrectness:
-    """Verify multi-replication driver."""
-    
     def test_replications_count(self):
-        """Should return results for all replications."""
         times, states, (arrivals, departures) = run_replications_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -292,13 +251,11 @@ class TestRunReplicationsJaxCorrectness:
             max_samples=20,
         )
         
-        # vmap adds a batch dimension
         assert times.shape[0] == 5
         assert states.shape[0] == 5
         assert arrivals.shape[0] == 5
     
     def test_replications_reproducible(self):
-        """Same seed should give same results."""
         times1, states1, _ = run_replications_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -325,16 +282,8 @@ class TestRunReplicationsJaxCorrectness:
         
         np.testing.assert_array_equal(states1, states2)
 
-
-# ============================================================
-# CATEGORY B: INVARIANT TESTS
-# ============================================================
-
 class TestJaxSimulationInvariants:
-    """Invariants that must hold for all JAX simulations."""
-    
     def test_probs_sum_to_one(self):
-        """Routing probabilities must sum to 1."""
         Q = jnp.array([5, 10, 15, 20])
         key = jax.random.PRNGKey(42)
         
@@ -355,7 +304,6 @@ class TestJaxSimulationInvariants:
             assert abs(float(jnp.sum(probs)) - 1.0) < 1e-6
     
     def test_probs_non_negative(self):
-        """Routing probabilities must be >= 0."""
         Q = jnp.array([5, 10, 15, 20])
         key = jax.random.PRNGKey(42)
         
@@ -375,16 +323,8 @@ class TestJaxSimulationInvariants:
             probs = get_probs(Q, params, key)
             assert (probs >= 0).all()
 
-
-# ============================================================
-# CATEGORY C: EDGE CASE TESTS
-# ============================================================
-
 class TestJaxSimulationEdgeCases:
-    """Test boundary conditions."""
-    
     def test_single_server(self):
-        """N=1 should work correctly."""
         times, states, (arrivals, departures) = simulate_jax(
             num_servers=1,
             arrival_rate=0.5,
@@ -400,7 +340,6 @@ class TestJaxSimulationEdgeCases:
         assert arrivals > 0  # Some arrivals
     
     def test_zero_arrival_rate(self):
-        """Zero arrivals should result in empty system (no real arrivals)."""
         times, states, (arrivals, departures) = simulate_jax(
             num_servers=2,
             arrival_rate=0.0,
@@ -419,8 +358,7 @@ class TestJaxSimulationEdgeCases:
         assert (states == 0).all()
     
     def test_power_of_d_d_equals_n(self):
-        """d=N should sample all servers, equivalent to JSQ."""
-        Q = jnp.array([10, 5, 20])  # Server 1 has minimum
+        Q = jnp.array([10, 5, 20])
         params = SimParams(
             num_servers=3,
             arrival_rate=1.0,
@@ -429,22 +367,17 @@ class TestJaxSimulationEdgeCases:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=4,  # Power-of-d
-            d=3,  # Sample all servers
+            policy_type=4,
+            d=3,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # Should route to server 1 (minimum queue)
-        # Note: permutation may reorder, but winner should be server 1
-        # Actually with permutation, the first d indices are shuffled
-        # So we just verify it's a valid one-hot
         assert jnp.sum(probs) == 1.0
         assert (probs >= 0).all()
     
     def test_power_of_d_d_greater_than_n(self):
-        """d > N should clamp to N."""
         Q = jnp.array([10, 5])
         params = SimParams(
             num_servers=2,
@@ -454,26 +387,17 @@ class TestJaxSimulationEdgeCases:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=4,  # Power-of-d
-            d=10,  # Greater than N
+            policy_type=4,
+            d=10,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # Should still produce valid probabilities
         assert abs(float(jnp.sum(probs)) - 1.0) < 1e-6
 
-
-# ============================================================
-# CATEGORY D: NUMERICAL STABILITY TESTS
-# ============================================================
-
 class TestJaxSimulationNumericalStability:
-    """Test behavior under numerically challenging inputs."""
-    
     def test_very_large_queues(self):
-        """Very large Q should not cause overflow."""
         Q = jnp.array([1000, 2000, 3000])
         params = SimParams(
             num_servers=3,
@@ -483,7 +407,7 @@ class TestJaxSimulationNumericalStability:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=3,  # Softmax
+            policy_type=3,
             d=2,
         )
         key = jax.random.PRNGKey(42)
@@ -494,7 +418,6 @@ class TestJaxSimulationNumericalStability:
         assert abs(float(jnp.sum(probs)) - 1.0) < 1e-6
     
     def test_very_small_alpha(self):
-        """Very small alpha (high temperature) should work."""
         Q = jnp.array([0, 100])
         params = SimParams(
             num_servers=2,
@@ -504,19 +427,17 @@ class TestJaxSimulationNumericalStability:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=3,  # Softmax
+            policy_type=3,
             d=2,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # Should be nearly uniform
         assert abs(float(probs[0]) - 0.5) < 0.01
         assert jnp.isfinite(probs).all()
     
     def test_very_large_alpha(self):
-        """Very large alpha (low temperature) should work."""
         Q = jnp.array([0, 1])
         params = SimParams(
             num_servers=2,
@@ -526,28 +447,18 @@ class TestJaxSimulationNumericalStability:
             sim_time=10.0,
             sample_interval=1.0,
             max_events=1000,
-            policy_type=3,  # Softmax
+            policy_type=3,
             d=2,
         )
         key = jax.random.PRNGKey(42)
         
         probs = get_probs(Q, params, key)
         
-        # Should be nearly one-hot at server 0
         assert probs[0] > 0.999
         assert jnp.isfinite(probs).all()
 
-
-# ============================================================
-# CATEGORY F: REGRESSION TESTS
-# ============================================================
-
 class TestJaxSimulationRegressions:
-    """Prevent reintroduction of known faults."""
-    
     def test_regression_power_of_d_static_d(self):
-        """Power-of-d requires d to be static for JIT."""
-        # This test verifies the implementation works with d as static arg
         times, states, counts = simulate_jax(
             num_servers=3,
             arrival_rate=1.0,
@@ -557,16 +468,13 @@ class TestJaxSimulationRegressions:
             sample_interval=1.0,
             key=jax.random.PRNGKey(42),
             max_samples=20,
-            policy_type=4,  # Power-of-d
+            policy_type=4,
             d=2,
         )
         
-        # Should complete without error
         assert states.shape[1] == 3
     
     def test_regression_key_splitting(self):
-        """Verify key splitting produces independent keys."""
-        # Run same simulation twice with different keys
         times1, states1, _ = simulate_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -589,7 +497,6 @@ class TestJaxSimulationRegressions:
             max_samples=100,
         )
         
-        # Different keys should produce different results
         assert not jnp.array_equal(states1, states2)
 
     def test_simulate_jax_rejects_invalid_service_rate_shape(self):
@@ -700,16 +607,8 @@ class TestJaxSimulationRegressions:
         for a, b in zip(out_vmap, out_ref):
             assert jnp.array_equal(a, b)
 
-
-# ============================================================
-# DETERMINISM TESTS
-# ============================================================
-
 class TestJaxSimulationDeterminism:
-    """Verify reproducibility."""
-    
     def test_same_key_same_result(self):
-        """Same PRNG key must produce identical results."""
         kwargs = dict(
             num_servers=2,
             arrival_rate=1.0,
@@ -727,18 +626,8 @@ class TestJaxSimulationDeterminism:
         np.testing.assert_array_equal(states1, states2)
         np.testing.assert_array_equal(counts1, counts2)
 
-
-# ============================================================
-# JIT COMPILATION TESTS
-# ============================================================
-
 class TestJaxJitCompilation:
-    """Verify JIT compilation works correctly."""
-    
     def test_jit_compiles_without_error(self):
-        """Function should be JIT compilable."""
-        # The @jax.jit decorator is already on simulate_jax
-        # Just verify it runs without compilation errors
         times, states, counts = simulate_jax(
             num_servers=2,
             arrival_rate=1.0,
@@ -755,8 +644,6 @@ class TestJaxJitCompilation:
         assert counts is not None
     
     def test_jit_caching(self):
-        """JIT should cache compiled functions."""
-        # Run same function multiple times
         for i in range(3):
             times, states, counts = simulate_jax(
                 num_servers=2,
@@ -769,5 +656,4 @@ class TestJaxJitCompilation:
                 max_samples=20,
             )
         
-        # Should complete without error (cached compilation)
         assert states.shape[1] == 2

@@ -1,6 +1,3 @@
-"""
-Shared test fixtures and configuration.
-"""
 
 import pytest
 import numpy as np
@@ -9,7 +6,6 @@ from gibbsq.core.config import ExperimentConfig, SystemConfig, SimulationConfig,
 
 @pytest.fixture
 def small_config():
-    """N=2 configuration for quick tests."""
     return ExperimentConfig(
         system=SystemConfig(
             num_servers=2,
@@ -32,7 +28,6 @@ def small_config():
 
 @pytest.fixture
 def medium_config():
-    """N=5 configuration for moderate tests."""
     return ExperimentConfig(
         system=SystemConfig(
             num_servers=5,
@@ -55,5 +50,4 @@ def medium_config():
 
 @pytest.fixture
 def rng():
-    """Deterministic RNG for reproducible tests."""
     return np.random.default_rng(42)

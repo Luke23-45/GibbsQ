@@ -54,7 +54,6 @@ def default_hydra_overrides_for_experiment(
     experiment: str,
     existing_overrides: list[str] | None = None,
 ) -> list[str]:
-    """Return publication-safe default Hydra overrides for public experiments."""
     existing = list(existing_overrides or [])
     defaults: list[str] = []
 
@@ -72,7 +71,6 @@ def default_hydra_overrides_for_experiment(
     return defaults
 
 def print_usage():
-    """Print usage information."""
     print("Usage: python experiment_runner.py [--progress auto|on|off] <experiment> [hydra_args...]")
     print("")
     print("Available experiments:")

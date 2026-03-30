@@ -1,9 +1,7 @@
 """
 Differentiable Gillespie Algorithm (DGA) for Soft-JSQ.
 
-SG#6 — SURROGATE DISCLOSURE:
-==============================
-The DGA is a **differentiable surrogate** of the true CTMC (Gillespie SSA),
+The DGA is a differentiable surrogate of the true CTMC (Gillespie SSA),
 not an exact simulation. Key differences from the true process:
 
 1. EVENT SIMULTANEITY: Each DGA step applies fractional arrival AND departure
@@ -35,10 +33,9 @@ def default_policy(params: jnp.float32, Q: jnp.float32) -> jnp.float32:
 
 class DGASimState(NamedTuple):
     t: jnp.float32
-    Q: jnp.float32  # Continuous queue lengths
+    Q: jnp.float32
     key: jax.random.PRNGKey
-    expected_Q_tot: jnp.float32  # Accumulated metric for loss tracking
-
+    expected_Q_tot: jnp.float32
 
 def _dga_step(
     state: DGASimState,
@@ -52,31 +49,23 @@ def _dga_step(
     """Single differentiable Gillespie step shared by scan/fori implementations."""
     k1, k2 = jax.random.split(state.key)
 
-    # 1. Routing Probabilities (fully differentiable via apply_fn)
     logits = apply_fn(params, state.Q)
     max_logit = jnp.max(logits)
     exp_logits = jnp.exp(logits - lax.stop_gradient(max_logit))
     probs = exp_logits / jnp.sum(exp_logits)
 
-    # 2. Relaxed Propensities
     arrival_rates = arrival_rate * probs
-    # Soft indicator 1−exp(−k·Q): exactly 0 at Q=0 (proof invariant: empty server
-    # has zero departure rate) and →1 for large Q, with non-vanishing gradient k
-    # at Q=0.  Replaces sigmoid(0)=0.5 which caused systematic downward bias in E[Q].
     _soft_indicator = 1.0 - jnp.exp(-state.Q * constants.DGA_INDICATOR_STEEPNESS)
     departure_rates = service_rates * _soft_indicator
 
     rates = jnp.concatenate([arrival_rates, departure_rates])
     a0 = jnp.sum(rates)
 
-    # 3. Expected Holding Time (Deterministic for variance reduction)
     tau = 1.0 / jnp.maximum(a0, constants.NUMERICAL_STABILITY_EPSILON)
 
-    # 4. Gumbel-Softmax Event Selection
     gumbels = -jnp.log(-jnp.log(jax.random.uniform(k1, shape=rates.shape) + constants.GUMBEL_SMOOTHING) + constants.GUMBEL_SMOOTHING)
     event_weights = jax.nn.softmax((jnp.log(rates + constants.GUMBEL_SMOOTHING) + gumbels) / temperature)
 
-    # 5. Continuous State Update
     arr_updates = event_weights[:num_servers]
     dep_updates = -event_weights[num_servers:]
 
@@ -124,7 +113,6 @@ def simulate_dga_jax(
         )
         return next_state, None
 
-    # Match dtype of service_rates for AD consistency.
     dtype = service_rates.dtype if hasattr(service_rates, 'dtype') else jnp.float32
 
     init_state = DGASimState(
@@ -134,13 +122,9 @@ def simulate_dga_jax(
         expected_Q_tot=jnp.zeros((), dtype=dtype)
     )
     
-    # Use scan because while_loop doesn't natively support reverse-mode AD easily 
-    # without explicitly defining iterations, and scan is preferred for RNN/DGA unrolling.
     final_state, _ = jax.lax.scan(body_fun, init_state, xs=None, length=sim_steps)
     
-    # Return time-averaged E[Q_total]
     return final_state.expected_Q_tot / jnp.maximum(final_state.t, constants.NUMERICAL_STABILITY_EPSILON)
-
 
 def simulate_dga_jax_dynamic_steps(
     num_servers: int,

@@ -3,62 +3,20 @@ Distributed Queueing Engine.
 
 Enables parallel replications across available hardware devices.
 
-PATCH 2026-03-13 (BUG-DIST-1) — INDEFINITE HANG FIX
------------------------------------------------------
-Root Cause:
-  The original implementation created a NamedSharding mesh, sharded the
-  PRNG keys with jax.device_put(..., NamedSharding(...)), then called
+Note: This module delegates to run_replications_jax from jax_engine.py, which uses
+the provably-correct pattern of @jax.jit wrapping jax.vmap over the raw simulation
+kernel. This avoids the XLA compilation hang that occurs when combining:
+- jax.vmap over a @jax.jit-decorated function without an outer jit
+- NamedSharding annotation on the vmap input
+- Nested lax.while_loop with loop-carried buffers
 
-      v_sim = jax.vmap(lambda k: simulate_jax(...))
-      v_sim(sharded_keys)                  ← hangs forever
-
-  This combination of three factors causes an indefinite XLA compilation hang
-  on single-GPU (and even multi-GPU) setups:
-
-  Factor 1 — jax.vmap over a jax.jit-decorated function WITHOUT an outer jit:
-    simulate_jax internally calls _simulate_jax_impl which is @jax.jit.
-    When jax.vmap traces through simulate_jax it must "peel back" the inner
-    @jax.jit and re-trace the raw computation. Without an outer jax.jit to
-    anchor the compilation, JAX repeatedly re-enters the tracing loop looking
-    for a stable computation to compile.
-
-  Factor 2 — NamedSharding annotation on the vmap input:
-    jax.device_put(keys, NamedSharding(mesh, PartitionSpec('batch'))) tags
-    the key array with SPMD sharding metadata. When this sharded array is fed
-    into an un-jitted jax.vmap, JAX activates its SPMD path, which requires
-    jax.jit to apply sharding transforms. Without an outer jit, SPMD
-    compilation loops waiting for a JIT context that never arrives.
-
-  Factor 3 — Interaction with nested lax.while_loop inside the vmapped fn:
-    _simulate_jax_impl contains nested lax.while_loops with loop-carried
-    buffers of shape (max_samples, N). The SPMD + vmap + nested-while_loop
-    combination creates a circular dependency in XLA's HLO shape inference
-    that hangs the compiler indefinitely (verified: >10 minutes, no progress).
-
-Fix:
-  Delegate to run_replications_jax from jax_engine.py.
-  That function uses the provably-correct pattern:
-
-      @jax.jit          ← outer jit owns the compilation context
-      def impl(...):
-          v_sim = lambda k: _simulate_jax_impl(...)  ← RAW function, not jitted
-          return jax.vmap(v_sim)(keys)               ← vmap INSIDE jit
-
-  This pattern has been validated across all prior pipeline steps
-  (policy_comparison, stability_sweep) with zero compilation hangs.
-
-For future true multi-host execution (TPU pods, multi-node GPU clusters),
-the SPMD approach can be re-introduced INSIDE a jax.jit context once the
-single-device path is confirmed stable.
+For multi-host execution (TPU pods, multi-node GPU clusters), SPMD sharding
+can be re-introduced inside a jax.jit context once single-device is stable.
 """
 
 import jax.numpy as jnp
 
-# Import the proven-working replications engine directly.
-# We avoid re-importing jax.sharding utilities here since the NamedSharding
-# approach is the root cause of the hang (see module docstring).
 from gibbsq.engines.jax_engine import run_replications_jax
-
 
 def sharded_replications(
     num_replications: int,
@@ -101,7 +59,6 @@ def sharded_replications(
     (times_buf, states_buf, (arrival_counts, departure_counts))
         Each array has a leading batch dimension of size ``num_replications``.
     """
-    # --- Input validation (preserved from original implementation) ----------
     if num_replications < 1:
         raise ValueError(f"num_replications must be >= 1, got {num_replications}")
     if num_servers < 1:
@@ -118,7 +75,6 @@ def sharded_replications(
             f"got {service_rates.shape}"
         )
 
-    # --- Delegate to the correctly-structured jit+vmap implementation -------
     return run_replications_jax(
         num_replications=num_replications,
         num_servers=num_servers,
@@ -130,7 +86,7 @@ def sharded_replications(
         base_seed=base_seed,
         max_samples=max_samples,
         policy_type=policy_type,
-        d=2,  # Power-of-d default; ignored by Softmax (policy_type=3)
+        d=2,
         max_events_multiplier=max_events_multiplier,
         max_events_buffer=max_events_buffer,
         scan_sampling_chunk=scan_sampling_chunk,
