@@ -33,6 +33,7 @@ from omegaconf import DictConfig
 
 from gibbsq.core.config import ExperimentConfig, NeuralConfig, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
+from gibbsq.core.pretraining import extract_bc_data_config
 from gibbsq.core.policy_distribution import compute_numpy_policy_probs
 from gibbsq.core.reinforce_objective import compute_action_interval_returns_from_trajectory_numpy
 from gibbsq.core.features import look_ahead_potential
@@ -390,10 +391,12 @@ class ReinforceTrainer:
         cfg: ExperimentConfig,
         run_dir: Path,
         run_logger=None,
+        bc_data_config: dict | None = None,
     ):
         self.cfg = cfg
         self.run_dir = run_dir
         self.run_logger = run_logger
+        self.bc_data_config = bc_data_config
 
         self.num_servers = cfg.system.num_servers
         self.service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
@@ -415,7 +418,8 @@ class ReinforceTrainer:
             num_steps=self.cfg.neural_training.bc_num_steps,
             lr=self.cfg.neural_training.bc_lr,
             weight_decay=self.cfg.neural_training.weight_decay,
-            label_smoothing=self.cfg.neural_training.bc_label_smoothing
+            label_smoothing=self.cfg.neural_training.bc_label_smoothing,
+            bc_data_config=self.bc_data_config,
         )
 
         # Initializes the baseline to expert performance level to prevent early gradient noise
@@ -432,7 +436,8 @@ class ReinforceTrainer:
             random_limit=random_limit,
             denom=denom,
             squash_scale=self.cfg.neural_training.squash_scale,
-            squash_threshold=self.cfg.neural_training.squash_threshold
+            squash_threshold=self.cfg.neural_training.squash_threshold,
+            bc_data_config=self.bc_data_config,
         )
 
         return policy_net, value_net
@@ -1042,12 +1047,13 @@ class ReinforceTrainer:
 def main(raw_cfg: DictConfig):
     """Main entry point for REINFORCE training."""
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "reinforce_train")
+    bc_data_config = extract_bc_data_config(resolved_raw_cfg)
 
     run_dir, run_id = get_run_config(cfg, "reinforce_train", resolved_raw_cfg)
     run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="reinforce_training",
                             run_id=run_id, run_dir=run_dir)
 
-    trainer = ReinforceTrainer(cfg, run_dir, run_logger)
+    trainer = ReinforceTrainer(cfg, run_dir, run_logger, bc_data_config=bc_data_config)
 
     seed_key = jax.random.PRNGKey(cfg.simulation.seed)
     trainer.execute(seed_key, n_epochs=cfg.train_epochs)

@@ -178,6 +178,17 @@ class CriticalLoadTest:
                 rho_bar.update(1)
 
         self._plot(self.rho_vals, neural_results, gibbs_results)
+        relative_ratios = [
+            float(n / max(g, 1e-8))
+            for n, g in zip(neural_results, gibbs_results)
+        ]
+        return {
+            "rho_vals": list(self.rho_vals),
+            "neural_eq": neural_results,
+            "gibbs_eq": gibbs_results,
+            "max_neural_to_gibbs_ratio": max(relative_ratios) if relative_ratios else float("inf"),
+            "mean_neural_to_gibbs_ratio": float(np.mean(relative_ratios)) if relative_ratios else float("inf"),
+        }
 
     def _plot(self, rho_vals, neural_r, gibbs_r):
         """Generate the critical-load curve."""
@@ -221,7 +232,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
 
     test = CriticalLoadTest(cfg, run_dir, run_logger)
-    test.execute(jax.random.PRNGKey(cfg.simulation.seed))
+    return test.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 
 if __name__ == "__main__":

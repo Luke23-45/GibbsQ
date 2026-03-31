@@ -36,6 +36,7 @@ def compute_poisson_max_steps(arrival_rate: float, service_rates: np.ndarray, si
 class TrajectoryBatchResult(NamedTuple):
     """Batched results from a vectorized JAX SSA simulation."""
     states: jax.Array                # [Batch, MaxSteps, N] - Queue states before events
+    jump_times: jax.Array            # [Batch, MaxSteps] - Event times after each step
     actions: jax.Array               # [Batch, MaxSteps] - Chosen server index (or -1)
     log_probs: jax.Array             # [Batch, MaxSteps] - Log probability of chosen action
     returns: jax.Array               # [Batch, MaxSteps] - Discounted causal returns to go
@@ -187,6 +188,7 @@ def collect_trajectory_jax(
     
     return {
         "states": pre_states,
+        "jump_times": jump_times,
         "actions": actions,
         "log_probs": log_probs,
         "returns": returns,
@@ -232,6 +234,7 @@ def vmap_collect_trajectories(
     
     return TrajectoryBatchResult(
         states=batch_outputs["states"],
+        jump_times=batch_outputs["jump_times"],
         actions=batch_outputs["actions"],
         log_probs=batch_outputs["log_probs"],
         returns=batch_outputs["returns"],

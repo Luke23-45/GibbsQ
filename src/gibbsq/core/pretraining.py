@@ -28,6 +28,88 @@ from gibbsq.utils.progress import create_progress
 
 log = logging.getLogger(__name__)
 
+DEFAULT_BC_DATA_CONFIG = {
+    "rhos": [0.45, 0.65, 0.85],
+    "mu_scales": [0.5, 1.0, 2.0],
+    "samples_per_rho": 1000,
+    "expert_sim_time": 1500.0,
+    "sample_interval": 1.0,
+    "augmentation_noise_min": -1,
+    "augmentation_noise_max": 1,
+}
+
+
+def normalize_bc_data_config(
+    bc_data_config: dict | None = None,
+    *,
+    rhos: list[float] | None = None,
+    samples_per_rho: int | None = None,
+) -> dict:
+    """Return validated BC expert-data generation settings."""
+    cfg = dict(DEFAULT_BC_DATA_CONFIG)
+    if bc_data_config:
+        cfg.update(dict(bc_data_config))
+    if rhos is not None:
+        cfg["rhos"] = list(rhos)
+    if samples_per_rho is not None:
+        cfg["samples_per_rho"] = int(samples_per_rho)
+
+    rho_values = [float(x) for x in cfg["rhos"]]
+    if not rho_values:
+        raise ValueError("bc_data.rhos must contain at least one load factor.")
+    if not all(0.0 < rho < 1.0 for rho in rho_values):
+        raise ValueError(f"bc_data.rhos must lie in (0, 1), got {rho_values}")
+
+    mu_scales = [float(x) for x in cfg["mu_scales"]]
+    if not mu_scales:
+        raise ValueError("bc_data.mu_scales must contain at least one multiplier.")
+    if not all(scale > 0.0 for scale in mu_scales):
+        raise ValueError(f"bc_data.mu_scales must be positive, got {mu_scales}")
+
+    samples = int(cfg["samples_per_rho"])
+    if samples < 1:
+        raise ValueError(f"bc_data.samples_per_rho must be >= 1, got {samples}")
+
+    expert_sim_time = float(cfg["expert_sim_time"])
+    if expert_sim_time <= 0.0:
+        raise ValueError(f"bc_data.expert_sim_time must be > 0, got {expert_sim_time}")
+
+    sample_interval = float(cfg["sample_interval"])
+    if sample_interval <= 0.0:
+        raise ValueError(f"bc_data.sample_interval must be > 0, got {sample_interval}")
+
+    noise_min = int(cfg["augmentation_noise_min"])
+    noise_max = int(cfg["augmentation_noise_max"])
+    if noise_min > noise_max:
+        raise ValueError(
+            "bc_data.augmentation_noise_min must be <= augmentation_noise_max, "
+            f"got [{noise_min}, {noise_max}]"
+        )
+
+    cfg["rhos"] = rho_values
+    cfg["mu_scales"] = mu_scales
+    cfg["samples_per_rho"] = samples
+    cfg["expert_sim_time"] = expert_sim_time
+    cfg["sample_interval"] = sample_interval
+    cfg["augmentation_noise_min"] = noise_min
+    cfg["augmentation_noise_max"] = noise_max
+    return cfg
+
+
+def extract_bc_data_config(raw_cfg) -> dict:
+    """Extract BC data settings from a raw Hydra/OmegaConf config."""
+    if raw_cfg is None:
+        return dict(DEFAULT_BC_DATA_CONFIG)
+    if hasattr(raw_cfg, "get"):
+        candidate = raw_cfg.get("bc_data")
+    else:
+        candidate = None
+    if candidate is None:
+        return dict(DEFAULT_BC_DATA_CONFIG)
+    if hasattr(candidate, "items"):
+        return normalize_bc_data_config(dict(candidate))
+    raise TypeError(f"Unsupported bc_data config type: {type(candidate)}")
+
 def compute_value_bootstrap_targets(
     queue_totals: jnp.ndarray,
     random_limit: float,
@@ -40,14 +122,20 @@ def compute_value_bootstrap_targets(
 def collect_robust_expert_data(
     num_servers: int,
     service_rates: np.ndarray,
-    rhos: list[float] = [0.45, 0.65, 0.85],
-    samples_per_rho: int = 1000,
+    rhos: list[float] | None = None,
+    samples_per_rho: int | None = None,
     seed: int = 42,
     alpha: float = 1.0,
+    bc_data_config: dict | None = None,
 ):
     """Collects steady-state expert data with noisy state augmentation."""
     log.info(f"--- Collecting Robust Expert Data (Steady-State + Augmentation) ---")
     rng = np.random.default_rng(seed)
+    bc_cfg = normalize_bc_data_config(
+        bc_data_config,
+        rhos=rhos,
+        samples_per_rho=samples_per_rho,
+    )
     
     all_states = []
     all_rhos = []
@@ -55,23 +143,23 @@ def collect_robust_expert_data(
     all_q_targets = []
     all_mus = []
     
-    mu_scales = [0.5, 1.0, 2.0]
-    samples_per_variant = max(100, samples_per_rho // len(mu_scales))
+    mu_scales = bc_cfg["mu_scales"]
+    samples_per_variant = max(100, int(bc_cfg["samples_per_rho"]) // len(mu_scales))
     
     for mu_scale in mu_scales:
         scaled_service_rates = service_rates * mu_scale
         expert = UASRouting(scaled_service_rates, alpha=alpha)
         total_capacity = np.sum(scaled_service_rates)
         
-        for rho in rhos:
+        for rho in bc_cfg["rhos"]:
             arrival_rate = rho * total_capacity
             res = simulate(
                 num_servers=num_servers,
                 arrival_rate=arrival_rate,
                 service_rates=scaled_service_rates,
                 policy=expert,
-                sim_time=1500.0,
-                sample_interval=1.0,
+                sim_time=bc_cfg["expert_sim_time"],
+                sample_interval=bc_cfg["sample_interval"],
                 rng=rng
             )
             states = res.states[len(res.states)//2:]
@@ -87,7 +175,11 @@ def collect_robust_expert_data(
                 all_q_targets.append(np.sum(s))
                 all_mus.append(scaled_service_rates)
                 
-                noise = rng.integers(-1, 2, size=num_servers)
+                noise = rng.integers(
+                    bc_cfg["augmentation_noise_min"],
+                    bc_cfg["augmentation_noise_max"] + 1,
+                    size=num_servers,
+                )
                 s_aug = np.maximum(0, s + noise)
                 all_states.append(s_aug)
                 all_rhos.append(rho)
@@ -112,6 +204,7 @@ def train_robust_bc_policy(
     entropy_bonus: float = 0.01,
     seed: int = 42,
     alpha: float = 1.0,
+    bc_data_config: dict | None = None,
 ):
     """Trains a neural policy using Ultra-Robust BC logic."""
     num_servers = policy_net.layers[-1].weight.shape[0]
@@ -121,6 +214,7 @@ def train_robust_bc_policy(
         service_rates=service_rates,
         seed=seed,
         alpha=alpha,
+        bc_data_config=bc_data_config,
     )
     
     optimizer = optax.adamw(lr, weight_decay=weight_decay)
@@ -176,6 +270,7 @@ def train_robust_bc_value(
     squash_threshold: float = 100.0,
     seed: int = 42,
     alpha: float = 1.0,
+    bc_data_config: dict | None = None,
 ):
     """Trains a value network (critic) to estimate steady-state queue lengths."""
     num_servers = len(service_rates)
@@ -185,6 +280,7 @@ def train_robust_bc_value(
         service_rates=service_rates,
         seed=seed,
         alpha=alpha,
+        bc_data_config=bc_data_config,
     )
     
     optimizer = optax.adamw(lr, weight_decay=weight_decay)

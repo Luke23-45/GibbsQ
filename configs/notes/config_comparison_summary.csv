@@ -85,6 +85,10 @@ experiments.drift.system.num_servers,N/A,N/A,2,N/A
 experiments.drift.system.service_rates,N/A,N/A,"[1.0, 1.5]",N/A
 experiments.drift.wandb.enabled,N/A,N/A,False,N/A
 experiments.drift.wandb.project,N/A,N/A,GibbsQ-SOTA,N/A
+experiments.hyperqual.study.candidate_count,12,12,8,4
+experiments.hyperqual.study.full_certification,False,False,False,True
+experiments.hyperqual.study.promote_top_k,3,3,3,2
+experiments.hyperqual.study.stage,A,A,B,C
 experiments.policy.jax.enabled,N/A,True,True,N/A
 experiments.policy.jax.fallback_to_cpu,N/A,True,True,N/A
 experiments.policy.jax.platform,N/A,auto,auto,N/A

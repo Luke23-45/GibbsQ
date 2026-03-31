@@ -61,6 +61,7 @@ PROFILE_CONFIG_NAMES = (
 
 EXPERIMENT_BLOCK_NAMES = (
     "check_configs",
+    "hyperqual",
     "reinforce_check",
     "drift",
     "sweep",

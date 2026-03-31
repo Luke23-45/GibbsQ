@@ -24,6 +24,7 @@ from gibbsq.utils.progress import configure_progress_mode
 EXPERIMENTS = {
     # Phase 0: Validation & Pre-flight Sanity
     "check_configs": "experiments.testing.check_configs",
+    "hyperqual": "experiments.studies.hyperparameter_qualification",
     "reinforce_check": "experiments.testing.reinforce_gradient_check",
 
     # Phase 1: Foundational Metrics & Baselines

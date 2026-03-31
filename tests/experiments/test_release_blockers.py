@@ -76,16 +76,42 @@ def test_public_configs_require_full_stationarity_for_sweep_certification():
             assert float(raw_cfg.verification.stationarity_threshold) == pytest.approx(1.0)
 
 
-def test_gradient_check_fd_uses_same_action_interval_objective():
-    from experiments.testing.reinforce_gradient_check import _sum_masked_action_interval_returns
+def test_reinforce_check_uses_canonical_verification_workload_across_profiles():
+    from hydra import compose, initialize_config_dir
+    from gibbsq.core.config import load_experiment_config
+
+    config_dir = str(Path("configs").resolve())
+    with initialize_config_dir(config_dir=config_dir, version_base=None):
+        canonical = None
+        for config_name in ("debug", "small", "default", "final_experiment"):
+            raw_cfg = compose(config_name=config_name)
+            cfg, _ = load_experiment_config(raw_cfg, "reinforce_check", profile_name=config_name)
+            fingerprint = (
+                cfg.system.num_servers,
+                tuple(float(x) for x in cfg.system.service_rates),
+                cfg.neural.hidden_size,
+                cfg.neural.preprocessing,
+                cfg.neural.init_type,
+                bool(cfg.jax.enabled),
+                float(cfg.verification.gradient_check_sim_time),
+                int(cfg.verification.gradient_check_n_samples),
+                float(cfg.verification.gradient_check_error_threshold),
+            )
+            if canonical is None:
+                canonical = fingerprint
+            assert fingerprint == canonical
+
+
+def test_gradient_check_fd_uses_trainer_aligned_first_action_objective():
+    from experiments.testing.reinforce_gradient_check import _sum_first_action_interval_returns
 
     class Batch:
         returns = np.array([[10.0, 0.0, 4.0], [0.0, 7.0, 8.0]], dtype=np.float32)
         is_action_mask = np.array([[True, False, True], [False, True, True]])
         valid_mask = np.array([[True, True, False], [True, True, True]])
 
-    total = float(_sum_masked_action_interval_returns(Batch()))
-    assert total == pytest.approx(25.0)
+    total = float(_sum_first_action_interval_returns(Batch()))
+    assert total == pytest.approx(17.0)
 
 
 def test_gradient_check_plot_artifacts_only_use_computed_mask():

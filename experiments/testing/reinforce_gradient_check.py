@@ -26,6 +26,7 @@ from gibbsq.core.features import look_ahead_potential
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.progress import create_progress, iter_progress
 from gibbsq.engines.jax_ssa import vmap_collect_trajectories, compute_poisson_max_steps
+from gibbsq.core.reinforce_objective import extract_first_action_returns_jax
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
@@ -64,9 +65,125 @@ def _build_plot_artifacts(
     return fd_grads, rf_grads, z_scores
 
 
-def _sum_masked_action_interval_returns(batch) -> jax.Array:
+def _sum_first_action_interval_returns(batch) -> jax.Array:
+    return jnp.sum(
+        extract_first_action_returns_jax(
+            batch.returns,
+            batch.is_action_mask,
+            batch.valid_mask,
+        )
+    )
+
+
+def _compute_random_limit(num_servers: int, arrival_rate: float, service_rates: np.ndarray) -> float:
+    lam_i = float(arrival_rate) / float(num_servers)
+    q_rand_analytical = 0.0
+    for mu in np.asarray(service_rates, dtype=np.float64):
+        if lam_i >= float(mu) - 1e-4:
+            return float(50.0 * num_servers)
+        q_rand_analytical += lam_i / (float(mu) - lam_i)
+    return float(q_rand_analytical)
+
+
+def _extract_first_action_batch(
+    batch,
+    *,
+    arrival_rate: float,
+    service_rates: np.ndarray,
+    sim_time: float,
+    cfg: Any,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     action_mask = batch.is_action_mask & batch.valid_mask
-    return jnp.sum(jnp.where(action_mask, batch.returns, 0.0))
+    first_action_idx = jnp.argmax(action_mask, axis=1)
+    has_action = jnp.any(action_mask, axis=1)
+    batch_idx = jnp.arange(action_mask.shape[0])
+
+    first_states = batch.states[batch_idx, first_action_idx]
+    first_actions = batch.actions[batch_idx, first_action_idx]
+    first_returns = batch.returns[batch_idx, first_action_idx]
+    first_jump_times = batch.jump_times[batch_idx, first_action_idx]
+
+    t_rem = jnp.maximum(1e-3, jnp.asarray(sim_time, dtype=jnp.float32) - first_jump_times)
+    random_limit = _compute_random_limit(len(service_rates), arrival_rate, service_rates)
+    denom = max(float(cfg.neural_training.perf_index_min_denom), random_limit)
+    perf_targets = 100.0 * (
+        jnp.asarray(random_limit, dtype=jnp.float32) * t_rem - first_returns
+    ) / (jnp.asarray(denom, dtype=jnp.float32) * t_rem)
+    perf_targets = jnp.where(has_action, perf_targets, 0.0)
+    norm_adv = (perf_targets - jnp.mean(perf_targets)) / (jnp.std(perf_targets) + 1e-8)
+    norm_adv = jnp.where(has_action, norm_adv, 0.0)
+    return first_states, first_actions, norm_adv, has_action
+
+
+def _frozen_batch_policy_loss(
+    flat_theta,
+    *,
+    unravel,
+    states,
+    actions,
+    advs,
+    has_action,
+    service_rates_jax,
+    arrival_rate: float,
+    ent_coef: float,
+):
+    model = unravel(flat_theta)
+    rho_val = arrival_rate / jnp.sum(service_rates_jax)
+    logits = jax.vmap(model, in_axes=(0, None, None))(states, service_rates_jax, rho_val)
+    log_probs = jax.nn.log_softmax(logits, axis=-1)
+    safe_actions = jnp.clip(actions, 0, log_probs.shape[-1] - 1)
+    chosen_log_probs = log_probs[jnp.arange(len(actions)), safe_actions]
+    chosen_log_probs = jnp.where(has_action, chosen_log_probs, 0.0)
+
+    probs = jax.nn.softmax(logits, axis=-1)
+    entropy = -jnp.sum(probs * log_probs, axis=-1)
+    entropy = jnp.where(has_action, entropy, 0.0)
+
+    return -jnp.mean(chosen_log_probs * advs) - ent_coef * jnp.mean(entropy)
+
+
+def _build_frozen_chunks(
+    *,
+    policy_net: NeuralRouter,
+    num_servers: int,
+    arrival_rate: float,
+    service_rates: np.ndarray,
+    sim_time: float,
+    keys: jax.Array,
+    cfg: Any,
+) -> list[tuple[jax.Array, jax.Array, jax.Array, jax.Array]]:
+    service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
+    max_steps = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
+    chunk_size = cfg.verification.gradient_check_chunk_size
+    frozen_chunks: list[tuple[jax.Array, jax.Array, jax.Array, jax.Array]] = []
+    for i in iter_progress(
+        range(0, keys.shape[0], chunk_size),
+        total=len(range(0, keys.shape[0], chunk_size)),
+        desc="reinforce_check: sample chunks",
+        unit="chunk",
+        leave=False,
+    ):
+        chunk_keys = keys[i:i + chunk_size]
+        batch = vmap_collect_trajectories(
+            policy_net=policy_net,
+            num_servers=num_servers,
+            arrival_rate=arrival_rate,
+            service_rates=service_rates_jax,
+            sim_time=sim_time,
+            keys=chunk_keys,
+            max_steps=max_steps,
+            gamma=cfg.neural_training.gamma,
+        )
+        frozen_chunks.append(
+            _extract_first_action_batch(
+                batch,
+                arrival_rate=arrival_rate,
+                service_rates=service_rates,
+                sim_time=sim_time,
+                cfg=cfg,
+            )
+        )
+    return frozen_chunks
 
 def compute_reinforce_gradient(
     policy_net: NeuralRouter,
@@ -78,7 +195,7 @@ def compute_reinforce_gradient(
     base_seed: int,
     cfg: Any,
 ) -> tuple[np.ndarray, float, float, np.ndarray]:
-    """Compute REINFORCE gradient using JAX Chunked Vectorized Execution."""
+    """Compute the trainer-aligned frozen-batch policy-loss gradient."""
     from jax.flatten_util import ravel_pytree
     import jax
     import jax.numpy as jnp
@@ -87,7 +204,6 @@ def compute_reinforce_gradient(
     from gibbsq.engines.jax_ssa import vmap_collect_trajectories
     
     chunk_size = cfg.verification.gradient_check_chunk_size
-    max_steps = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
     
     keys = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
     service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
@@ -95,80 +211,46 @@ def compute_reinforce_gradient(
     params = eqx.filter(policy_net, eqx.is_array)
     init_flat_params, unravel = ravel_pytree(params)
     
+    frozen_chunks = _build_frozen_chunks(
+        policy_net=policy_net,
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        sim_time=sim_time,
+        keys=keys,
+        cfg=cfg,
+    )
+
     @eqx.filter_jit
-    def compute_chunk_grad(flat_theta, keys_chunk):
-        actual_chunk_size = keys_chunk.shape[0]
-        
-        active_model = unravel(flat_theta)
-        
-        batch = vmap_collect_trajectories(
-            policy_net=active_model,
-            num_servers=num_servers,
+    def compute_chunk_grad(flat_theta, states, actions, advs, has_action):
+        loss_grad = jax.grad(_frozen_batch_policy_loss)(
+            flat_theta,
+            unravel=unravel,
+            states=states,
+            actions=actions,
+            advs=advs,
+            has_action=has_action,
+            service_rates_jax=service_rates_jax,
             arrival_rate=arrival_rate,
-            service_rates=service_rates_jax,
-            sim_time=sim_time,
-            keys=keys_chunk,
-            max_steps=max_steps,
-            gamma=cfg.neural_training.gamma
+            ent_coef=float(cfg.neural.entropy_bonus),
         )
-        
-        mask = batch.is_action_mask & batch.valid_mask
-        mask_f32 = mask.astype(jnp.float32)
-        
-        sum_returns = jnp.sum(jnp.where(mask, batch.returns, 0.0), axis=0, keepdims=True)
-        sum_mask = jnp.sum(mask_f32, axis=0, keepdims=True)
-        
-        loo_sum_returns = sum_returns - jnp.where(mask, batch.returns, 0.0)
-        loo_sum_mask = sum_mask - mask_f32
-        
-        b_k = jnp.where(loo_sum_mask > 0.5, loo_sum_returns / loo_sum_mask, 0.0)
-        
-        adv = jax.lax.stop_gradient(batch.returns - b_k)
-        fixed_states = jax.lax.stop_gradient(batch.states)
-        fixed_actions = jax.lax.stop_gradient(batch.actions)
-        fixed_mask = jax.lax.stop_gradient(mask)
-
-        def loss_fn(theta):
-            m = unravel(theta)
-            
-            inner_vmap = jax.vmap(m, in_axes=(0, None, None))
-            v_model = jax.vmap(inner_vmap, in_axes=(0, None, None))
-            
-            rho_val = arrival_rate / jnp.sum(service_rates_jax)
-            logits = v_model(fixed_states, service_rates_jax, rho_val)
-            log_probs = jax.nn.log_softmax(logits, axis=-1)
-            
-            safe_a = jnp.clip(fixed_actions, 0, num_servers - 1)
-            batch_idx = jnp.arange(actual_chunk_size)[:, None]
-            step_idx = jnp.arange(max_steps)[None, :]
-            chosen_log_probs = log_probs[batch_idx, step_idx, safe_a]
-            
-            # We return negative sum because jax.grad minimizes by default
-            return -jnp.sum(fixed_mask * adv * chosen_log_probs)
-
-        return jax.grad(loss_fn)(flat_theta)
+        return loss_grad
 
     grad_list = []
     samples_per_chunk = []  # Track actual samples per chunk for proper variance scaling
     
-    chunk_starts = range(0, n_samples, chunk_size)
-    for i in iter_progress(
-        chunk_starts,
-        total=len(range(0, n_samples, chunk_size)),
-        desc="reinforce_check: REINFORCE chunks",
-        unit="chunk",
-        leave=False,
-    ):
-        chunk_keys = keys[i:i+chunk_size]
-        actual_chunk_size = chunk_keys.shape[0]
-        grad_list.append(compute_chunk_grad(init_flat_params, chunk_keys))
+    for states, actions, advs, has_action in frozen_chunks:
+        actual_chunk_size = int(states.shape[0])
+        grad_list.append(compute_chunk_grad(init_flat_params, states, actions, advs, has_action))
         samples_per_chunk.append(actual_chunk_size)
     
     stacked_grads = jnp.stack(grad_list, axis=0)
     samples_per_chunk = jnp.array(samples_per_chunk)
     total_samples = float(n_samples)
     
-    mean_grad = np.array(-jnp.sum(stacked_grads, axis=0) / total_samples)
+    # Convert the minimization loss gradient into the ascent-direction policy gradient
+    # so it is comparable to the finite-difference objective gradient.
+    mean_grad = np.array(-jnp.sum(stacked_grads, axis=0))
     
     if stacked_grads.shape[0] > 1:
         
@@ -205,7 +287,7 @@ def compute_finite_difference_gradient(
     reinforce_var: np.ndarray = None,
     z_critical: float = 3.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute gradient via finite differences using Chunked JAX Execution."""
+    """Compute finite differences of the same frozen-batch trainer loss."""
     from jax.flatten_util import ravel_pytree
     import jax
     import jax.numpy as jnp
@@ -224,50 +306,54 @@ def compute_finite_difference_gradient(
     grad = np.zeros(n_params)
     service_rates_jax = jnp.asarray(service_rates, dtype=jnp.float32)
     
-    chunk_size = cfg.verification.gradient_check_chunk_size
-    max_steps = compute_poisson_max_steps(arrival_rate, service_rates, sim_time)
-    
     keys_shared = jax.random.split(jax.random.PRNGKey(base_seed), n_samples)
+    frozen_chunks = _build_frozen_chunks(
+        policy_net=policy_net,
+        num_servers=num_servers,
+        arrival_rate=arrival_rate,
+        service_rates=service_rates,
+        sim_time=sim_time,
+        keys=keys_shared,
+        cfg=cfg,
+    )
+    chunk_size = cfg.verification.gradient_check_chunk_size
     
     @jax.jit
-    def get_chunk_sum_return(flat_theta, keys_chunk):
-        model = unravel(flat_theta)
-        batch = vmap_collect_trajectories(
-            policy_net=model,
-            num_servers=num_servers,
+    def get_chunk_objective(flat_theta, states, actions, advs, has_action):
+        return _frozen_batch_policy_loss(
+            flat_theta,
+            unravel=unravel,
+            states=states,
+            actions=actions,
+            advs=advs,
+            has_action=has_action,
+            service_rates_jax=service_rates_jax,
             arrival_rate=arrival_rate,
-            service_rates=service_rates_jax,
-            sim_time=sim_time,
-            keys=keys_chunk,
-            max_steps=max_steps,
-            gamma=cfg.neural_training.gamma
+            ent_coef=float(cfg.neural.entropy_bonus),
         )
-        return _sum_masked_action_interval_returns(batch)
 
-    def get_expected_return(flat_theta, all_keys):
+    def get_expected_objective(flat_theta):
         total_sum = 0.0
-        chunk_sums = []
-        for i in iter_progress(
-            range(0, n_samples, chunk_size),
-            total=len(range(0, n_samples, chunk_size)),
+        chunk_vals = []
+        for states, actions, advs, has_action in iter_progress(
+            frozen_chunks,
+            total=len(frozen_chunks),
             desc="reinforce_check: FD chunks",
             unit="chunk",
             leave=False,
         ):
-            chunk_keys = all_keys[i:i+chunk_size]
-            # Cast to Python float64 immediately to prevent float32 catastrophic cancellation
-            val = float(get_chunk_sum_return(flat_theta, chunk_keys))
+            val = float(get_chunk_objective(flat_theta, states, actions, advs, has_action))
             total_sum += val
-            chunk_sums.append(val)
+            chunk_vals.append(val)
         
-        chunk_arr = np.array(chunk_sums)
-        n_chunks = len(chunk_sums)
+        chunk_arr = np.array(chunk_vals)
+        n_chunks = len(chunk_vals)
         if n_chunks > 1:
-            chunk_var = np.var(chunk_arr, ddof=1) / (float(chunk_size)**2 * n_chunks)
+            chunk_var = np.var(chunk_arr, ddof=1) / n_chunks
         else:
             chunk_var = 0.0
         
-        return total_sum / float(n_samples), chunk_var
+        return total_sum / float(n_chunks), chunk_var
 
     computed_mask = np.zeros(n_params, dtype=bool)
     fd_var = np.zeros(n_params)
@@ -279,10 +365,10 @@ def compute_finite_difference_gradient(
         unit="param",
     )):
         params_plus = flat_params.at[param_idx].add(epsilon)
-        return_plus, var_plus = get_expected_return(params_plus, keys_shared)
+        return_plus, var_plus = get_expected_objective(params_plus)
         
         params_minus = flat_params.at[param_idx].add(-epsilon)
-        return_minus, var_minus = get_expected_return(params_minus, keys_shared)
+        return_minus, var_minus = get_expected_objective(params_minus)
         
         grad[param_idx] = (return_plus - return_minus) / (2 * epsilon)
         # Var((R+ - R-) / 2e) = (Var(R+) + Var(R-) - 2Cov(R+, R-)) / (4e^2)
@@ -313,7 +399,7 @@ def compute_finite_difference_gradient(
                 running_cos_sim = 0.0
 
             if reinforce_var is not None and reinforce_var[param_idx] > 1e-11:
-                rf_std_err = np.sqrt(reinforce_var[param_idx] / n_samples)
+                rf_std_err = np.sqrt(reinforce_var[param_idx] / max(len(range(0, n_samples, chunk_size)), 1))
                 
                 fd_std_err = np.sqrt(fd_var[param_idx]) 
                 pooled_std_err = np.sqrt(rf_std_err**2 + fd_std_err**2)
@@ -505,6 +591,7 @@ def main(raw_cfg: DictConfig) -> None:
     log.info("=" * 60)
     log.info("  REINFORCE Gradient Estimator Validation")
     log.info("=" * 60)
+    log.info("Validating REINFORCE gradients against the trainer-aligned first-action objective.")
     
     seed_key = jax.random.PRNGKey(cfg.simulation.seed)
     # Uses cfg.verification.gradient_check_n_samples under the hood now.

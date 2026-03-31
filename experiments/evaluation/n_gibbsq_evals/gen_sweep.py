@@ -193,6 +193,13 @@ class GeneralizationSweeper:
                     cell_bar.update(1)
 
         self._plot_heatmap(grid, scale_vals, rho_vals)
+        return {
+            "grid": grid.tolist(),
+            "scale_vals": scale_vals,
+            "rho_vals": rho_vals,
+            "min_improvement_ratio": float(np.min(grid)) if grid.size else 0.0,
+            "mean_improvement_ratio": float(np.mean(grid)) if grid.size else 0.0,
+        }
 
     def _plot_heatmap(self, grid, scale_vals, rho_vals):
         """Generates generalization heatmap."""
@@ -238,7 +245,7 @@ def main(raw_cfg: DictConfig):
     log.info("=" * 60)
     
     sweeper = GeneralizationSweeper(cfg, run_dir, run_logger)
-    sweeper.execute(jax.random.PRNGKey(cfg.simulation.seed))
+    return sweeper.execute(jax.random.PRNGKey(cfg.simulation.seed))
 
 if __name__ == "__main__":
     main()
