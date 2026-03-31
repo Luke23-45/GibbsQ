@@ -282,6 +282,9 @@ experiments:
       group: policy_evaluation
   bc_train: {}
   reinforce_train:
+    simulation:
+      ssa:
+        sim_time: 4000.0
     jax:
       enabled: true
       platform: auto
