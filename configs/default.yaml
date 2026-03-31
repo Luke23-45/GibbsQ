@@ -281,7 +281,12 @@ experiments:
       project: GibbsQ-Paper
       group: policy_evaluation
   bc_train: {}
-  reinforce_train: {}
+  reinforce_train:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   stats:
     simulation:
       num_replications: 30

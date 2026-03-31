@@ -17,6 +17,8 @@ Usage
 
 from __future__ import annotations
 
+import hashlib
+import json
 import functools
 import logging
 from pathlib import Path
@@ -29,6 +31,7 @@ REINFORCE_POINTER = "latest_reinforce_weights.txt"
 DOMAIN_RANDOMIZED_POINTER = "latest_domain_randomized_weights.txt"
 BC_POINTER = "latest_bc_weights.txt"
 LEGACY_POINTER = "latest_weights.txt"
+BC_METADATA_SUFFIX = ".bc_metadata.json"
 
 def _resolve_from_candidates(project_root: Path, candidates: list[Path]) -> Path | None:
     for ptr in candidates:
@@ -182,6 +185,115 @@ def save_model_pointer(
         f.write(str(relative_path))
     log.info(f"[Pointer] Updated {pointer_name} at {ptr_path}")
     return ptr_path
+
+def build_bc_reuse_compatibility_record(
+    cfg,
+    *,
+    bc_data_config: dict | None,
+) -> dict:
+    """Build the canonical BC reuse contract for metadata/fingerprint checks."""
+    from gibbsq.core.pretraining import normalize_bc_data_config
+
+    normalized_bc_data = normalize_bc_data_config(bc_data_config)
+    compatibility = {
+        "schema_version": 1,
+        "artifact_kind": "bc_actor_warm_start",
+        "system": {
+            "num_servers": int(cfg.system.num_servers),
+            "service_rates": [float(x) for x in cfg.system.service_rates],
+            "alpha": float(cfg.system.alpha),
+        },
+        "neural": {
+            "hidden_size": int(cfg.neural.hidden_size),
+            "preprocessing": str(cfg.neural.preprocessing),
+            "capacity_bound": float(cfg.neural.capacity_bound),
+            "init_type": str(cfg.neural.init_type),
+            "use_rho": bool(cfg.neural.use_rho),
+            "use_service_rates": bool(cfg.neural.use_service_rates),
+            "rho_input_scale": float(cfg.neural.rho_input_scale),
+        },
+        "bc_data": {
+            "rhos": [float(x) for x in normalized_bc_data["rhos"]],
+            "mu_scales": [float(x) for x in normalized_bc_data["mu_scales"]],
+            "samples_per_rho": int(normalized_bc_data["samples_per_rho"]),
+            "expert_sim_time": float(normalized_bc_data["expert_sim_time"]),
+            "sample_interval": float(normalized_bc_data["sample_interval"]),
+            "augmentation_noise_min": int(normalized_bc_data["augmentation_noise_min"]),
+            "augmentation_noise_max": int(normalized_bc_data["augmentation_noise_max"]),
+        },
+    }
+    canonical = json.dumps(compatibility, sort_keys=True, separators=(",", ":"))
+    return {
+        "schema_version": 1,
+        "artifact_kind": "bc_actor_warm_start",
+        "compatibility": compatibility,
+        "provenance": {
+            "simulation_seed": int(cfg.simulation.seed),
+            "neural_training": {
+                "bc_num_steps": int(cfg.neural_training.bc_num_steps),
+                "bc_lr": float(cfg.neural_training.bc_lr),
+                "bc_label_smoothing": float(cfg.neural_training.bc_label_smoothing),
+                "weight_decay": float(cfg.neural_training.weight_decay),
+            },
+        },
+        "fingerprint": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+    }
+
+def get_bc_metadata_path(model_path: Path) -> Path:
+    """Return the sidecar metadata path for a BC warm-start weights file."""
+    return model_path.with_name(f"{model_path.name}{BC_METADATA_SUFFIX}")
+
+def write_bc_reuse_metadata(
+    model_path: Path,
+    *,
+    cfg,
+    bc_data_config: dict | None,
+) -> Path:
+    """Write BC warm-start metadata used by reinforce_train compatibility checks."""
+    metadata_path = get_bc_metadata_path(model_path)
+    metadata = build_bc_reuse_compatibility_record(cfg, bc_data_config=bc_data_config)
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return metadata_path
+
+def load_bc_reuse_metadata(model_path: Path) -> dict:
+    """Load BC warm-start metadata from the sidecar JSON file."""
+    metadata_path = get_bc_metadata_path(model_path)
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+def validate_bc_reuse_metadata(
+    model_path: Path,
+    *,
+    cfg,
+    bc_data_config: dict | None,
+) -> dict:
+    """Validate that a BC artifact matches the active training contract."""
+    expected = build_bc_reuse_compatibility_record(cfg, bc_data_config=bc_data_config)
+    actual = load_bc_reuse_metadata(model_path)
+    if actual.get("schema_version") != 1:
+        raise ValueError(f"Unsupported BC metadata schema_version: {actual.get('schema_version')}")
+    if actual.get("artifact_kind") != "bc_actor_warm_start":
+        raise ValueError(f"Unsupported BC metadata artifact_kind: {actual.get('artifact_kind')}")
+
+    actual_compatibility = actual.get("compatibility")
+    if not isinstance(actual_compatibility, dict):
+        raise ValueError("BC metadata is missing the compatibility section.")
+
+    actual_fingerprint = actual.get("fingerprint")
+    canonical_actual = json.dumps(actual_compatibility, sort_keys=True, separators=(",", ":"))
+    recomputed_actual = hashlib.sha256(canonical_actual.encode("utf-8")).hexdigest()
+    if actual_fingerprint != recomputed_actual:
+        raise ValueError(
+            "BC metadata fingerprint does not match the stored compatibility payload."
+        )
+    if actual_fingerprint != expected["fingerprint"]:
+        raise ValueError(
+            "BC metadata fingerprint mismatch: "
+            f"expected {expected['fingerprint']}, got {actual_fingerprint}."
+        )
+    return actual
 
 def validate_neural_model_shape(model, config, num_servers: int) -> None:
     """Validates that loaded neural model weights match the active configuration.

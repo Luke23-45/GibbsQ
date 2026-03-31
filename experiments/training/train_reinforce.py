@@ -18,7 +18,9 @@ References:
       Computation Graphs.
 """
 
+import json
 import logging
+import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -43,7 +45,13 @@ from gibbsq.core import constants
 # but here we use the local collect_trajectory_ssa.
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
-from gibbsq.utils.model_io import save_model_pointer
+from gibbsq.utils.model_io import (
+    BC_POINTER,
+    get_bc_metadata_path,
+    save_model_pointer,
+    validate_bc_reuse_metadata,
+    validate_neural_model_shape,
+)
 from gibbsq.utils.progress import create_progress, iter_progress
 
 log = logging.getLogger(__name__)
@@ -62,6 +70,66 @@ class TrajectoryResult(NamedTuple):
     action_step_indices: list[int]  # Indices where routing decisions were made
     all_states: list[np.ndarray]  # All states (not just at decision points)
     rho: float = 0.4  # Load factor used during trajectory collection
+
+
+def try_load_bc_actor_warm_start(
+    policy_net: NeuralRouter,
+    *,
+    cfg: ExperimentConfig,
+    bc_data_config: dict | None,
+    project_root: Path,
+    output_root: Path,
+) -> tuple[NeuralRouter, dict[str, str | bool | None]]:
+    """Load BC actor warm-start weights when a compatible pointer exists."""
+    pointer_path = output_root / BC_POINTER
+    metadata: dict[str, str | bool | None] = {
+        "source": "expert_bootstrap",
+        "pointer_path": str(pointer_path),
+        "model_path": None,
+        "loaded": False,
+        "reason": "bc_pointer_missing",
+    }
+    if not pointer_path.exists():
+        return policy_net, metadata
+
+    try:
+        raw_pointer = pointer_path.read_text(encoding="utf-8").strip()
+        if not raw_pointer:
+            metadata["reason"] = "bc_pointer_empty"
+            return policy_net, metadata
+        model_path = Path(raw_pointer)
+        if not model_path.is_absolute():
+            model_path = project_root / model_path
+        metadata["model_path"] = str(model_path)
+        if not model_path.exists():
+            metadata["reason"] = "bc_model_missing"
+            return policy_net, metadata
+
+        compatibility = validate_bc_reuse_metadata(
+            model_path,
+            cfg=cfg,
+            bc_data_config=bc_data_config,
+        )
+        candidate = eqx.tree_deserialise_leaves(model_path, policy_net)
+        validate_neural_model_shape(candidate, cfg.neural, cfg.system.num_servers)
+        metadata.update(
+            {
+                "source": "bc_pointer",
+                "loaded": True,
+                "reason": "loaded",
+                "fingerprint": str(compatibility["fingerprint"]),
+                "metadata_path": str(get_bc_metadata_path(model_path)),
+            }
+        )
+        log.info("Reusing BC warm-start actor weights from %s", model_path)
+        return candidate, metadata
+    except Exception as exc:
+        metadata["reason"] = f"bc_load_failed:{exc}"
+        log.warning(
+            "BC warm-start reuse failed; falling back to expert bootstrap. Reason: %s",
+            exc,
+        )
+        return policy_net, metadata
 
 
 def compute_causal_returns_to_go(
@@ -409,18 +477,29 @@ class ReinforceTrainer:
         """Pretrain the neural network using centralized BC logic."""
         from gibbsq.core.pretraining import train_robust_bc_policy, train_robust_bc_value
 
-        policy_net = train_robust_bc_policy(
-            policy_net=policy_net,
-            service_rates=self.service_rates,
-            key=key,
-            seed=self.cfg.simulation.seed,
-            alpha=self.cfg.system.alpha,
-            num_steps=self.cfg.neural_training.bc_num_steps,
-            lr=self.cfg.neural_training.bc_lr,
-            weight_decay=self.cfg.neural_training.weight_decay,
-            label_smoothing=self.cfg.neural_training.bc_label_smoothing,
+        project_root = Path(__file__).resolve().parents[2]
+        output_root = self.run_dir.parent.parent
+        policy_net, warm_start_meta = try_load_bc_actor_warm_start(
+            policy_net,
+            cfg=self.cfg,
             bc_data_config=self.bc_data_config,
+            project_root=project_root,
+            output_root=output_root,
         )
+
+        if not warm_start_meta["loaded"]:
+            policy_net = train_robust_bc_policy(
+                policy_net=policy_net,
+                service_rates=self.service_rates,
+                key=key,
+                seed=self.cfg.simulation.seed,
+                alpha=self.cfg.system.alpha,
+                num_steps=self.cfg.neural_training.bc_num_steps,
+                lr=self.cfg.neural_training.bc_lr,
+                weight_decay=self.cfg.neural_training.weight_decay,
+                label_smoothing=self.cfg.neural_training.bc_label_smoothing,
+                bc_data_config=self.bc_data_config,
+            )
 
         # Initializes the baseline to expert performance level to prevent early gradient noise
         value_net, _ = train_robust_bc_value(
@@ -440,10 +519,22 @@ class ReinforceTrainer:
             bc_data_config=self.bc_data_config,
         )
 
-        return policy_net, value_net
+        return policy_net, value_net, warm_start_meta
 
     def execute(self, key: PRNGKeyArray, n_epochs: int = 100):
         """Execute the REINFORCE training loop."""
+        execute_start = time.perf_counter()
+        stage_profile: dict[str, object] = {
+            "oracle_rollout_engine": "numpy_ssa",
+            "profile": {
+                "batch_size": int(self.batch_size),
+                "train_epochs": int(n_epochs),
+                "sim_time": float(self.sim_time),
+                "jax_enabled": bool(self.cfg.jax.enabled),
+            },
+            "setup": {},
+            "epochs": [],
+        }
 
         key, actor_key, critic_key = jax.random.split(key, 3)
 
@@ -483,6 +574,7 @@ class ReinforceTrainer:
 
         jsq_queues = []
         with create_progress(total=3, desc="reinforce: setup", unit="stage", leave=False) as setup_bar:
+            jsq_started = time.perf_counter()
             for _ in iter_progress(
                 range(self.batch_size),
                 total=self.batch_size,
@@ -502,6 +594,11 @@ class ReinforceTrainer:
                 )
                 jsq_queues.append(traj_jsq.total_integrated_queue / self.sim_time)
             setup_bar.update(1)
+            stage_profile["setup"] = {
+                "jsq_baseline_seconds": time.perf_counter() - jsq_started,
+                "jsq_baseline_mean_queue": float(np.mean(jsq_queues)) if jsq_queues else 0.0,
+                "jsq_baseline_trajectories": int(len(jsq_queues)),
+            }
 
             jsq_limit = np.mean(jsq_queues)
 
@@ -532,7 +629,18 @@ class ReinforceTrainer:
 
             # Uses pre-bootstrap baselines when computing the initial denominator.
             key, bootstrap_key = jax.random.split(key)
-            policy_net, value_net = self.bootstrap_from_expert(policy_net, value_net, bootstrap_key, jsq_limit, random_limit, denom)
+            bootstrap_started = time.perf_counter()
+            policy_net, value_net, warm_start_meta = self.bootstrap_from_expert(
+                policy_net, value_net, bootstrap_key, jsq_limit, random_limit, denom
+            )
+            setup_profile = dict(stage_profile["setup"])
+            setup_profile.update(
+                {
+                    "bootstrap_seconds": time.perf_counter() - bootstrap_started,
+                    "warm_start": warm_start_meta,
+                }
+            )
+            stage_profile["setup"] = setup_profile
             setup_bar.update(1)
 
             policy_state = policy_opt.init(eqx.filter(policy_net, eqx.is_array))
@@ -632,6 +740,7 @@ class ReinforceTrainer:
                         rho_min = float(config_rho)
                         rho_max = float(config_rho)
 
+                    rollout_started = time.perf_counter()
                     for _ in iter_progress(
                         range(self.batch_size),
                         total=self.batch_size,
@@ -655,6 +764,7 @@ class ReinforceTrainer:
                         )
                         trajectories.append(traj)
                         epoch_rewards.append(traj.total_integrated_queue)
+                    rollout_seconds = time.perf_counter() - rollout_started
 
                     mean_queue = np.mean(epoch_rewards) / self.sim_time
                     base_regime_index = compute_performance_index(
@@ -668,6 +778,7 @@ class ReinforceTrainer:
                     gae_lambda = getattr(self.cfg.neural_training, 'gae_lambda', 0.95)
                     use_gae = gae_lambda > 0.0 and gae_lambda < 1.0
 
+                    advantage_started = time.perf_counter()
                     for traj in trajectories:
                         G_raw = compute_causal_returns_to_go(
                             traj.all_states, traj.jump_times, traj.action_step_indices,
@@ -694,6 +805,7 @@ class ReinforceTrainer:
                             all_advantages.append((G_raw, gae_adv, gae_ret))
                         else:
                             all_advantages.append((G_raw, None, None))
+                    advantage_seconds = time.perf_counter() - advantage_started
 
                     batch_S = []
                     batch_A = []
@@ -729,6 +841,7 @@ class ReinforceTrainer:
                     policy_aux = {"entropy": 0.0, "mean_logp": 0.0, "mean_adv": 0.0}
 
                     if len(batch_G) > 0:
+                        update_started = time.perf_counter()
                         S_tensor = jnp.asarray(np.stack(batch_S), dtype=jnp.float32)
                         A_tensor = jnp.asarray(batch_A, dtype=jnp.int32)
                         G_tensor = jnp.asarray(batch_G, dtype=jnp.float32)
@@ -853,6 +966,7 @@ class ReinforceTrainer:
                             value_grads, value_state, eqx.filter(value_net, eqx.is_array)
                         )
                         value_net = eqx.apply_updates(value_net, updates)
+                        update_seconds = time.perf_counter() - update_started
 
                         if epoch % 10 == 0:
                             avg_ent = policy_aux["entropy"]
@@ -865,6 +979,27 @@ class ReinforceTrainer:
                             log.info(
                                 f"    [Grad Check] P-Grad Norm: {policy_grad_norm:.4f} | V-Grad Norm: {value_grad_norm:.4f}"
                             )
+                    else:
+                        update_seconds = 0.0
+
+                    epoch_profile = {
+                        "epoch": int(epoch),
+                        "rollout_seconds": float(rollout_seconds),
+                        "advantage_seconds": float(advantage_seconds),
+                        "update_seconds": float(update_seconds),
+                        "mean_queue": float(mean_queue),
+                        "mean_integrated_queue": float(np.mean(epoch_rewards)) if epoch_rewards else 0.0,
+                        "mean_event_steps": float(np.mean([len(t.jump_times) for t in trajectories])) if trajectories else 0.0,
+                        "mean_actions": float(np.mean([len(t.actions) for t in trajectories])) if trajectories else 0.0,
+                        "mean_arrivals": float(np.mean([t.arrival_count for t in trajectories])) if trajectories else 0.0,
+                        "mean_departures": float(np.mean([t.departure_count for t in trajectories])) if trajectories else 0.0,
+                        "num_trajectories": int(len(trajectories)),
+                        "base_regime_index": float(base_regime_index),
+                    }
+                    cast_epochs = stage_profile["epochs"]
+                    assert isinstance(cast_epochs, list)
+                    if len(cast_epochs) < 10 or epoch == n_epochs - 1:
+                        cast_epochs.append(epoch_profile)
 
                 if epoch == 0:
                     ema_base_idx, ema_corr, ema_ev = base_regime_index, float(policy_aux.get("corr", 0.0)), float(policy_aux.get("ev", 0.0))
@@ -925,7 +1060,18 @@ class ReinforceTrainer:
                 log.info(f"Saved emergency checkpoint at epoch {last_successful_epoch}")
             raise
 
-        self._save_assets(policy_net, value_net, history_loss, history_reward, jsq_limit, random_limit, random_queue)
+        stage_profile["training_loop_seconds"] = time.perf_counter() - execute_start
+        self._save_assets(
+            policy_net,
+            value_net,
+            history_loss,
+            history_reward,
+            jsq_limit,
+            random_limit,
+            random_queue,
+            stage_profile=stage_profile,
+            execute_start=execute_start,
+        )
 
     def _save_assets(
         self,
@@ -936,6 +1082,8 @@ class ReinforceTrainer:
         jsq_limit: float,
         random_limit: float,
         random_queue: float,
+        stage_profile: dict | None = None,
+        execute_start: float | None = None,
     ):
         """Persist model weights and training history."""
         import matplotlib.pyplot as plt
@@ -988,6 +1136,7 @@ class ReinforceTrainer:
         log.info("-" * 55)
         log.info("-------------------------------------------------------")
         log.info(f"Running Final Deterministic Evaluation (N={self.cfg.neural_training.eval_batches * self.cfg.neural_training.eval_trajs_per_batch})...")
+        eval_started = time.perf_counter()
         eval_indices = []
         with create_progress(
             total=self.cfg.neural_training.eval_batches,
@@ -1033,6 +1182,18 @@ class ReinforceTrainer:
 
         final_mean = np.mean(eval_indices)
         final_std = np.std(eval_indices)
+        if stage_profile is not None:
+            stage_profile["final_eval"] = {
+                "seconds": float(time.perf_counter() - eval_started),
+                "mean_score": float(final_mean),
+                "std_score": float(final_std),
+                "num_scores": int(len(eval_indices)),
+            }
+            if execute_start is not None:
+                stage_profile["total_wall_seconds"] = float(time.perf_counter() - execute_start)
+            stage_profile_path = self.run_dir / "reinforce_stage_profile.json"
+            stage_profile_path.write_text(json.dumps(stage_profile, indent=2), encoding="utf-8")
+            log.info("Stage profile written to %s", stage_profile_path)
         log.info(f"Deterministic Policy Score: {final_mean:.2f}% ± {final_std:.2f}%")
         log.info(f"JSQ Target: 100.0% | Random Floor: 0.0% (Performance Index Scale)")
         log.info("-------------------------------------------------------")

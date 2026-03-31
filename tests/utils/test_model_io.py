@@ -3,6 +3,7 @@ import numpy as np
 from pathlib import Path
 import tempfile
 import shutil
+from types import SimpleNamespace
 
 class TestResolveModelPointer:
     def test_resolve_reinforce_pointer_first(self, tmp_path):
@@ -297,6 +298,134 @@ class TestValidateNeuralModelShape:
         cfg = NeuralConfig(hidden_size=8, use_service_rates=True, use_rho=False)
         with pytest.raises(ValueError, match="Model input dimension mismatch"):
             validate_neural_model_shape(MockModel(), cfg, num_servers=3)
+
+class TestBCReuseMetadata:
+    def _make_cfg(self):
+        return SimpleNamespace(
+            system=SimpleNamespace(
+                num_servers=3,
+                service_rates=[1.0, 1.5, 2.0],
+                alpha=1.25,
+            ),
+            neural=SimpleNamespace(
+                hidden_size=16,
+                preprocessing="log1p",
+                capacity_bound=10.0,
+                init_type="zero_final",
+                use_rho=True,
+                use_service_rates=True,
+                rho_input_scale=10.0,
+            ),
+            neural_training=SimpleNamespace(
+                bc_num_steps=100,
+                bc_lr=0.002,
+                bc_label_smoothing=0.1,
+                weight_decay=1e-4,
+            ),
+            simulation=SimpleNamespace(seed=42),
+        )
+
+    def _make_bc_data(self):
+        return {
+            "rhos": [0.45, 0.65],
+            "mu_scales": [0.5, 1.0],
+            "samples_per_rho": 100,
+            "expert_sim_time": 50.0,
+            "sample_interval": 1.0,
+            "augmentation_noise_min": -1,
+            "augmentation_noise_max": 1,
+        }
+
+    def test_bc_reuse_metadata_round_trip(self, tmp_path):
+        from gibbsq.utils.model_io import (
+            get_bc_metadata_path,
+            load_bc_reuse_metadata,
+            validate_bc_reuse_metadata,
+            write_bc_reuse_metadata,
+        )
+
+        cfg = self._make_cfg()
+        bc_data = self._make_bc_data()
+        model_path = tmp_path / "policy.eqx"
+        model_path.write_text("weights")
+
+        metadata_path = write_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+
+        assert metadata_path == get_bc_metadata_path(model_path)
+        assert metadata_path.exists()
+        loaded = load_bc_reuse_metadata(model_path)
+        assert loaded["artifact_kind"] == "bc_actor_warm_start"
+        assert loaded["compatibility"]["neural"]["hidden_size"] == 16
+        assert loaded["provenance"]["simulation_seed"] == 42
+        assert loaded["fingerprint"]
+        validated = validate_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+        assert validated["fingerprint"] == loaded["fingerprint"]
+
+    def test_bc_reuse_metadata_rejects_mismatch(self, tmp_path):
+        from gibbsq.utils.model_io import validate_bc_reuse_metadata, write_bc_reuse_metadata
+
+        cfg = self._make_cfg()
+        bc_data = self._make_bc_data()
+        model_path = tmp_path / "policy.eqx"
+        model_path.write_text("weights")
+        write_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+
+        mismatched_cfg = self._make_cfg()
+        mismatched_cfg.neural.hidden_size = 32
+
+        with pytest.raises(ValueError, match="BC metadata fingerprint mismatch"):
+            validate_bc_reuse_metadata(model_path, cfg=mismatched_cfg, bc_data_config=bc_data)
+
+    def test_bc_reuse_metadata_accepts_provenance_only_change(self, tmp_path):
+        from gibbsq.utils.model_io import validate_bc_reuse_metadata, write_bc_reuse_metadata
+
+        cfg = self._make_cfg()
+        bc_data = self._make_bc_data()
+        model_path = tmp_path / "policy.eqx"
+        model_path.write_text("weights")
+        write_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+
+        provenance_changed_cfg = self._make_cfg()
+        provenance_changed_cfg.simulation.seed = 99
+        provenance_changed_cfg.neural_training.bc_num_steps = 500
+        provenance_changed_cfg.neural_training.bc_lr = 0.01
+
+        validated = validate_bc_reuse_metadata(
+            model_path,
+            cfg=provenance_changed_cfg,
+            bc_data_config=bc_data,
+        )
+        assert validated["fingerprint"]
+
+    def test_bc_reuse_metadata_rejects_tampered_compatibility_payload(self, tmp_path):
+        import json
+
+        from gibbsq.utils.model_io import get_bc_metadata_path, validate_bc_reuse_metadata, write_bc_reuse_metadata
+
+        cfg = self._make_cfg()
+        bc_data = self._make_bc_data()
+        model_path = tmp_path / "policy.eqx"
+        model_path.write_text("weights")
+        write_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+
+        metadata_path = get_bc_metadata_path(model_path)
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        payload["compatibility"]["neural"]["hidden_size"] = 32
+        metadata_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="stored compatibility payload"):
+            validate_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
+
+    def test_bc_reuse_metadata_rejects_missing_sidecar(self, tmp_path):
+        from gibbsq.utils.model_io import validate_bc_reuse_metadata
+
+        cfg = self._make_cfg()
+        bc_data = self._make_bc_data()
+        model_path = tmp_path / "policy.eqx"
+        model_path.write_text("weights")
+
+        with pytest.raises(FileNotFoundError):
+            validate_bc_reuse_metadata(model_path, cfg=cfg, bc_data_config=bc_data)
 
 class TestDeterministicNeuralPolicy:
     def test_deterministic_returns_one_hot(self):

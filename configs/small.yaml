@@ -218,7 +218,20 @@ experiments:
       project: GibbsQ-Paper
       group: policy_evaluation
   bc_train: {}
-  reinforce_train: {}
+  reinforce_train:
+    simulation:
+      ssa:
+        sim_time: 1000.0
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+    neural_training:
+      eval_batches: 1
+      eval_trajs_per_batch: 3
+    train_epochs: 5
+    batch_size: 4
   stats: {}
   generalize: {}
   ablation: {}

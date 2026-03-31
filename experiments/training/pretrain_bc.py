@@ -16,7 +16,7 @@ from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.pretraining import extract_bc_data_config, train_robust_bc_policy
 from gibbsq.utils.logging import setup_wandb, get_run_config
-from gibbsq.utils.model_io import BC_POINTER, save_model_pointer
+from gibbsq.utils.model_io import BC_POINTER, save_model_pointer, write_bc_reuse_metadata
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +54,13 @@ def main(raw_cfg: DictConfig):
     jax.tree_util.tree_map(lambda x: x.block_until_ready() if hasattr(x, "block_until_ready") else x, policy_net)
     import equinox as eqx
     eqx.tree_serialise_leaves(model_path, policy_net)
+    metadata_path = write_bc_reuse_metadata(
+        model_path,
+        cfg=cfg,
+        bc_data_config=bc_data_config,
+    )
     log.info(f"\n[DONE] Platinum BC Weights saved to {model_path}")
+    log.info("[Metadata] BC warm-start compatibility metadata saved to %s", metadata_path)
     
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
     pointer_dir = run_dir.parent.parent
