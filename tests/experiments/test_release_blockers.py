@@ -20,6 +20,7 @@ def test_check_configs_discovers_profile_configs_and_public_paths():
     assert profiles == list(PROFILE_CONFIG_NAMES)
     assert tuple(EXPERIMENT_BLOCK_NAMES) == (
         "check_configs",
+        "hyperqual",
         "reinforce_check",
         "drift",
         "sweep",
@@ -32,6 +33,7 @@ def test_check_configs_discovers_profile_configs_and_public_paths():
         "ablation",
         "critical",
     )
+    assert _public_experiment_overrides("hyperqual") == ["++active_experiment=hyperqual"]
     assert _public_experiment_overrides("policy") == ["++active_experiment=policy"]
     assert _public_experiment_overrides("stats") == ["++active_experiment=stats"]
     assert _public_experiment_overrides("stress") == ["++active_experiment=stress", "++jax.enabled=True"]
@@ -346,6 +348,7 @@ def test_runner_injects_publication_safe_defaults():
     from scripts.execution.experiment_runner import default_hydra_overrides_for_experiment
 
     assert default_hydra_overrides_for_experiment("drift", []) == ["++active_experiment=drift"]
+    assert default_hydra_overrides_for_experiment("hyperqual", []) == ["++active_experiment=hyperqual"]
     assert default_hydra_overrides_for_experiment("sweep", []) == ["++active_experiment=sweep"]
     assert default_hydra_overrides_for_experiment("policy", []) == ["++active_experiment=policy"]
     assert default_hydra_overrides_for_experiment("stats", []) == ["++active_experiment=stats"]
