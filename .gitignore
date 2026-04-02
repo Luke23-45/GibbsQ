@@ -24,7 +24,7 @@ env/
 .vscode/
 *.swp
 *.swo
-
+configs/notes
 # Hydra outputs
 # outputs/
 multirun/
@@ -47,4 +47,4 @@ outputs
 new_test
 docs/PROPOSED
 UAS_FINAL_AUDIT_REPORT.md
-logs.md
+# logs.md

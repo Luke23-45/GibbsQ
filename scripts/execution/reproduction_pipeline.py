@@ -7,7 +7,9 @@ Replaces both run_paper_experiments.ps1 and run_paper_experiments.sh.
 import sys
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
@@ -16,6 +18,20 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.execution.experiment_runner import default_hydra_overrides_for_experiment
 from gibbsq.utils.progress import create_progress
+
+
+def _current_timestamp() -> datetime:
+    """Return the current local time with timezone information attached."""
+    return datetime.now().astimezone()
+
+
+def _format_timestamp(timestamp: datetime) -> str:
+    """Render timestamps in an unambiguous local format."""
+    return timestamp.isoformat(sep=" ", timespec="seconds")
+
+
+def _format_elapsed(elapsed_seconds: float) -> str:
+    return f"{elapsed_seconds:.3f}s"
 
 
 def run_experiment(experiment, hydra_args=None, dry_run: bool = False, progress_mode: str = "auto"):
@@ -60,10 +76,14 @@ def main():
     
     args, hydra_args = parser.parse_known_args()
     
+    pipeline_start = _current_timestamp()
+    pipeline_start_perf = perf_counter()
+    
     print("=" * 58)
     print("  GibbsQ Research Paper: Final Execution Pipeline")
     print("=" * 58)
     print(f"  Progress Mode: {args.progress}")
+    print(f"  Pipeline Started At: {_format_timestamp(pipeline_start)}")
     print("\n[Initiating Pipeline...]\n")
     
     experiments = [
@@ -104,6 +124,13 @@ def main():
             valid_aliases = [exp for exp, _, _ in experiments]
             print(f"Error: Unknown start experiment '{args.start_from}'")
             print(f"Valid options are: {', '.join(valid_aliases)}")
+            pipeline_end = _current_timestamp()
+            pipeline_elapsed_seconds = perf_counter() - pipeline_start_perf
+            print("\n" + "=" * 58)
+            print("  Pipeline Status: failed (invalid start-from)")
+            print(f"  Pipeline Ended At: {_format_timestamp(pipeline_end)}")
+            print(f"  Total Pipeline Runtime: {_format_elapsed(pipeline_elapsed_seconds)}")
+            print("=" * 58)
             return 1
         
         experiments = experiments[found_index:]
@@ -111,54 +138,81 @@ def main():
 
     
     failed_experiments = []
+    pipeline_status = "unknown"
+    exit_code = 1
     
     global_hydra_args = list(hydra_args)
-    
-    with create_progress(
-        total=len(experiments),
-        desc="pipeline",
-        mode=args.progress,
-        unit="experiment",
-    ) as pipeline_bar:
-        for index, (experiment, description, step_idx) in enumerate(experiments, start=1):
-            rendered_description = _format_pipeline_step(description, step_idx, total_numbered_steps)
-            if description:
-                print(f"\n{rendered_description}")
 
-            pipeline_bar.set_description(f"{index}/{len(experiments)} {experiment}")
-            pipeline_bar.set_postfix({"alias": experiment}, refresh=False)
+    try:
+        with create_progress(
+            total=len(experiments),
+            desc="pipeline",
+            mode=args.progress,
+            unit="experiment",
+        ) as pipeline_bar:
+            for index, (experiment, description, step_idx) in enumerate(experiments, start=1):
+                rendered_description = _format_pipeline_step(description, step_idx, total_numbered_steps)
+                if description:
+                    print(f"\n{rendered_description}")
 
-            current_hydra_args = global_hydra_args + default_hydra_overrides_for_experiment(
-                experiment,
-                global_hydra_args,
-            )
+                pipeline_bar.set_description(f"{index}/{len(experiments)} {experiment}")
+                pipeline_bar.set_postfix({"alias": experiment}, refresh=False)
 
-            print(f"[handoff] Launching {experiment} ({index}/{len(experiments)})")
-            result = run_experiment(
-                experiment,
-                current_hydra_args,
-                dry_run=args.dry_run,
-                progress_mode=args.progress,
-            )
-            pipeline_bar.update(1)
+                current_hydra_args = global_hydra_args + default_hydra_overrides_for_experiment(
+                    experiment,
+                    global_hydra_args,
+                )
 
-            if result != 0:
-                print(f"Experiment '{experiment}' failed with exit code {result}")
-                failed_experiments.append(experiment)
-                print("Stopping pipeline after the first failure to avoid running dependent phases on invalid artifacts.")
-                break
-    
-    print("\n" + "=" * 58)
-    if failed_experiments:
-        print(f"  Pipeline completed with {len(failed_experiments)} failed experiments:")
-        for exp in failed_experiments:
-            print(f"    - {exp}")
-    else:
-        print("  Pipeline fully complete.")
-    print("  Review '/outputs/' for your plots and logs.")
-    print("=" * 58)
-    
-    return 1 if failed_experiments else 0
+                print(f"[handoff] Launching {experiment} ({index}/{len(experiments)})")
+                step_start = _current_timestamp()
+                step_start_perf = perf_counter()
+                print(f"  -> [{experiment}] Started at {_format_timestamp(step_start)}")
+                result = run_experiment(
+                    experiment,
+                    current_hydra_args,
+                    dry_run=args.dry_run,
+                    progress_mode=args.progress,
+                )
+                step_end = _current_timestamp()
+                elapsed_seconds = perf_counter() - step_start_perf
+                step_status = "completed" if result == 0 else f"failed (exit code {result})"
+                print(f"  -> [{experiment}] Ended at {_format_timestamp(step_end)}")
+                print(f"  -> [{experiment}] Status: {step_status}")
+                print(f"  -> [{experiment}] Elapsed: {_format_elapsed(elapsed_seconds)}")
+                pipeline_bar.update(1)
+
+                if result != 0:
+                    print(f"Experiment '{experiment}' failed with exit code {result}")
+                    failed_experiments.append(experiment)
+                    print("Stopping pipeline after the first failure to avoid running dependent phases on invalid artifacts.")
+                    break
+
+        pipeline_status = "completed" if not failed_experiments else "completed with failures"
+        exit_code = 1 if failed_experiments else 0
+        return exit_code
+    except KeyboardInterrupt:
+        pipeline_status = "interrupted by user"
+        exit_code = 130
+        print("\nPipeline interrupted by user.")
+        return exit_code
+    finally:
+        print("\n" + "=" * 58)
+        if failed_experiments:
+            print(f"  Pipeline completed with {len(failed_experiments)} failed experiments:")
+            for exp in failed_experiments:
+                print(f"    - {exp}")
+        elif pipeline_status == "interrupted by user":
+            print("  Pipeline interrupted before completion.")
+        else:
+            print("  Pipeline fully complete.")
+
+        pipeline_end = _current_timestamp()
+        pipeline_elapsed_seconds = perf_counter() - pipeline_start_perf
+        print(f"  Pipeline Status: {pipeline_status}")
+        print(f"  Pipeline Ended At: {_format_timestamp(pipeline_end)}")
+        print(f"  Total Pipeline Runtime: {_format_elapsed(pipeline_elapsed_seconds)}")
+        print("  Review '/outputs/' for your plots and logs.")
+        print("=" * 58)
 
 if __name__ == "__main__":
     sys.exit(main())

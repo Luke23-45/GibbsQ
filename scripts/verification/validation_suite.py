@@ -8,7 +8,23 @@ import sys
 import os
 import subprocess
 import argparse
+from datetime import datetime
 from pathlib import Path
+from time import perf_counter
+
+
+def _current_timestamp() -> datetime:
+    """Return the current local time with timezone information attached."""
+    return datetime.now().astimezone()
+
+
+def _format_timestamp(timestamp: datetime) -> str:
+    """Render timestamps in an unambiguous local format."""
+    return timestamp.isoformat(sep=" ", timespec="seconds")
+
+
+def _format_elapsed(elapsed_seconds: float) -> str:
+    return f"{elapsed_seconds:.3f}s"
 
 
 def _format_validation_step(step_idx: int, total_steps: int, label: str) -> str:
@@ -20,20 +36,37 @@ def run_cmd(args, dry_run=False):
     run_script = script_dir.parent / "execution" / "experiment_runner.py"
     
     cmd = [sys.executable, str(run_script)] + args
+    step_name = args[0] if args else "unknown"
+    step_start = _current_timestamp()
+    step_start_perf = perf_counter()
+    step_status = "unknown"
     
     print("\n" + "="*60)
     print(f" COMMAND: {' '.join(cmd)}")
+    print(f" STARTED: {_format_timestamp(step_start)}")
     print("="*60)
     
-    if dry_run:
-        print("[DRY-RUN] Skipping execution.")
-        return
-        
     try:
-        result = subprocess.run(cmd, check=True)
+        if dry_run:
+            print("[DRY-RUN] Skipping execution.")
+            step_status = "dry-run"
+        else:
+            subprocess.run(cmd, check=True)
+            step_status = "completed"
     except subprocess.CalledProcessError as e:
+        step_status = f"failed (exit code {e.returncode})"
         print(f"\n[CRITICAL ERROR] Step failed with exit code {e.returncode}")
         sys.exit(e.returncode)
+    except KeyboardInterrupt:
+        step_status = "interrupted by user"
+        raise
+    finally:
+        step_end = _current_timestamp()
+        elapsed_seconds = perf_counter() - step_start_perf
+        print(f"[STEP COMPLETE] {step_name}")
+        print(f"  Status: {step_status}")
+        print(f"  Ended At: {_format_timestamp(step_end)}")
+        print(f"  Elapsed: {_format_elapsed(elapsed_seconds)}")
 
 def verify_standard(args):
     """Corresponds to the logic in verify_implementation.ps1."""
@@ -182,7 +215,13 @@ def main():
         parser.print_help()
         sys.exit(0)
     
+    suite_status = "unknown"
+    suite_start = _current_timestamp()
+    suite_start_perf = perf_counter()
+
     try:
+        print(f"\nValidation Suite Started At: {_format_timestamp(suite_start)}")
+        
         if args.command == "standard":
             verify_standard(args)
         elif args.command == "phase_iv":
@@ -190,15 +229,26 @@ def main():
         elif args.command == "full_paper":
             verify_full_paper(args)
             
+        suite_status = "completed"
         print("\n" + "="*60)
         print("  VERIFICATION COMPLETE!")
-        print("="*60)
-        if not args.dry_run:
-            print("  Check '/outputs' for detailed analysis results.")
-    
     except KeyboardInterrupt:
+        suite_status = "interrupted by user"
         print("\n[Interrupted] Verification canceled by user.")
         sys.exit(130)
+    except SystemExit as e:
+        exit_code = e.code if isinstance(e.code, int) else 1
+        suite_status = f"failed (exit code {exit_code})"
+        raise
+    finally:
+        suite_end = _current_timestamp()
+        print("\n" + "="*60)
+        print(f"  Validation Status: {suite_status}")
+        print(f"  Ended At: {_format_timestamp(suite_end)}")
+        print(f"  Total Elapsed Time: {_format_elapsed(perf_counter() - suite_start_perf)}")
+        print("="*60)
+        if suite_status == "completed" and not args.dry_run:
+            print("  Check '/outputs' for detailed analysis results.")
 
 if __name__ == "__main__":
     main()

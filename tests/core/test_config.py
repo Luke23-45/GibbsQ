@@ -38,7 +38,7 @@ from gibbsq.core.config import (
     drift_rate_epsilon, compact_set_radius, hydra_to_config, PolicyName,
     critical_load_required_sim_time, critical_load_sim_time,
     PROFILE_CONFIG_NAMES, EXPERIMENT_BLOCK_NAMES, validate_profile_config,
-    resolve_experiment_config, runtime_root_dict,
+    resolve_experiment_config, resolve_experiment_config_chain, runtime_root_dict,
 )
 from omegaconf import DictConfig, OmegaConf
 
@@ -578,6 +578,165 @@ class TestHydraConversion:
         assert float(resolved.system.alpha) == pytest.approx(7.0)
         assert float(resolved.simulation.ssa.sim_time) == pytest.approx(1234.0)
         assert resolved.policy.name == "softmax"
+
+    def test_layered_experiment_resolution_inherits_reinforce_budget_for_ablation(self):
+        config_dir = str(Path("configs").resolve())
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raw_cfg = compose(
+                config_name="debug",
+                overrides=["++active_profile=debug"],
+            )
+            reinforce = resolve_experiment_config(raw_cfg, "reinforce_train", profile_name="debug")
+            ablation = resolve_experiment_config_chain(
+                raw_cfg,
+                ["reinforce_train", "ablation"],
+                profile_name="debug",
+            )
+
+        assert int(ablation.train_epochs) == int(reinforce.train_epochs) == 5
+        assert int(ablation.batch_size) == int(reinforce.batch_size) == 4
+        assert float(ablation.simulation.ssa.sim_time) == pytest.approx(
+            float(reinforce.simulation.ssa.sim_time)
+        )
+        assert int(ablation.neural_training.eval_batches) == int(reinforce.neural_training.eval_batches)
+        assert int(ablation.neural_training.eval_trajs_per_batch) == int(
+            reinforce.neural_training.eval_trajs_per_batch
+        )
+
+    def test_layered_experiment_resolution_preserves_ablation_specific_overrides(self):
+        raw_cfg = OmegaConf.create(
+            {
+                "active_profile": "debug",
+                "system": {
+                    "num_servers": 2,
+                    "arrival_rate": 1.0,
+                    "service_rates": [1.0, 1.5],
+                    "alpha": 1.0,
+                },
+                "simulation": {
+                    "num_replications": 10,
+                    "seed": 42,
+                    "burn_in_fraction": 0.2,
+                    "export_trajectories": False,
+                    "ssa": {"sim_time": 1000.0, "sample_interval": 1.0},
+                    "dga": {"sim_steps": 1000, "temperature": 0.5},
+                },
+                "policy": {"name": "uas", "d": 2},
+                "drift": {"q_max": 50, "use_grid": True},
+                "wandb": {"enabled": False, "project": "GibbsQ-Debug", "mode": "offline", "run_name": None},
+                "jax": {"enabled": False, "platform": "auto", "precision": "float32", "fallback_to_cpu": True},
+                "jax_engine": {
+                    "max_events_safety_multiplier": 1.5,
+                    "max_events_additive_buffer": 1000,
+                    "scan_sampling_chunk": 16,
+                },
+                "neural": {
+                    "hidden_size": 64,
+                    "preprocessing": "log1p",
+                    "init_type": "zero_final",
+                    "use_rho": True,
+                    "use_service_rates": True,
+                    "rho_input_scale": 10.0,
+                    "entropy_bonus": 0.01,
+                    "entropy_final": 0.001,
+                    "clip_global_norm": 0.5,
+                    "actor_lr": 0.001,
+                    "critic_lr": 0.005,
+                    "lr_decay_rate": 0.9,
+                    "weight_decay": 0.0001,
+                },
+                "verification": {
+                    "parity_threshold_percent": 25.0,
+                    "jacobian_rel_tol": 0.05,
+                    "alpha_significance": 0.05,
+                    "confidence_interval": 0.95,
+                    "stationarity_threshold": 1.0,
+                    "parity_z_score": 1.96,
+                    "gradient_check_chunk_size": 100,
+                    "gradient_check_max_steps": 50,
+                    "gradient_check_n_test": 50,
+                    "gradient_check_hidden_size": 128,
+                    "gradient_check_sim_time": 10.0,
+                    "gradient_check_n_samples": 5000,
+                    "gradient_check_epsilon": 0.05,
+                    "gradient_check_cosine_threshold": 0.9,
+                    "gradient_check_error_threshold": 0.30,
+                    "gradient_shake_scale": 0.1,
+                },
+                "generalization": {
+                    "rho_boundary_vals": [0.95],
+                    "scale_vals": [0.5, 2.0],
+                    "rho_grid_vals": [0.5, 0.85],
+                },
+                "stress": {
+                    "n_values": [4, 8],
+                    "critical_rhos": [0.9],
+                    "mu_het": [10.0, 0.1, 0.1, 0.1],
+                    "sample_interval": 1.0,
+                    "massive_n_rho": 0.8,
+                    "massive_n_sim_time": 500.0,
+                    "critical_load_n": 10,
+                    "critical_load_base_rho": 0.8,
+                    "critical_load_max_sim_time": 100000.0,
+                    "heterogeneity_rho": 0.5,
+                    "heterogeneity_sim_time": 1000.0,
+                },
+                "stability_sweep": {
+                    "alpha_vals": [0.1, 1.0, 5.0],
+                    "rho_vals": [0.5, 0.8, 0.9],
+                },
+                "domain_randomization": {"enabled": True, "rho_min": 0.4, "rho_max": 0.98},
+                "neural_training": {
+                    "learning_rate": 3e-3,
+                    "dga_learning_rate": 0.1,
+                    "weight_decay": 1e-4,
+                    "min_temperature": 0.3,
+                    "gamma": 0.99,
+                    "gae_lambda": 0.95,
+                    "curriculum": [[20, 1000]],
+                    "eval_batches": 1,
+                    "eval_trajs_per_batch": 3,
+                    "perf_index_min_denom": 0.5,
+                    "perf_index_jsq_margin": 0.05,
+                    "bc_num_steps": 200,
+                    "bc_lr": 0.002,
+                    "bc_label_smoothing": 0.1,
+                    "shake_scale": 0.01,
+                    "checkpoint_freq": 10,
+                    "squash_scale": 100.0,
+                    "squash_threshold": 500.0,
+                },
+                "output_dir": "outputs/debug",
+                "log_dir": "${output_dir}/logs",
+                "train_epochs": 30,
+                "batch_size": 16,
+                "experiments": {name: {} for name in EXPERIMENT_BLOCK_NAMES},
+            }
+        )
+        raw_cfg.experiments.reinforce_train = {
+            "simulation": {"ssa": {"sim_time": 1000.0}},
+            "neural_training": {"eval_batches": 1, "eval_trajs_per_batch": 3},
+            "train_epochs": 5,
+            "batch_size": 4,
+        }
+        raw_cfg.experiments.ablation = {
+            "simulation": {"num_replications": 7},
+            "neural_training": {"checkpoint_freq": 99},
+        }
+
+        resolved = resolve_experiment_config_chain(
+            raw_cfg,
+            ["reinforce_train", "ablation"],
+            profile_name="debug",
+        )
+
+        assert int(resolved.train_epochs) == 5
+        assert int(resolved.batch_size) == 4
+        assert float(resolved.simulation.ssa.sim_time) == pytest.approx(1000.0)
+        assert int(resolved.simulation.num_replications) == 7
+        assert int(resolved.neural_training.checkpoint_freq) == 99
+        assert int(resolved.neural_training.eval_batches) == 1
+        assert int(resolved.neural_training.eval_trajs_per_batch) == 3
 
     def test_profile_invariants_hold_across_active_profiles(self):
         config_dir = str(Path("configs").resolve())

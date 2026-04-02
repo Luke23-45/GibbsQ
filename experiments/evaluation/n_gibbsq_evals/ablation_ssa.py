@@ -25,7 +25,7 @@ from jaxtyping import PRNGKeyArray
 from omegaconf import DictConfig
 
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.core.config import ExperimentConfig, load_experiment_config
+from gibbsq.core.config import ExperimentConfig, load_experiment_config_chain
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.numpy_engine import run_replications
 from gibbsq.utils.exporter import append_metrics_jsonl
@@ -232,7 +232,10 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
 
 
 def main(raw_cfg: DictConfig):
-    cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "ablation")
+    cfg, resolved_raw_cfg = load_experiment_config_chain(
+        raw_cfg,
+        ["reinforce_train", "ablation"],
+    )
 
     run_dir, run_id = get_run_config(cfg, "ablation", resolved_raw_cfg)
     run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="ablation_ssa", run_id=run_id, run_dir=run_dir)

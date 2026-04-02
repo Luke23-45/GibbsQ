@@ -48,7 +48,9 @@ __all__ = [
     "EXPERIMENT_BLOCK_NAMES",
     "validate_profile_config",
     "resolve_experiment_config",
+    "resolve_experiment_config_chain",
     "load_experiment_config",
+    "load_experiment_config_chain",
     "runtime_root_dict",
 ]
 
@@ -958,11 +960,24 @@ def resolve_experiment_config(
     experiment_name: str,
     profile_name: str | None = None,
 ) -> DictConfig:
-    if experiment_name not in EXPERIMENT_BLOCK_NAMES:
-        raise ValueError(
-            f"Unknown experiment '{experiment_name}'. "
-            f"Expected one of {list(EXPERIMENT_BLOCK_NAMES)}."
-        )
+    return resolve_experiment_config_chain(raw, [experiment_name], profile_name=profile_name)
+
+
+def resolve_experiment_config_chain(
+    raw: DictConfig | dict,
+    experiment_names: Sequence[str],
+    profile_name: str | None = None,
+) -> DictConfig:
+    experiment_names = tuple(experiment_names)
+    if not experiment_names:
+        raise ValueError("experiment_names must contain at least one experiment.")
+
+    for experiment_name in experiment_names:
+        if experiment_name not in EXPERIMENT_BLOCK_NAMES:
+            raise ValueError(
+                f"Unknown experiment '{experiment_name}'. "
+                f"Expected one of {list(EXPERIMENT_BLOCK_NAMES)}."
+            )
 
     selected_profile = (
         profile_name
@@ -971,11 +986,16 @@ def resolve_experiment_config(
         or "default"
     )
 
-    pristine_profile = OmegaConf.load(_profile_path(selected_profile))
-    validate_profile_config(pristine_profile)
-
-    pristine_data = _plain_container(pristine_profile)
     raw_data = _plain_container(raw)
+    pristine_profile = OmegaConf.load(_profile_path(selected_profile))
+    try:
+        validate_profile_config(pristine_profile)
+        pristine_data = _plain_container(pristine_profile)
+    except ValueError:
+        # Support internal profiles that use Hydra defaults composition by
+        # falling back to the already-composed raw config surface.
+        validate_profile_config(raw)
+        pristine_data = raw_data
 
     pristine_root = {
         k: v for k, v in pristine_data.items()
@@ -988,17 +1008,23 @@ def resolve_experiment_config(
     raw_experiments = raw_data.get("experiments")
     if not isinstance(raw_experiments, dict):
         raise ValueError("Resolved config is missing the top-level 'experiments' mapping.")
-    if experiment_name not in raw_experiments:
-        raise ValueError(f"Config profile '{selected_profile}' does not define experiments.{experiment_name}.")
-
-    experiment_block = raw_experiments.get(experiment_name) or {}
-    if not isinstance(experiment_block, dict):
-        raise ValueError(f"experiments.{experiment_name} must be a mapping, got {type(experiment_block)}")
+    experiment_blocks = []
+    for experiment_name in experiment_names:
+        if experiment_name not in raw_experiments:
+            raise ValueError(
+                f"Config profile '{selected_profile}' does not define experiments.{experiment_name}."
+            )
+        experiment_block = raw_experiments.get(experiment_name) or {}
+        if not isinstance(experiment_block, dict):
+            raise ValueError(
+                f"experiments.{experiment_name} must be a mapping, got {type(experiment_block)}"
+            )
+        experiment_blocks.append(OmegaConf.create(experiment_block))
 
     top_level_diff = _diff_container(pristine_root, raw_root)
     merged = OmegaConf.merge(
         OmegaConf.create(pristine_root),
-        OmegaConf.create(experiment_block),
+        *experiment_blocks,
         OmegaConf.create(top_level_diff if top_level_diff is not _MISSING else {}),
     )
     return OmegaConf.create(OmegaConf.to_container(merged, resolve=True))
@@ -1009,7 +1035,18 @@ def load_experiment_config(
     experiment_name: str,
     profile_name: str | None = None,
 ) -> tuple[ExperimentConfig, DictConfig]:
-    resolved_raw = resolve_experiment_config(raw, experiment_name, profile_name=profile_name)
+    resolved_raw = resolve_experiment_config_chain(raw, [experiment_name], profile_name=profile_name)
+    cfg = hydra_to_config(resolved_raw)
+    validate(cfg)
+    return cfg, resolved_raw
+
+
+def load_experiment_config_chain(
+    raw: DictConfig | dict,
+    experiment_names: Sequence[str],
+    profile_name: str | None = None,
+) -> tuple[ExperimentConfig, DictConfig]:
+    resolved_raw = resolve_experiment_config_chain(raw, experiment_names, profile_name=profile_name)
     cfg = hydra_to_config(resolved_raw)
     validate(cfg)
     return cfg, resolved_raw

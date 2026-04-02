@@ -269,9 +269,12 @@ experiments:
   stress:
     jax:
       enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   policy:
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
@@ -286,13 +289,33 @@ experiments:
       ssa:
         sim_time: 4000.0
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
   stats:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
     simulation:
       num_replications: 30
-  generalize: {}
-  ablation: {}
-  critical: {}
+  generalize:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  ablation:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  critical:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true

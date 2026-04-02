@@ -101,7 +101,7 @@ domain_randomization:
   rho_max: 0.95
 
 jax:
-  enabled: true
+  enabled: false
   platform: auto
   precision: float32
   fallback_to_cpu: true
@@ -192,7 +192,17 @@ experiments:
     policy:
       name: softmax
       d: 2
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   sweep:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
     wandb:
       enabled: true
       mode: offline
@@ -201,7 +211,15 @@ experiments:
   stress:
     jax:
       enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   policy:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
     wandb:
       enabled: true
       mode: offline
@@ -210,13 +228,38 @@ experiments:
   bc_train: {}
   reinforce_train:
     jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+    simulation:
+      ssa:
+        sim_time: 1500.0
+    train_epochs: 15
+    batch_size: 16
+  stats:
+    jax:
       enabled: true
       platform: auto
       precision: float32
       fallback_to_cpu: true
-  stats:
     simulation:
       num_replications: 30
-  generalize: {}
-  ablation: {}
-  critical: {}
+  generalize:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  ablation:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  critical:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true

@@ -8,7 +8,9 @@ import sys
 import os
 import subprocess
 import argparse
+from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
@@ -43,6 +45,20 @@ EXPERIMENTS = {
     "ablation": "experiments.evaluation.n_gibbsq_evals.ablation_ssa",
     "critical": "experiments.evaluation.n_gibbsq_evals.critical_load",
 }
+
+
+def _current_timestamp() -> datetime:
+    """Return the current local time with timezone information attached."""
+    return datetime.now().astimezone()
+
+
+def _format_timestamp(timestamp: datetime) -> str:
+    """Render timestamps in an unambiguous local format."""
+    return timestamp.isoformat(sep=" ", timespec="seconds")
+
+
+def _format_elapsed(elapsed_seconds: float) -> str:
+    return f"{elapsed_seconds:.3f}s"
 
 
 def _has_override(args: list[str], key: str) -> bool:
@@ -130,8 +146,12 @@ def main():
         hydra_overrides,
     )
     
+    start_time = _current_timestamp()
+    start_perf = perf_counter()
+
     print("=" * 58)
     print(f" Starting Experiment: {experiment}")
+    print(f" Start Time: {_format_timestamp(start_time)}")
     print(f" Config Profile: {args.config_name}")
     print(f" Progress Mode: {args.progress}")
     print(f" Remaining Args (Hydra Overrides): {' '.join(resolved_hydra_overrides)}")
@@ -149,15 +169,31 @@ def main():
         f"++active_profile={args.config_name}",
     ] + resolved_hydra_overrides
     
+    status = "unknown"
+    return_code = 1
+
     try:
         result = subprocess.run(cmd, env=env)
-        return result.returncode
+        return_code = result.returncode
+        status = "completed" if return_code == 0 else f"failed (exit code {return_code})"
+        return return_code
     except KeyboardInterrupt:
+        status = "interrupted by user"
         print("\nExperiment interrupted by user")
+        return_code = 130
         return 130
     except Exception as e:
+        status = f"crashed ({type(e).__name__})"
         print(f"Error running experiment: {e}")
+        return_code = 1
         return 1
+    finally:
+        end_time = _current_timestamp()
+        elapsed_seconds = perf_counter() - start_perf
+        print(f"\n[Experiment '{experiment}' Finished]")
+        print(f"  Status: {status}")
+        print(f"  End Time: {_format_timestamp(end_time)}")
+        print(f"  Elapsed Duration: {_format_elapsed(elapsed_seconds)}")
 
 if __name__ == "__main__":
     sys.exit(main())

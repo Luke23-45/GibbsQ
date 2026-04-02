@@ -58,7 +58,7 @@ neural_training:
   eval_trajs_per_batch: 5
   perf_index_min_denom: 0.5
   perf_index_jsq_margin: 0.05
-  bc_num_steps: 1000
+  bc_num_steps: 200
   bc_lr: 0.002
   bc_label_smoothing: 0.1
   shake_scale: 0.01
@@ -84,8 +84,8 @@ neural:
 bc_data:
   rhos: [0.45, 0.65, 0.85]
   mu_scales: [0.5, 1.0, 2.0]
-  samples_per_rho: 1000
-  expert_sim_time: 1500.0
+  samples_per_rho: 300
+  expert_sim_time: 600.0
   sample_interval: 1.0
   augmentation_noise_min: -1
   augmentation_noise_max: 1
@@ -192,6 +192,11 @@ experiments:
     policy:
       name: softmax
       d: 2
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   sweep:
     jax:
       enabled: true
@@ -206,9 +211,12 @@ experiments:
   stress:
     jax:
       enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   policy:
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
@@ -223,7 +231,7 @@ experiments:
       ssa:
         sim_time: 1000.0
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
@@ -232,7 +240,27 @@ experiments:
       eval_trajs_per_batch: 3
     train_epochs: 5
     batch_size: 4
-  stats: {}
-  generalize: {}
-  ablation: {}
-  critical: {}
+  stats:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  generalize:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  ablation:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  critical:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true

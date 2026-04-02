@@ -78,8 +78,8 @@ neural:
 bc_data:
   rhos: [0.45, 0.65, 0.85]
   mu_scales: [0.5, 1.0, 2.0]
-  samples_per_rho: 1000
-  expert_sim_time: 1500.0
+  samples_per_rho: 300
+  expert_sim_time: 600.0
   sample_interval: 1.0
   augmentation_noise_min: -1
   augmentation_noise_max: 1
@@ -95,7 +95,7 @@ generalization:
   rho_grid_vals: [0.5, 0.85]
 
 jax:
-  enabled: true
+  enabled: false
   platform: auto
   precision: float32
   fallback_to_cpu: true
@@ -187,7 +187,17 @@ experiments:
     policy:
       name: softmax
       d: 2
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   sweep:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
     wandb:
       enabled: true
       mode: offline
@@ -196,15 +206,56 @@ experiments:
   stress:
     jax:
       enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   policy:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
     wandb:
       enabled: true
       mode: offline
       project: GibbsQ-Paper
       group: policy_evaluation
   bc_train: {}
-  reinforce_train: {}
-  stats: {}
-  generalize: {}
-  ablation: {}
-  critical: {}
+  reinforce_train:
+    simulation:
+      ssa:
+        sim_time: 1000.0
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+    neural_training:
+      eval_batches: 1
+      eval_trajs_per_batch: 3
+    train_epochs: 5
+    batch_size: 4
+  stats:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  generalize:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  ablation:
+    jax:
+      enabled: false
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
+  critical:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true

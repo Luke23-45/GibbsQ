@@ -28,6 +28,9 @@ python scripts/execution/experiment_runner.py reinforce_train
 
 # Run corrected policy benchmark (Track 4)
 python scripts/execution/experiment_runner.py policy
+
+python scripts/execution/reproduction_pipeline.py --config-name debug
+
 ```
 
 ## Project Structure
