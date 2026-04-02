@@ -10,6 +10,7 @@ from scripts.verification.runtime_budgeting import (
     GROUP_B_EXPERIMENTS,
     GROUP_C_EXPERIMENTS,
     default_calibration_matrix,
+    default_probe_overrides,
     latest_complete_sections_by_config,
 )
 
@@ -51,10 +52,17 @@ def test_log_parser_picks_latest_complete_section(tmp_path: Path):
 def test_default_reinforce_calibration_matrix_has_expected_knobs():
     rows = default_calibration_matrix("small", "reinforce_train")
     keys = {tuple(sorted(row.keys())) for row in rows}
-    assert ("batch_size",) in keys
-    assert ("eval_batches", "eval_trajs_per_batch") in keys
-    assert ("sim_time",) in keys
-    assert ("train_epochs",) in keys
+    assert ("probe_case",) in keys
+    assert ("batch_size", "probe_case") in keys
+    assert ("eval_batches", "eval_trajs_per_batch", "probe_case") in keys
+    assert ("probe_case", "sim_time") in keys
+
+
+def test_default_reinforce_probe_overrides_are_tiny():
+    overrides = default_probe_overrides("final_experiment", "reinforce_train")
+    assert "train_epochs=1" in overrides
+    assert "neural_training.eval_batches=1" in overrides
+    assert "neural_training.eval_trajs_per_batch=1" in overrides
 
 
 def test_build_runtime_plan_uses_log_anchors(tmp_path: Path, monkeypatch):

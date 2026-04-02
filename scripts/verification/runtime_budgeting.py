@@ -491,36 +491,115 @@ def default_calibration_matrix(profile_name: str, experiment_name: str) -> list[
     rows: list[dict[str, float]] = []
 
     if experiment_name == "reinforce_train":
-        rows.extend({"train_epochs": float(v)} for v in _three_point_ints(cfg.train_epochs))
-        rows.extend({"batch_size": float(v)} for v in _three_point_ints(cfg.batch_size))
-        rows.extend({"sim_time": float(v)} for v in _three_point_floats(cfg.simulation.ssa.sim_time, 100.0))
-        eval_batches = _three_point_ints(cfg.neural_training.eval_batches)
-        eval_trajs = _three_point_ints(cfg.neural_training.eval_trajs_per_batch)
-        for eval_batch, eval_traj in zip(eval_batches, eval_trajs):
-            rows.append({"eval_batches": float(eval_batch), "eval_trajs_per_batch": float(eval_traj)})
+        rows.extend(
+            [
+                {"probe_case": 1.0},
+                {"batch_size": float(max(2, int(cfg.batch_size // 2))), "probe_case": 2.0},
+                {"batch_size": float(cfg.batch_size), "probe_case": 3.0},
+                {"sim_time": float(max(500.0, cfg.simulation.ssa.sim_time * 0.5)), "probe_case": 4.0},
+                {"sim_time": float(cfg.simulation.ssa.sim_time), "probe_case": 5.0},
+                {
+                    "eval_batches": 1.0,
+                    "eval_trajs_per_batch": 1.0,
+                    "probe_case": 6.0,
+                },
+            ]
+        )
         return rows
 
     if experiment_name == "generalize":
-        scale_counts = sorted({min(len(cfg.generalization.scale_vals), v) for v in (2, 3, len(cfg.generalization.scale_vals))})
-        rho_counts = sorted({min(len(cfg.generalization.rho_grid_vals), v) for v in (2, 3, len(cfg.generalization.rho_grid_vals))})
-        rows.extend({"replications": float(v)} for v in _three_point_ints(cfg.simulation.num_replications))
-        rows.extend({"scale_count": float(v)} for v in scale_counts)
-        rows.extend({"rho_grid_count": float(v)} for v in rho_counts)
-        rows.extend({"sim_time": float(v)} for v in _three_point_floats(cfg.simulation.ssa.sim_time, 100.0))
+        scale_counts = sorted({min(len(cfg.generalization.scale_vals), v) for v in (2, 3)})
+        rho_counts = sorted({min(len(cfg.generalization.rho_grid_vals), v) for v in (2, 3)})
+        rows.extend(
+            [
+                {"replications": 2.0, "scale_count": float(scale_counts[0]), "rho_grid_count": float(rho_counts[0]), "probe_case": 1.0},
+                {"replications": 4.0, "scale_count": float(scale_counts[0]), "rho_grid_count": float(rho_counts[0]), "probe_case": 2.0},
+                {
+                    "replications": 2.0,
+                    "scale_count": float(scale_counts[-1]),
+                    "rho_grid_count": float(rho_counts[0]),
+                    "probe_case": 3.0,
+                },
+                {
+                    "replications": 2.0,
+                    "scale_count": float(scale_counts[0]),
+                    "rho_grid_count": float(rho_counts[-1]),
+                    "probe_case": 4.0,
+                },
+                {
+                    "replications": 2.0,
+                    "scale_count": float(scale_counts[0]),
+                    "rho_grid_count": float(rho_counts[0]),
+                    "sim_time": float(max(1000.0, cfg.simulation.ssa.sim_time * 0.5)),
+                    "probe_case": 5.0,
+                },
+            ]
+        )
         return rows
 
     if experiment_name == "critical":
         rho_counts = sorted({min(len(cfg.generalization.rho_boundary_vals), v) for v in (2, 3, len(cfg.generalization.rho_boundary_vals))})
-        rows.extend({"replications": float(v)} for v in _three_point_ints(cfg.simulation.num_replications))
-        rows.extend({"rho_count": float(v)} for v in rho_counts)
+        rows.extend(
+            [
+                {"replications": 2.0, "rho_count": float(rho_counts[0]), "probe_case": 1.0},
+                {"replications": 4.0, "rho_count": float(rho_counts[0]), "probe_case": 2.0},
+                {"replications": 2.0, "rho_count": float(rho_counts[-1]), "probe_case": 3.0},
+            ]
+        )
         return rows
 
     if experiment_name == "stress":
-        rows.extend({"replications": float(v)} for v in _three_point_ints(cfg.simulation.num_replications))
+        rows.extend(
+            [
+                {"replications": 2.0, "probe_case": 1.0},
+                {"replications": 4.0, "probe_case": 2.0},
+            ]
+        )
         return rows
 
     if experiment_name == "ablation":
-        rows.append({"replications": float(cfg.simulation.num_replications)})
+        rows.append({"replications": min(float(cfg.simulation.num_replications), 2.0), "probe_case": 1.0})
         return rows
 
     return rows
+
+
+def default_probe_overrides(profile_name: str, experiment_name: str) -> list[str]:
+    cfg, _ = resolve_experiment_cfg(profile_name, experiment_name)
+    if experiment_name == "reinforce_train":
+        return [
+            "train_epochs=1",
+            f"batch_size={max(2, min(int(cfg.batch_size), 8))}",
+            f"simulation.ssa.sim_time={_coerce_override_value(max(500.0, min(float(cfg.simulation.ssa.sim_time), 1500.0)))}",
+            "neural_training.eval_batches=1",
+            "neural_training.eval_trajs_per_batch=1",
+            f"neural_training.checkpoint_freq={max(1, int(cfg.neural_training.checkpoint_freq))}",
+        ]
+    if experiment_name == "generalize":
+        scale_vals = cfg.generalization.scale_vals[:2]
+        rho_vals = cfg.generalization.rho_grid_vals[:2]
+        return [
+            "simulation.num_replications=2",
+            f"simulation.ssa.sim_time={_coerce_override_value(max(1000.0, min(float(cfg.simulation.ssa.sim_time), 10000.0)))}",
+            f"generalization.scale_vals={json.dumps(scale_vals)}",
+            f"generalization.rho_grid_vals={json.dumps(rho_vals)}",
+        ]
+    if experiment_name == "critical":
+        rho_vals = cfg.generalization.rho_boundary_vals[:2]
+        return [
+            "simulation.num_replications=2",
+            f"generalization.rho_boundary_vals={json.dumps(rho_vals)}",
+        ]
+    if experiment_name == "stress":
+        n_values = cfg.stress.n_values[:2]
+        critical_rhos = cfg.stress.critical_rhos[:2]
+        return [
+            "simulation.num_replications=2",
+            f"stress.n_values={json.dumps(n_values)}",
+            f"stress.critical_rhos={json.dumps(critical_rhos)}",
+        ]
+    if experiment_name == "ablation":
+        return [
+            "simulation.num_replications=2",
+        ]
+    return []

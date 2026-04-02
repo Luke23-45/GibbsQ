@@ -17,6 +17,7 @@ from scripts.verification.runtime_budgeting import (
     append_jsonl,
     apply_feature_overrides,
     default_calibration_matrix,
+    default_probe_overrides,
     experiment_runtime_features,
     load_stage_profile,
     now_iso,
@@ -38,6 +39,11 @@ def _build_parser(experiment_name: str) -> argparse.ArgumentParser:
     parser.add_argument("--limit-runs", type=int, default=None, help="Cap the number of calibration rows executed")
     parser.add_argument("--dry-run", action="store_true", help="Print the planned commands without executing them")
     parser.add_argument(
+        "--full-run",
+        action="store_true",
+        help="Disable the default probe overrides and run the calibration rows at full resolved scale",
+    )
+    parser.add_argument(
         "--extra-override",
         action="append",
         default=[],
@@ -52,12 +58,14 @@ def _run_one(
     feature_override: dict[str, float],
     output_path: Path,
     extra_overrides: list[str],
+    base_probe_overrides: list[str],
     dry_run: bool,
 ) -> dict[str, Any]:
     before = perf_counter()
     output_root = PROJECT_ROOT / "outputs"
     stage_before = load_stage_profile(output_root, profile_name, experiment_name)
-    overrides = apply_feature_overrides(experiment_name, feature_override) + list(extra_overrides)
+    dynamic_feature_override = {k: v for k, v in feature_override.items() if k != "probe_case"}
+    overrides = list(base_probe_overrides) + apply_feature_overrides(experiment_name, dynamic_feature_override) + list(extra_overrides)
     cmd = [
         sys.executable,
         str(PROJECT_ROOT / "scripts" / "execution" / "experiment_runner.py"),
@@ -73,6 +81,7 @@ def _run_one(
         "experiment": experiment_name,
         "config_name": profile_name,
         "feature_override": feature_override,
+        "base_probe_overrides": base_probe_overrides,
         "hydra_overrides": overrides,
         "command": cmd,
         "dry_run": dry_run,
@@ -105,6 +114,7 @@ def run_calibration(experiment_name: str) -> int:
     args = parser.parse_args()
 
     rows = default_calibration_matrix(args.config_name, experiment_name)
+    base_probe_overrides = [] if args.full_run else default_probe_overrides(args.config_name, experiment_name)
     if args.limit_runs is not None:
         rows = rows[: args.limit_runs]
 
@@ -115,6 +125,9 @@ def run_calibration(experiment_name: str) -> int:
     print(f" Output: {project_relative(args.output)}")
     print(f" Planned Rows: {len(rows)}")
     print(f" Dry Run: {args.dry_run}")
+    print(f" Probe Mode: {not args.full_run}")
+    if base_probe_overrides:
+        print(f" Base Probe Overrides: {' '.join(base_probe_overrides)}")
 
     failures = 0
     for idx, row in enumerate(rows, start=1):
@@ -125,6 +138,7 @@ def run_calibration(experiment_name: str) -> int:
             feature_override=row,
             output_path=args.output,
             extra_overrides=args.extra_override,
+            base_probe_overrides=base_probe_overrides,
             dry_run=args.dry_run,
         )
         print(f"  -> status={result['status']}")
