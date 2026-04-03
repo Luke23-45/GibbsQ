@@ -18,6 +18,7 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import functools
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
@@ -27,6 +28,7 @@ from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 
 
 # _NeuralSSAPolicy moved to gibbsq.utils.model_io.NeuralSSAPolicy
@@ -215,7 +217,7 @@ class StatsBenchmark:
         
         from gibbsq.analysis.plotting import plot_raincloud
 
-        plot_path = self.run_dir / "stats_boxplot"
+        plot_path = figure_path(self.run_dir, "stats_boxplot")
         fig = plot_raincloud(
             group_a_data=gibbs_data,
             group_b_data=neural_data,
@@ -229,6 +231,13 @@ class StatsBenchmark:
             save_path=plot_path,
             theme="publication",
             formats=["png", "pdf"],
+            context=ExperimentPlotContext(
+                experiment_id="stats",
+                chart_name="plot_raincloud",
+                semantic_overrides={
+                    "figure_title": "GibbsQ vs N-GibbsQ: Distribution Comparison",
+                },
+            ),
         )
         plt.close(fig)
 
@@ -238,7 +247,7 @@ class StatsBenchmark:
             "p_value": float(p_val), "cohen_d": float(cohen_d),
             "ci_low": float(ci_low), "ci_high": float(ci_high),
             "improvement_pct": float(improvement)
-        }, self.run_dir / "metrics.jsonl")
+        }, metrics_path(self.run_dir))
 
         if self.run_logger:
             self.run_logger.log({
@@ -250,7 +259,7 @@ class StatsBenchmark:
             })
             try:
                 import wandb
-                self.run_logger.log({"stats_boxplot": wandb.Image(str(self.run_dir / "stats_boxplot.png"))})
+                self.run_logger.log({"stats_boxplot": wandb.Image(str(figure_path(self.run_dir, "stats_boxplot").with_suffix(".png")))})
             except Exception:
                 pass
 

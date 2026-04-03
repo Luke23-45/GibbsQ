@@ -282,6 +282,7 @@ class GeneralizationConfig:
     rho_boundary_vals: List[float] = field(default_factory=lambda: [0.90, 0.95, 0.98, 0.99])
     scale_vals: List[float] = field(default_factory=lambda: [0.5, 1.0, 2.0, 5.0, 10.0])
     rho_grid_vals: List[float] = field(default_factory=lambda: [0.5, 0.7, 0.85, 0.95, 0.98])
+    rho_boundary_threshold: float = 0.95
 
 @dataclass
 class StressConfig:
@@ -691,6 +692,11 @@ def validate(cfg: ExperimentConfig) -> None:
     _validate_positive_list("stability_sweep.alpha_vals", cfg.stability_sweep.alpha_vals)
     _validate_rho_list("generalization.rho_grid_vals", cfg.generalization.rho_grid_vals)
     _validate_rho_list("generalization.rho_boundary_vals", cfg.generalization.rho_boundary_vals)
+    if not (0.0 < cfg.generalization.rho_boundary_threshold < 1.0):
+        raise ValueError(
+            f"generalization.rho_boundary_threshold must be in (0, 1), "
+            f"got {cfg.generalization.rho_boundary_threshold}"
+        )
     _validate_rho_list("stress.critical_rhos", cfg.stress.critical_rhos)
     if not cfg.stress.n_values:
         raise ValueError("stress.n_values must contain at least one target system size.")
@@ -882,6 +888,27 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
 
 _CONFIGS_DIR = Path(__file__).resolve().parents[3] / "configs"
 _MISSING = object()
+_FINAL_PROFILE_LOCKS: dict[str, dict[str, object]] = {
+    "reinforce_train": {
+        "simulation.ssa.sim_time": 1000.0,
+        "train_epochs": 15,
+        "batch_size": 16,
+    },
+    "ablation": {
+        "simulation.ssa.sim_time": 1000.0,
+        "train_epochs": 15,
+        "batch_size": 16,
+    },
+    "generalize": {
+        "simulation.num_replications": 2,
+        "simulation.ssa.sim_time": 10000.0,
+        "generalization.scale_vals": [0.5, 1.0, 2.0],
+        "generalization.rho_grid_vals": [0.5, 0.7, 0.85],
+    },
+    "critical": {
+        "simulation.num_replications": 2,
+    },
+}
 
 
 def _profile_path(profile_name: str) -> Path:
@@ -927,6 +954,44 @@ def _try_runtime_profile_name() -> str | None:
         return None
     config_name = getattr(getattr(hydra_cfg, "job", None), "config_name", None)
     return config_name or None
+
+
+def _normalize_budget_value(value):
+    if isinstance(value, list):
+        return tuple(_normalize_budget_value(item) for item in value)
+    if isinstance(value, float):
+        return round(value, 10)
+    return value
+
+
+def _validate_final_profile_locks(
+    resolved_cfg: DictConfig | dict,
+    experiment_names: Sequence[str],
+    profile_name: str,
+) -> None:
+    if profile_name != "final_experiment":
+        return
+
+    resolved = OmegaConf.create(_plain_container(resolved_cfg))
+    for experiment_name in experiment_names:
+        locked_paths = _FINAL_PROFILE_LOCKS.get(experiment_name)
+        if not locked_paths:
+            continue
+        for path, expected_value in locked_paths.items():
+            actual_value = OmegaConf.select(resolved, path)
+            if actual_value is None:
+                raise ValueError(
+                    f"final_experiment.{experiment_name} must define locked budget path "
+                    f"'{path}', but it resolved to null/missing."
+                )
+            normalized_actual = _normalize_budget_value(actual_value)
+            normalized_expected = _normalize_budget_value(expected_value)
+            if normalized_actual != normalized_expected:
+                raise ValueError(
+                    f"final_experiment budget drift for {experiment_name}: "
+                    f"{path} resolved to {actual_value!r}, expected {expected_value!r}. "
+                    "This profile is locked to prevent accidental compute overruns."
+                )
 
 
 def validate_profile_config(raw: DictConfig | dict) -> None:
@@ -1027,7 +1092,9 @@ def resolve_experiment_config_chain(
         *experiment_blocks,
         OmegaConf.create(top_level_diff if top_level_diff is not _MISSING else {}),
     )
-    return OmegaConf.create(OmegaConf.to_container(merged, resolve=True))
+    resolved = OmegaConf.create(OmegaConf.to_container(merged, resolve=True))
+    _validate_final_profile_locks(resolved, experiment_names, selected_profile)
+    return resolved
 
 
 def load_experiment_config(

@@ -10,6 +10,7 @@ from gibbsq.studies.hyperparameter_qualification import (
     run_stage,
 )
 from gibbsq.utils.logging import get_run_config
+from gibbsq.utils.run_artifacts import metadata_path
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def main(raw_cfg: DictConfig):
     study_cfg, preset = normalize_study_config(resolved_raw_cfg.get("study"))
 
     run_dir, _ = get_run_config(cfg, "hyperqual", resolved_raw_cfg)
-    _write_json(run_dir / "study_config.json", {"study": study_cfg.__dict__, "preset": preset})
+    _write_json(metadata_path(run_dir, "study_config.json"), {"study": study_cfg.__dict__, "preset": preset})
 
     log.info("=" * 60)
     log.info("  Hyperparameter Qualification Study")

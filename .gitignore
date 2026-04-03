@@ -42,9 +42,12 @@ docs/logs
 # OS
 .DS_Store
 Thumbs.db
-outputs
+# outputs
 # ledger
 new_test
 docs/PROPOSED
 UAS_FINAL_AUDIT_REPORT.md
 # logs.md
+logs
+logsz.md
+outputs

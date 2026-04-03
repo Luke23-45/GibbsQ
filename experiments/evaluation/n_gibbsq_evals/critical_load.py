@@ -16,6 +16,7 @@ import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
@@ -26,6 +27,7 @@ from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -81,103 +83,108 @@ class CriticalLoadTest:
 
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
+        try:
+            with create_progress(total=len(self.rho_vals), desc="critical", unit="rho") as rho_bar:
+                for idx, rho in enumerate(self.rho_vals):
+                    rho_bar.set_postfix({"rho": f"{rho:.3f}"}, refresh=False)
+                    arrival_rate = rho * total_capacity
+                    log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
 
-        with create_progress(total=len(self.rho_vals), desc="critical", unit="rho") as rho_bar:
-            for idx, rho in enumerate(self.rho_vals):
-                rho_bar.set_postfix({"rho": f"{rho:.3f}"}, refresh=False)
-                arrival_rate = rho * total_capacity
-                log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
+                    rho_sim_time = critical_load_sim_time(self.cfg, float(rho))
 
-                rho_sim_time = critical_load_sim_time(self.cfg, float(rho))
+                    max_samples = int(rho_sim_time / self.ssa_sample_interval) + 1
+                    mu_np = np.array(self.service_rates, dtype=np.float64)
+                    rho_seed = self.cfg.simulation.seed + idx * 1000
 
-                max_samples = int(rho_sim_time / self.ssa_sample_interval) + 1
-                mu_np = np.array(self.service_rates, dtype=np.float64)
-                rho_seed = self.cfg.simulation.seed + idx * 1000
-
-                times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
-                    num_replications=num_reps,
-                    num_servers=self.num_servers,
-                    arrival_rate=float(arrival_rate),
-                    service_rates=jnp.array(mu_np),
-                    alpha=float(self.cfg.system.alpha),
-                    sim_time=rho_sim_time,
-                    sample_interval=self.ssa_sample_interval,
-                    base_seed=rho_seed,
-                    max_samples=max_samples,
-                    policy_type=baseline_policy_type,
-                    max_events_multiplier=self.cfg.jax_engine.max_events_safety_multiplier,
-                    max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
-                    scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
-                )
-                g_vals = []
-                for rep_idx in iter_progress(
-                    range(num_reps),
-                    total=num_reps,
-                    desc=f"critical GibbsQ rho={rho:.3f}",
-                    unit="rep",
-                    leave=False,
-                ):
-                    np_times = np.array(times_g[rep_idx])
-                    np_states = np.array(states_g[rep_idx])
-                    valid_mask = np_times > 0
-                    valid_mask[0] = True
-                    valid_len = int(np.sum(valid_mask))
-                    np_times = np_times[:valid_len]
-                    np_states = np_states[:valid_len]
-
-                    res = SimResult(
-                        times=np_times,
-                        states=np_states,
-                        arrival_count=int(arrs_g[rep_idx]),
-                        departure_count=int(deps_g[rep_idx]),
-                        final_time=float(np_times[-1]),
-                        num_servers=self.num_servers,
-                    )
-                    g_vals.append(float(time_averaged_queue_lengths(
-                        res, self.cfg.simulation.burn_in_fraction).sum()))
-                g_loss = float(np.mean(g_vals))
-
-                neural_policy = build_neural_eval_policy(
-                    model,
-                    mu=mu_np,
-                    rho=rho,
-                    mode=NEURAL_EVAL_MODE,
-                )
-                max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
-                n_vals = []
-                for rep_idx in iter_progress(
-                    range(num_reps),
-                    total=num_reps,
-                    desc=f"critical neural rho={rho:.3f}",
-                    unit="rep",
-                    leave=False,
-                ):
-                    rng = np.random.default_rng(rho_seed + rep_idx)
-                    res_n = simulate(
+                    times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                        num_replications=num_reps,
                         num_servers=self.num_servers,
                         arrival_rate=float(arrival_rate),
-                        service_rates=mu_np,
-                        policy=neural_policy,
+                        service_rates=jnp.array(mu_np),
+                        alpha=float(self.cfg.system.alpha),
                         sim_time=rho_sim_time,
                         sample_interval=self.ssa_sample_interval,
-                        rng=rng,
-                        max_events=max_events,
+                        base_seed=rho_seed,
+                        max_samples=max_samples,
+                        policy_type=baseline_policy_type,
+                        max_events_multiplier=self.cfg.jax_engine.max_events_safety_multiplier,
+                        max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
+                        scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
                     )
-                    n_vals.append(float(time_averaged_queue_lengths(
-                        res_n, self.cfg.simulation.burn_in_fraction).sum()))
-                n_loss = float(np.mean(n_vals))
+                    g_vals = []
+                    for rep_idx in iter_progress(
+                        range(num_reps),
+                        total=num_reps,
+                        desc=f"critical GibbsQ rho={rho:.3f}",
+                        unit="rep",
+                        leave=False,
+                    ):
+                        np_times = np.array(times_g[rep_idx])
+                        np_states = np.array(states_g[rep_idx])
+                        valid_mask = np_times > 0
+                        valid_mask[0] = True
+                        valid_len = int(np.sum(valid_mask))
+                        np_times = np_times[:valid_len]
+                        np_states = np_states[:valid_len]
 
-                neural_results.append(n_loss)
-                gibbs_results.append(g_loss)
-                log.info(f"   => N-GibbsQ E[Q]: {n_loss:.2f} | GibbsQ E[Q]: {g_loss:.2f}")
+                        res = SimResult(
+                            times=np_times,
+                            states=np_states,
+                            arrival_count=int(arrs_g[rep_idx]),
+                            departure_count=int(deps_g[rep_idx]),
+                            final_time=float(np_times[-1]),
+                            num_servers=self.num_servers,
+                        )
+                        g_vals.append(float(time_averaged_queue_lengths(
+                            res, self.cfg.simulation.burn_in_fraction).sum()))
+                    g_loss = float(np.mean(g_vals))
 
-                append_metrics_jsonl(
-                    {"rho": float(rho), "neural_eq": n_loss, "gibbs_eq": g_loss},
-                    self.run_dir / "metrics.jsonl",
-                )
-                rho_bar.update(1)
+                    neural_policy = build_neural_eval_policy(
+                        model,
+                        mu=mu_np,
+                        rho=rho,
+                        mode=NEURAL_EVAL_MODE,
+                    )
+                    max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
+                    n_vals = []
+                    for rep_idx in iter_progress(
+                        range(num_reps),
+                        total=num_reps,
+                        desc=f"critical neural rho={rho:.3f}",
+                        unit="rep",
+                        leave=False,
+                    ):
+                        rng = np.random.default_rng(rho_seed + rep_idx)
+                        res_n = simulate(
+                            num_servers=self.num_servers,
+                            arrival_rate=float(arrival_rate),
+                            service_rates=mu_np,
+                            policy=neural_policy,
+                            sim_time=rho_sim_time,
+                            sample_interval=self.ssa_sample_interval,
+                            rng=rng,
+                            max_events=max_events,
+                        )
+                        n_vals.append(float(time_averaged_queue_lengths(
+                            res_n, self.cfg.simulation.burn_in_fraction).sum()))
+                    n_loss = float(np.mean(n_vals))
 
-        self._plot(self.rho_vals, neural_results, gibbs_results)
+                    neural_results.append(n_loss)
+                    gibbs_results.append(g_loss)
+                    log.info(f"   => N-GibbsQ E[Q]: {n_loss:.2f} | GibbsQ E[Q]: {g_loss:.2f}")
+
+                    append_metrics_jsonl(
+                        {"rho": float(rho), "neural_eq": n_loss, "gibbs_eq": g_loss},
+                        metrics_path(self.run_dir),
+                    )
+                    self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, gibbs_results)
+                    rho_bar.update(1)
+        finally:
+            self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, gibbs_results)
+
+        if neural_results:
+            self._assert_curve_artifacts()
+
         relative_ratios = [
             float(n / max(g, 1e-8))
             for n, g in zip(neural_results, gibbs_results)
@@ -190,11 +197,28 @@ class CriticalLoadTest:
             "mean_neural_to_gibbs_ratio": float(np.mean(relative_ratios)) if relative_ratios else float("inf"),
         }
 
+    def _plot_progress(self, rho_vals, neural_r, gibbs_r) -> None:
+        """Persist the best available critical-load curve when results exist."""
+        if not rho_vals or not neural_r or not gibbs_r:
+            return
+        try:
+            self._plot(rho_vals, neural_r, gibbs_r)
+        except Exception:
+            log.exception(
+                "Failed to persist critical-load curve for %d point(s). "
+                "rho_vals=%s neural_eq=%s gibbs_eq=%s",
+                len(rho_vals),
+                rho_vals,
+                neural_r,
+                gibbs_r,
+            )
+            raise
+
     def _plot(self, rho_vals, neural_r, gibbs_r):
         """Generate the critical-load curve."""
         from gibbsq.analysis.plotting import plot_critical_load
 
-        plot_path = self.run_dir / "critical_load_curve"
+        plot_path = figure_path(self.run_dir, "critical_load_curve")
         fig = plot_critical_load(
             rho_values=np.array(rho_vals),
             neural_eq=np.array(neural_r),
@@ -202,8 +226,16 @@ class CriticalLoadTest:
             save_path=plot_path,
             theme="publication",
             formats=["png", "pdf"],
+            context=ExperimentPlotContext(
+                experiment_id="critical",
+                chart_name="plot_critical_load",
+                semantic_overrides={
+                    "thresholds": {"critical_rho": float(self.cfg.generalization.rho_boundary_threshold)},
+                },
+            ),
         )
         plt.close(fig)
+        self._assert_curve_artifacts()
 
         log.info(f"Critical load test complete. Curve saved to {plot_path}.png, {plot_path}.pdf")
 
@@ -215,9 +247,23 @@ class CriticalLoadTest:
             })
             try:
                 import wandb
-                self.run_logger.log({"critical_load_curve": wandb.Image(str(self.run_dir / "critical_load_curve.png"))})
+                self.run_logger.log({"critical_load_curve": wandb.Image(str(figure_path(self.run_dir, "critical_load_curve").with_suffix(".png")))})
             except Exception:
                 pass
+
+    def _assert_curve_artifacts(self) -> None:
+        """Fail fast when the critical-load figure was not actually written."""
+        plot_path = figure_path(self.run_dir, "critical_load_curve")
+        missing = [
+            str(path)
+            for path in (plot_path.with_suffix(".png"), plot_path.with_suffix(".pdf"))
+            if not path.exists()
+        ]
+        if missing:
+            raise RuntimeError(
+                "Critical-load plotting did not produce the required figure artifact(s): "
+                + ", ".join(missing)
+            )
 
 
 @hydra.main(version_base=None, config_path="../../../configs", config_name="default")

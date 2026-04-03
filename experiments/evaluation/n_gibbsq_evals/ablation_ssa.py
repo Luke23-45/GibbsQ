@@ -24,6 +24,7 @@ import numpy as np
 from jaxtyping import PRNGKeyArray
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.core.config import ExperimentConfig, load_experiment_config_chain
 from gibbsq.core.neural_policies import NeuralRouter
@@ -32,6 +33,7 @@ from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.model_io import build_neural_eval_policy
 from gibbsq.utils.progress import create_progress
+from gibbsq.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
 from experiments.training.train_reinforce import ReinforceTrainer
 
 log = logging.getLogger(__name__)
@@ -46,29 +48,39 @@ class AblationReinforceTrainer(ReinforceTrainer):
 
     def _save_assets(self, *args, **kwargs):
         import matplotlib.pyplot as plt
-        from gibbsq.analysis.plotting import plot_training_dashboard
+        from gibbsq.analysis.plotting import plot_ablation_training_curve
 
         policy_net = args[0] if len(args) > 0 else kwargs.get('policy_net')
         value_net = args[1] if len(args) > 1 else kwargs.get('value_net')
         history_loss = args[2] if len(args) > 2 else kwargs.get('history_loss')
         history_reward = args[3] if len(args) > 3 else kwargs.get('history_reward')
 
-        policy_path = self.run_dir / "n_gibbsq_reinforce_weights.eqx"
+        artifacts = artifacts_dir(self.run_dir)
+        artifacts.mkdir(parents=True, exist_ok=True)
+        policy_path = artifacts / "n_gibbsq_reinforce_weights.eqx"
         eqx.tree_serialise_leaves(policy_path, policy_net)
 
-        value_path = self.run_dir / "value_network_weights.eqx"
+        value_path = artifacts / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
-        plot_path = self.run_dir / "reinforce_training_curve"
-        fig = plot_training_dashboard(
+        plot_path = figure_path(self.run_dir, "ablation_training_curve")
+        fig = plot_ablation_training_curve(
             metrics={
                 "epoch": list(range(len(history_loss))),
-                "policy_loss": history_loss,
+                "training_loss": history_loss,
                 "performance_index": history_reward,
+                "variant_label": self.run_dir.name,
+                "preprocessing": self.cfg.neural.preprocessing,
+                "init_type": self.cfg.neural.init_type,
+                "train_epochs": len(history_loss),
             },
             save_path=plot_path,
             theme="publication",
             formats=["png", "pdf"],
+            context=ExperimentPlotContext(
+                experiment_id="ablation",
+                chart_name="plot_ablation_training_curve",
+            ),
         )
         plt.close(fig)
 
@@ -154,8 +166,9 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
         for idx, (name, preproc, init_type) in enumerate(variants):
             variant_bar.set_postfix({"variant": name}, refresh=False)
             v_cfg = _variant_cfg(cfg, preproc, init_type)
-            v_dir = run_dir / f"variant_{idx+1}_{name.lower().replace(' ', '_').replace(':', '')}"
+            v_dir = artifacts_dir(run_dir) / f"variant_{idx+1}_{name.lower().replace(' ', '_').replace(':', '')}"
             v_dir.mkdir(parents=True, exist_ok=True)
+            artifacts_dir(v_dir).mkdir(parents=True, exist_ok=True)
 
             log.info("-" * 60)
             log.info(f"Training variant: {name}")
@@ -165,7 +178,7 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
             seed_key = jax.random.PRNGKey(v_cfg.simulation.seed + idx)
             trainer.execute(seed_key, n_epochs=v_cfg.train_epochs)
 
-            model_path = v_dir / "n_gibbsq_reinforce_weights.eqx"
+            model_path = artifacts_dir(v_dir) / "n_gibbsq_reinforce_weights.eqx"
             skeleton = NeuralRouter(
                 num_servers=v_cfg.system.num_servers,
                 config=v_cfg.neural,
@@ -186,7 +199,7 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
                     "init_type": v_cfg.neural.init_type,
                     **metrics,
                 },
-                run_dir / "ablation_ssa_metrics.jsonl",
+                metrics_path(run_dir, "ablation_ssa_metrics.jsonl"),
             )
 
             log.info(f"  SSA E[Q_total] = {metrics['mean_q_total']:.4f} +/- {metrics['se_q_total']:.4f}")
@@ -201,7 +214,7 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
                 "init_type": "n/a",
                 **uniform_metrics,
             },
-            run_dir / "ablation_ssa_metrics.jsonl",
+            metrics_path(run_dir, "ablation_ssa_metrics.jsonl"),
         )
         variant_bar.update(1)
 
@@ -211,7 +224,7 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
 
     from gibbsq.analysis.plotting import plot_ablation_bars
 
-    plot_path = run_dir / "ablation_ssa"
+    plot_path = figure_path(run_dir, "ablation_ssa")
     fig = plot_ablation_bars(
         variant_names=names,
         mean_values=values,
@@ -219,6 +232,10 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
         save_path=plot_path,
         theme="publication",
         formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="ablation",
+            chart_name="plot_ablation_bars",
+        ),
     )
     import matplotlib.pyplot as plt
     plt.close(fig)

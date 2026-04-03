@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import (
     gelman_rubin_diagnostic,
     gini_coefficient,
@@ -24,6 +25,7 @@ from gibbsq.engines.numpy_engine import SimResult
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 
 try:
     import wandb
@@ -136,12 +138,15 @@ def main(raw_cfg: DictConfig) -> None:
                 mean_q = float(np.mean(avg_q_vals))
                 log.info(f"    -> Average Gini Imbalance: {avg_gini:.4f}")
                 if wandb and wandb.run:
-                    wandb.log({"massive_n/N": N, "massive_n/avg_gini": avg_gini})
+                    wandb.log({"massive_n/N": N, "massive_n/avg_gini": avg_gini, "massive_n/mean_q": mean_q})
 
                 scaling_data["n_values"].append(int(N))
                 scaling_data["mean_q"].append(mean_q)
                 scaling_data["gini"].append(avg_gini)
-                append_metrics_jsonl({"test": "massive_n", "N": int(N), "avg_gini": avg_gini}, out_dir / "metrics.jsonl")
+                append_metrics_jsonl(
+                    {"test": "massive_n", "N": int(N), "avg_gini": avg_gini, "mean_q": mean_q},
+                    metrics_path(out_dir),
+                )
                 scaling_bar.update(1)
         stage_bar.update(1)
 
@@ -245,7 +250,7 @@ def main(raw_cfg: DictConfig) -> None:
                         "mean_q": mean_q,
                         "stationary_rate": stationary_rate,
                     },
-                    out_dir / "metrics.jsonl",
+                    metrics_path(out_dir),
                 )
                 critical_bar.update(1)
         stage_bar.update(1)
@@ -312,14 +317,14 @@ def main(raw_cfg: DictConfig) -> None:
         hetero_data["gini"].append(mean_gini)
         append_metrics_jsonl(
             {"test": "heterogeneity", "gini": mean_gini, "mean_dist": [float(x) for x in mean_dist]},
-            out_dir / "metrics.jsonl",
+            metrics_path(out_dir),
         )
         stage_bar.update(1)
 
     from gibbsq.analysis.plotting import plot_stress_dashboard
     import matplotlib.pyplot as plt
 
-    plot_path = out_dir / "stress_dashboard"
+    plot_path = figure_path(out_dir, "stress_dashboard")
     fig = plot_stress_dashboard(
         scaling_data=scaling_data,
         critical_data=critical_data,
@@ -327,6 +332,16 @@ def main(raw_cfg: DictConfig) -> None:
         save_path=plot_path,
         theme="publication",
         formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="stress",
+            chart_name="plot_stress_dashboard",
+            semantic_overrides={
+                "thresholds": {"critical_rho": float(cfg.stress.critical_rhos[-1])},
+                "axis_labels": {
+                    "heterogeneity_y": r"$\mathbb{E}[|Q|_1]$",
+                },
+            },
+        ),
     )
     plt.close(fig)
     log.info(f"Stress dashboard saved to {plot_path}.png, {plot_path}.pdf")

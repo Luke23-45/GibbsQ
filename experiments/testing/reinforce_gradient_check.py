@@ -19,12 +19,14 @@ from jax.flatten_util import ravel_pytree
 from jaxtyping import PRNGKeyArray, Array, Float
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from typing import Any
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.features import look_ahead_potential
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 from gibbsq.engines.jax_ssa import vmap_collect_trajectories, compute_poisson_max_steps
 from gibbsq.core.reinforce_objective import extract_first_action_returns_jax
 
@@ -598,7 +600,7 @@ def main(raw_cfg: DictConfig) -> None:
     result = run_gradient_check(cfg, seed_key)
     
     import json
-    result_path = run_dir / "gradient_check_result.json"
+    result_path = metrics_path(run_dir, "gradient_check_result.json")
     with open(result_path, 'w') as f:
         json.dump({
             "relative_error": float(result.relative_error),
@@ -613,7 +615,7 @@ def main(raw_cfg: DictConfig) -> None:
     
     fd_plot, rf_plot, z_scores = _build_plot_artifacts(result)
     
-    plot_path = run_dir / "gradient_scatter"
+    plot_path = figure_path(run_dir, "gradient_scatter")
     fig = plot_gradient_scatter(
         fd_grads=fd_plot,
         rf_grads=rf_plot,
@@ -626,6 +628,10 @@ def main(raw_cfg: DictConfig) -> None:
         save_path=plot_path,
         theme="publication",
         formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="reinforce_check",
+            chart_name="plot_gradient_scatter",
+        ),
     )
     import matplotlib.pyplot as plt
     plt.close(fig)

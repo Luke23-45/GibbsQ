@@ -28,7 +28,7 @@ drift:
 
 stress:
   n_values: [8, 32, 128, 512, 1024]
-  critical_rhos: [0.90, 0.95, 0.98, 0.99]
+  critical_rhos: [0.90, 0.92, 0.95, 0.97, 0.98, 0.985, 0.99]
   mu_het: [10.0, 0.1, 0.1, 0.1]
   sample_interval: 1.0
   massive_n_rho: 0.8
@@ -40,9 +40,10 @@ stress:
   heterogeneity_sim_time: 1000.0
 
 generalization:
-  rho_boundary_vals: [0.90, 0.95, 0.98, 0.99]
+  rho_boundary_vals: [0.90, 0.92, 0.95, 0.97, 0.98, 0.985, 0.99]
   scale_vals: [0.5, 1.0, 2.0, 5.0, 10.0]
   rho_grid_vals: [0.5, 0.7, 0.85, 0.95, 0.98]
+  rho_boundary_threshold: 0.95
 
 stability_sweep:
   alpha_vals: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0]
@@ -227,6 +228,8 @@ experiments:
       group: policy_evaluation
   bc_train: {}
   reinforce_train:
+    # Final bounded training budget: keep this capped for the CPU/SSA-heavy
+    # rollout path instead of inheriting the much larger root training budget.
     jax:
       enabled: false
       platform: auto
@@ -234,7 +237,7 @@ experiments:
       fallback_to_cpu: true
     simulation:
       ssa:
-        sim_time: 1500.0
+        sim_time: 1000.0
     train_epochs: 15
     batch_size: 16
   stats:
@@ -246,20 +249,34 @@ experiments:
     simulation:
       num_replications: 30
   generalize:
+    # Final standalone grid widened up to the measured Colab budget envelope,
+    # but not restored to the original full 5x5 final grid.
     jax:
       enabled: true
       platform: auto
       precision: float32
       fallback_to_cpu: true
+    simulation:
+      num_replications: 2
+      ssa:
+        sim_time: 10000.0
+    generalization:
+      scale_vals: [0.5, 1.0, 2.0]
+      rho_grid_vals: [0.5, 0.7, 0.85]
   ablation:
+    # Ablation inherits the finalized reinforce_train budget via config-chain
+    # resolution and should stay aligned with that training contract.
     jax:
       enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
   critical:
+    # Final critical-load coverage remains standalone.
     jax:
       enabled: true
       platform: auto
       precision: float32
       fallback_to_cpu: true
+    simulation:
+      num_replications: 2

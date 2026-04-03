@@ -36,6 +36,7 @@ from jaxtyping import Array, Float, PRNGKeyArray
 import numpy as np
 import matplotlib.pyplot as plt
 import functools
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core import constants
 
 from gibbsq.core.config import load_experiment_config
@@ -48,6 +49,7 @@ from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -104,7 +106,10 @@ class GeneralizationSweeper:
         total_cells = len(scale_vals) * len(rho_vals)
         cell_keys = jax.random.split(k_grid, total_cells)
         
-        log.info("Evaluating N-GibbsQ improvement ratio (GibbsQ / Neural) on 5x5 Grid...")
+        log.info(
+            "Evaluating N-GibbsQ improvement ratio (GibbsQ / Neural) "
+            f"on {len(scale_vals)}x{len(rho_vals)} grid..."
+        )
         
         cell_idx = 0
         baseline_policy_name = self.cfg.policy.name
@@ -205,7 +210,7 @@ class GeneralizationSweeper:
         """Generates generalization heatmap."""
         from gibbsq.analysis.plotting import plot_improvement_heatmap
 
-        plot_path = self.run_dir / "generalization_heatmap"
+        plot_path = figure_path(self.run_dir, "generalization_heatmap")
         fig = plot_improvement_heatmap(
             grid=grid,
             x_labels=[str(r) for r in rho_vals],
@@ -215,6 +220,15 @@ class GeneralizationSweeper:
             save_path=plot_path,
             theme="publication",
             formats=["png", "pdf"],
+            context=ExperimentPlotContext(
+                experiment_id="generalize",
+                chart_name="plot_improvement_heatmap",
+                semantic_overrides={
+                    "axis_labels": {
+                        "y": "Service Rate Scale (x base distribution)",
+                    },
+                },
+            ),
         )
         plt.close(fig)
 
@@ -223,7 +237,7 @@ class GeneralizationSweeper:
         if self.run_logger:
             try:
                 import wandb
-                self.run_logger.log({"generalization_heatmap": wandb.Image(str(self.run_dir / "generalization_heatmap.png"))})
+                self.run_logger.log({"generalization_heatmap": wandb.Image(str(figure_path(self.run_dir, "generalization_heatmap").with_suffix(".png")))})
             except Exception:
                 pass
 
@@ -231,7 +245,7 @@ class GeneralizationSweeper:
             "grid": grid.tolist(),
             "scale_vals": scale_vals,
             "rho_vals": rho_vals
-        }, self.run_dir / "metrics.jsonl")
+        }, metrics_path(self.run_dir))
 
 @hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):

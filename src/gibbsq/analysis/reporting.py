@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import logging
 from gibbsq.utils.discovery import load_metrics
+from gibbsq.utils.run_artifacts import figure_path
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def report_drift(run_dir: Path) -> None:
         else:
             print(f"[✘] VIOLATION DETECTED: {violations} states exceeded theoretical upper bound!")
 
-    if (run_dir / "drift_vs_norm.png").exists():
+    if figure_path(run_dir, "drift_vs_norm").with_suffix(".png").exists() or (run_dir / "drift_vs_norm.png").exists():
         print("[+] Landscape plot generated: drift_vs_norm.png.")
     else:
         print("[!] Plot not found in capsule.")

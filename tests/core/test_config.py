@@ -784,6 +784,52 @@ class TestHydraConversion:
         stress_lengths = [len(OmegaConf.select(raws[name], "stress.n_values")) for name in ordered_profiles]
         assert stress_lengths == sorted(stress_lengths), f"stress.n_values is not monotonic: {stress_lengths}"
 
+    def test_final_experiment_locked_runtime_budgets_resolve_exactly(self):
+        config_dir = str(Path("configs").resolve())
+
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raw_cfg = compose(config_name="final_experiment")
+
+            reinforce = resolve_experiment_config(raw_cfg, "reinforce_train", profile_name="final_experiment")
+            assert float(reinforce.simulation.ssa.sim_time) == pytest.approx(1000.0)
+            assert int(reinforce.train_epochs) == 15
+            assert int(reinforce.batch_size) == 16
+
+            generalize = resolve_experiment_config(raw_cfg, "generalize", profile_name="final_experiment")
+            assert int(generalize.simulation.num_replications) == 2
+            assert float(generalize.simulation.ssa.sim_time) == pytest.approx(10000.0)
+            assert list(generalize.generalization.scale_vals) == [0.5, 1.0, 2.0]
+            assert list(generalize.generalization.rho_grid_vals) == [0.5, 0.7, 0.85]
+
+            critical = resolve_experiment_config(raw_cfg, "critical", profile_name="final_experiment")
+            assert int(critical.simulation.num_replications) == 2
+            assert list(critical.generalization.rho_boundary_vals) == [0.9, 0.92, 0.95, 0.97, 0.98, 0.985, 0.99]
+
+            ablation = resolve_experiment_config_chain(
+                raw_cfg,
+                ["reinforce_train", "ablation"],
+                profile_name="final_experiment",
+            )
+            assert float(ablation.simulation.ssa.sim_time) == pytest.approx(1000.0)
+            assert int(ablation.train_epochs) == 15
+            assert int(ablation.batch_size) == 16
+
+    def test_final_experiment_budget_drift_is_rejected_during_resolution(self):
+        config_dir = str(Path("configs").resolve())
+
+        with initialize_config_dir(config_dir=config_dir, version_base=None):
+            raw_cfg = compose(config_name="final_experiment")
+
+        drifted_reinforce = OmegaConf.create(OmegaConf.to_container(raw_cfg, resolve=True))
+        OmegaConf.update(
+            drifted_reinforce,
+            "experiments.reinforce_train.train_epochs",
+            20,
+            force_add=True,
+        )
+        with pytest.raises(ValueError, match="final_experiment budget drift for reinforce_train"):
+            resolve_experiment_config(drifted_reinforce, "reinforce_train", profile_name="final_experiment")
+
     def test_parameter_freeze_ledger_covers_all_active_parameters(self):
         config_dir = str(Path("configs").resolve())
         ledger_path = Path("configs") / "notes" / "parameter_freeze_ledger.csv"

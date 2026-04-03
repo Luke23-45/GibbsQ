@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import stationarity_diagnostic, time_averaged_queue_lengths
 from gibbsq.analysis.plotting import plot_alpha_sweep
 from gibbsq.analysis.theme import apply_theme
@@ -15,6 +16,7 @@ from gibbsq.engines.numpy_engine import SimResult, simulate
 from gibbsq.utils.exporter import append_metrics_jsonl, save_trajectory_parquet
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
 
 try:
     import wandb
@@ -45,7 +47,8 @@ def main(raw_cfg: DictConfig) -> None:
     cap = float(mu.sum())
 
     out_dir = run_dir
-    (out_dir / "trajectories").mkdir(parents=True, exist_ok=True)
+    trajectories_dir = artifacts_dir(out_dir) / "trajectories"
+    trajectories_dir.mkdir(parents=True, exist_ok=True)
 
     if cfg.policy.name not in ["softmax", "uas"]:
         raise ValueError(
@@ -183,12 +186,12 @@ def main(raw_cfg: DictConfig) -> None:
                     "stationarity_threshold": threshold,
                     "backend": "JAX" if cfg.jax.enabled else "NumPy",
                 }
-                append_metrics_jsonl(metrics, out_dir / "metrics.jsonl")
+                append_metrics_jsonl(metrics, metrics_path(out_dir))
                 if run:
                     run.log(metrics)
 
                 if cfg.simulation.export_trajectories and last_res is not None:
-                    fname = out_dir / f"trajectories/rho{rho:.2f}_alpha{alpha:.2f}.parquet"
+                    fname = trajectories_dir / f"rho{rho:.2f}_alpha{alpha:.2f}.parquet"
                     save_trajectory_parquet(last_res, fname)
 
                 stat_str = "OK" if stationary[i, j] else "NONSTATIONARY"
@@ -199,11 +202,23 @@ def main(raw_cfg: DictConfig) -> None:
                 cell_bar.update(1)
 
     rho_labels = [f"ρ={r:.2f}" for r in rho_values]
-    f_plot = out_dir / "alpha_sweep"
-    plot_alpha_sweep(alpha_values, mean_Q, rho_labels, save_path=f_plot, theme="publication", formats=["png", "pdf"])
+    f_plot = figure_path(out_dir, "alpha_sweep")
+    plot_alpha_sweep(
+        alpha_values,
+        mean_Q,
+        rho_labels,
+        stationary_matrix=stationary,
+        save_path=f_plot,
+        theme="publication",
+        formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="sweep",
+            chart_name="plot_alpha_sweep",
+        ),
+    )
     log.info(f"\nSaved plot: {f_plot}.png, {f_plot}.pdf")
     if run:
-        run.log({"alpha_sweep_plot": wandb.Image(str(out_dir / "alpha_sweep.png"))})
+        run.log({"alpha_sweep_plot": wandb.Image(str(figure_path(out_dir, "alpha_sweep").with_suffix(".png")))})
 
     n_fail = np.sum(~stationary)
     log.info(f"\nSummary: {n_fail}/{stationary.size} configurations non-stationary.")

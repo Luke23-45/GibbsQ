@@ -16,6 +16,7 @@ from omegaconf import DictConfig, OmegaConf
 from gibbsq.core.config import load_experiment_config
 from gibbsq.core.pretraining import DEFAULT_BC_DATA_CONFIG, extract_bc_data_config
 from gibbsq.utils.logging import get_run_config
+from gibbsq.utils.run_artifacts import metrics_path
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -416,7 +417,9 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def summarize_reinforce_run(run_dir: Path) -> dict[str, Any]:
-    rows = _read_jsonl(run_dir / "reinforce_metrics.jsonl")
+    rows = _read_jsonl(metrics_path(run_dir, "reinforce_metrics.jsonl"))
+    if not rows:
+        rows = _read_jsonl(run_dir / "reinforce_metrics.jsonl")
     if not rows:
         return {
             "run_dir": str(run_dir),
@@ -475,7 +478,9 @@ def summarize_critical_results(results: dict[str, Any]) -> dict[str, Any]:
 
 
 def summarize_stress_run(run_dir: Path) -> dict[str, Any]:
-    rows = _read_jsonl(run_dir / "metrics.jsonl")
+    rows = _read_jsonl(metrics_path(run_dir))
+    if not rows:
+        rows = _read_jsonl(run_dir / "metrics.jsonl")
     critical_rows = [row for row in rows if row.get("test") == "critical_load"]
     hetero_rows = [row for row in rows if row.get("test") == "heterogeneity"]
     stationarity = [float(row.get("stationary_rate", 0.0)) for row in critical_rows]

@@ -99,6 +99,8 @@ generalization:
   rho_boundary_vals: [0.95]
   scale_vals: [0.5, 2.0]
   rho_grid_vals: [0.5, 0.85]
+  rho_boundary_threshold: 0.95
+
 
 jax:
   enabled: false

@@ -15,6 +15,7 @@ from omegaconf import OmegaConf, DictConfig
 
 from gibbsq.core.config import ExperimentConfig
 from gibbsq.utils.device import setup_jax
+from gibbsq.utils.run_artifacts import artifacts_dir, config_path, figures_dir, logs_dir, metadata_dir, metrics_dir
 
 log = logging.getLogger(__name__)
 
@@ -58,8 +59,12 @@ def get_run_config(
     run_dir = Path(cfg.output_dir) / experiment_type / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    capsule_log_dir = run_dir / "logs"
+    capsule_log_dir = logs_dir(run_dir)
     capsule_log_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir(run_dir).mkdir(parents=True, exist_ok=True)
+    metrics_dir(run_dir).mkdir(parents=True, exist_ok=True)
+    artifacts_dir(run_dir).mkdir(parents=True, exist_ok=True)
+    metadata_dir(run_dir).mkdir(parents=True, exist_ok=True)
     
     log_file = capsule_log_dir / "run.log"
     _root = logging.getLogger()
@@ -74,11 +79,11 @@ def get_run_config(
         ))
         _root.addHandler(file_handler)
     
-    config_path = run_dir / "config.yaml"
+    resolved_config_path = config_path(run_dir)
     if raw_cfg is not None:
-        OmegaConf.save(raw_cfg, config_path, resolve=True)
+        OmegaConf.save(raw_cfg, resolved_config_path, resolve=True)
     else:
-        OmegaConf.save(cfg, config_path)
+        OmegaConf.save(cfg, resolved_config_path)
     
     log.info(f"[IO] Run directory: {run_dir.absolute()}")
     return run_dir, run_id
@@ -135,7 +140,7 @@ def setup_wandb(
         tags=cfg.wandb.tags,
         name=final_run_name,
         config=full_config,
-        dir=str(run_dir) if run_dir else None,
+        dir=str(artifacts_dir(run_dir)) if run_dir else None,
     )
     
     if run is not None:

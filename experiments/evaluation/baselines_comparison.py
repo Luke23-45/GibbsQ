@@ -5,15 +5,14 @@ This module implements the corrected baseline hierarchy for policy comparison,
 addressing Smoking Gun #3 (Critical Load Advantage Is Baseline Collapse) and
 Smoking Gun #4 (Parity Benchmark Is Self-Referential).
 
-The corrected baseline hierarchy:
-- Tier 1: Blind policies (Uniform, Proportional)
-- Tier 2: Queue-length-based (JSQ, Power-of-d)
-- Tier 3: Sojourn-time-based (JSSQ, UAS)
-- Tier 4: Fixed-weight baselines (Proportional, Uniform)
-- Tier 5: Neural (N-GibbsQ trained with REINFORCE)
+The corrected baseline hierarchy used by this experiment:
+- Tier 2: Structural dispatch baselines (JSQ, JSSQ)
+- Tier 3: Capacity-aware GibbsQ baselines (UAS variants)
+- Tier 4: Blind/fixed-weight baselines (Proportional, Uniform)
+- Tier 5: Neural candidate (N-GibbsQ trained with REINFORCE)
 
-The parity criterion is now: N-GibbsQ must match or beat Tier 3 (JSSQ),
-not the fixed-weight Tier 4 baselines.
+The parity criterion is now: N-GibbsQ must match or beat the strongest
+Tier 2/Tier 3 references before falling back to Tier 4 baselines.
 """
 
 import logging
@@ -21,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import jax
 from omegaconf import DictConfig
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.core.builders import build_policy_by_name
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
@@ -31,6 +31,7 @@ from gibbsq.analysis.metrics import (
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.progress import iter_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 from gibbsq.analysis.theme import apply_theme, THEMES
 from gibbsq.utils.chart_exporter import save_chart
 import pandas as pd
@@ -98,7 +99,7 @@ CORRECTED_POLICIES = [
     {"tier": 3, "name": "uas", "label": "UAS (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
     {"tier": 3, "name": "uas", "label": "UAS (alpha=5.0)", "requires_mu": True, "alpha": 5.0},
 
-    # Tier 4: Fixed-Weight Baselines (Blind Policies)
+    # Tier 4: Blind / fixed-weight baselines
     {"tier": 4, "name": "proportional", "label": "Proportional (mu/Lambda)", "requires_mu": True},
     {"tier": 4, "name": "uniform", "label": "Uniform (1/N)", "requires_mu": False},
 
@@ -203,7 +204,7 @@ def run_corrected_comparison(
             "policy": label,
             "tier": tier,
             **metrics,
-        }, run_dir / "corrected_comparison_metrics.jsonl")
+        }, metrics_path(run_dir, "corrected_comparison_metrics.jsonl"))
 
     # Resolve pointer directory from active run output layout
     _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -234,17 +235,27 @@ def run_corrected_comparison(
         mode=NEURAL_EVAL_MODE,
     )
 
-    log.info(f"Evaluating N-GibbsQ ({NEURAL_EVAL_MODE})...")
+    neural_label = "N-GibbsQ (Proposed)"
+    log.info(f"Evaluating {neural_label} ({NEURAL_EVAL_MODE})...")
     metrics = evaluate_single_policy(neural_policy, cfg, np.random.default_rng(cfg.simulation.seed))
 
-    results["N-GibbsQ (Platinum)"] = {
+    results[neural_label] = {
         "tier": 5,
-        "name": f"neural_platinum_{NEURAL_EVAL_MODE}",
+        "name": f"neural_proposed_{NEURAL_EVAL_MODE}",
         "eval_mode": NEURAL_EVAL_MODE,
         **metrics,
     }
 
     log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
+    append_metrics_jsonl(
+        {
+            "policy": neural_label,
+            "tier": 5,
+            "eval_mode": NEURAL_EVAL_MODE,
+            **metrics,
+        },
+        metrics_path(run_dir, "corrected_comparison_metrics.jsonl"),
+    )
 
     # Compute parity result using corrected tiered criteria
     log.info("\n" + "=" * 60)
@@ -261,20 +272,20 @@ def run_corrected_comparison(
     sojourn_result = results.get("UAS (alpha=1.0)")
     proportional_result = results.get("Proportional (mu/Lambda)")
 
-    neural_result = results.get("N-GibbsQ (Platinum)")
+    neural_result = results.get(neural_label)
 
     if neural_result:
         neural_q = neural_result["mean_q_total"]
-        log.info(f"N-GibbsQ (Platinum/Greedy): E[Q] = {neural_q:.4f}")
+        log.info(f"{neural_label} ({NEURAL_EVAL_MODE}): E[Q] = {neural_q:.4f}")
 
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
         sojourn_q = sojourn_result["mean_q_total"] if sojourn_result else float('inf')
         proportional_q = proportional_result["mean_q_total"] if proportional_result else float('inf')
 
         log.info(f"Reference thresholds:")
-        log.info(f"  JSSQ (Tier 2): E[Q] = {jssq_q:.4f}")
+        log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f}")
         log.info(f"  UAS (Tier 3): E[Q] = {sojourn_q:.4f}")
-        log.info(f"  Proportional (Tier 4): E[Q] = {proportional_q:.4f}")
+        log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f}")
 
         def has_parity(q_agent, se_agent, q_base, se_base):
             # Parity applies if the Agent performs better OR is within the statistical Margin of Error
@@ -294,9 +305,9 @@ def run_corrected_comparison(
         proportional_se = proportional_result["se_q_total"] if proportional_result else 0.0
 
         log.info(f"Reference statistical bounds (95% CI):")
-        log.info(f"  JSSQ (Tier 2): E[Q] = {jssq_q:.4f} ± {jssq_se:.4f}")
+        log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f} ± {jssq_se:.4f}")
         log.info(f"  UAS (Tier 3): E[Q] = {sojourn_q:.4f} ± {sojourn_se:.4f}")
-        log.info(f"  Proportional (Tier 4): E[Q] = {proportional_q:.4f} ± {proportional_se:.4f}")
+        log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f} ± {proportional_se:.4f}")
 
         if has_parity(neural_q, se_neural, jssq_q, jssq_se):
             parity = "GOLD"
@@ -306,7 +317,7 @@ def run_corrected_comparison(
             log.info(f"PARITY RESULT: SILVER [OK] (Statistically matches empirical UAS baseline)")
         elif has_parity(neural_q, se_neural, proportional_q, proportional_se):
             parity = "BRONZE"
-            log.info(f"PARITY RESULT: BRONZE [OK] (Statistically matches static Proportional baseline)")
+            log.info(f"PARITY RESULT: BRONZE [OK] (Statistically matches static blind Proportional baseline)")
         else:
             parity = "FAILED"
             log.info(f"PARITY RESULT: FAILED [FAIL] (Statistically inferior to benchmark baselines)")
@@ -331,7 +342,7 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     q_errors = [r["se_q_total"] for _, r in sorted_results]
     tiers = [r["tier"] for _, r in sorted_results]
 
-    plot_path = run_dir / "corrected_policy_comparison"
+    plot_path = figure_path(run_dir, "corrected_policy_comparison")
     fig = plot_tier_comparison_bars(
         labels=labels,
         q_values=q_values,
@@ -339,7 +350,11 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
         tiers=tiers,
         save_path=plot_path,
         theme="publication",
-        formats=["png", "pdf"]
+        formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="policy",
+            chart_name="plot_tier_comparison_bars",
+        ),
     )
     import matplotlib.pyplot as plt
     plt.close(fig)
@@ -362,9 +377,9 @@ def run_grid_generalization(
     cfg: ExperimentConfig,
     run_dir: Path,
 ):
-    """Evaluate generalization across a grid of load factors (Platinum Standard)."""
+    """Evaluate generalization across a grid of load factors (Proposed Standard)."""
     log.info("\n" + "=" * 60)
-    log.info("  Platinum Generalization Sweep (Grid Evaluation)")
+    log.info("  Proposed Generalization Sweep (Grid Evaluation)")
     log.info("=" * 60)
 
     num_servers = cfg.system.num_servers
@@ -425,7 +440,7 @@ def run_grid_generalization(
         log.info(f"  Idx: {idx:.1f}% | Neural E[Q]: {q_n:.2f} (JSQ: {q_j:.2f})")
 
     df = pd.DataFrame(results)
-    df.to_csv(run_dir / "platinum_grid_results.csv", index=False)
+    df.to_csv(metrics_path(run_dir, "platinum_grid_results.csv"), index=False)
 
     _plot_platinum_grid(df, run_dir)
     return results
@@ -434,7 +449,7 @@ def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
     """Generate log-scale curves and performance index plots over rho."""
     from gibbsq.analysis.plotting import plot_platinum_grid
 
-    plot_path = output_dir / "platinum_grid_analysis"
+    plot_path = figure_path(output_dir, "platinum_grid_analysis")
     fig = plot_platinum_grid(
         rho_values=df['rho'].values,
         uniform_eq=df['Uniform_EQ'].values,
@@ -443,11 +458,15 @@ def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
         performance_index=df['Performance_Index'].values,
         save_path=plot_path,
         theme="publication",
-        formats=["png", "pdf"]
+        formats=["png", "pdf"],
+        context=ExperimentPlotContext(
+            experiment_id="policy",
+            chart_name="plot_platinum_grid",
+        ),
     )
     import matplotlib.pyplot as plt
     plt.close(fig)
-    log.info(f"Platinum grid analysis saved to {plot_path}.png, {plot_path}.pdf")
+    log.info(f"Proposed grid analysis saved to {plot_path}.png, {plot_path}.pdf")
 
 
 def main(raw_cfg: DictConfig):
@@ -461,10 +480,10 @@ def main(raw_cfg: DictConfig):
     import jax
     results = run_corrected_comparison(cfg, run_dir, run_logger)
 
-    # Platinum Step: If we have a neural policy, run the full grid generalization sweep
-    if results and "N-GibbsQ (Platinum)" in results:
+    # Proposed Step: If we have a neural policy, run the full grid generalization sweep
+    if results and "N-GibbsQ (Proposed)" in results:
         if raw_cfg.get("grid", False):
-            log.info("\n--- Platinum Trigger: Running Grid Generalization Sweep ---")
+            log.info("\n--- Proposed Trigger: Running Grid Generalization Sweep ---")
 
             N = cfg.system.num_servers
             mu = np.array(cfg.system.service_rates)

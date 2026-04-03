@@ -15,6 +15,7 @@ import numpy as np
 import hydra
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import load_experiment_config, drift_constant_R, drift_rate_epsilon
 from gibbsq.core.builders import build_policy_by_name
 from gibbsq.engines.numpy_engine import simulate
@@ -23,6 +24,7 @@ from gibbsq.analysis.plotting import plot_drift_landscape, plot_drift_vs_norm
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import setup_wandb, get_run_config
 from gibbsq.utils.progress import create_progress
+from gibbsq.utils.run_artifacts import figure_path, metrics_path
 from gibbsq.analysis.theme import apply_theme
 
 try:
@@ -96,20 +98,41 @@ def main(raw_cfg: DictConfig) -> None:
 
 
             if N == 2:
-                f1 = out_dir / "drift_heatmap"
-                plot_drift_landscape(res, alpha, save_path=f1, theme='publication', formats=['png', 'pdf'])
+                f1 = figure_path(out_dir, "drift_heatmap")
+                plot_drift_landscape(
+                    res,
+                    alpha,
+                    save_path=f1,
+                    theme='publication',
+                    formats=['png', 'pdf'],
+                    context=ExperimentPlotContext(
+                        experiment_id="verification",
+                        chart_name="plot_drift_landscape",
+                    ),
+                )
                 log.info(f"Saved: {f1}.png, {f1}.pdf")
 
-            f2 = out_dir / "drift_vs_norm"
-            plot_drift_vs_norm(res, eps, R, save_path=f2, theme='publication', formats=['png', 'pdf'])
+            f2 = figure_path(out_dir, "drift_vs_norm")
+            plot_drift_vs_norm(
+                res,
+                eps,
+                R,
+                save_path=f2,
+                theme='publication',
+                formats=['png', 'pdf'],
+                context=ExperimentPlotContext(
+                    experiment_id="verification",
+                    chart_name="plot_drift_vs_norm",
+                ),
+            )
             log.info(f"Saved: {f2}.png, {f2}.pdf")
             progress.update(1)
 
             if run:
-                png_path = str(out_dir / "drift_heatmap.png") if N == 2 else None
+                png_path = str(figure_path(out_dir, "drift_heatmap").with_suffix(".png")) if N == 2 else None
                 run.log({
                     "drift_heatmap": wandb.Image(png_path) if png_path else None,
-                    "drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))
+                    "drift_vs_norm": wandb.Image(str(figure_path(out_dir, "drift_vs_norm").with_suffix(".png")))
                 })
 
             append_metrics_jsonl({
@@ -120,7 +143,7 @@ def main(raw_cfg: DictConfig) -> None:
                 "epsilon": float(eps),
                 "violations": int(res.violations),
                 "states_evaluated": int(len(res.states))
-            }, out_dir / "metrics.jsonl")
+            }, metrics_path(out_dir))
             progress.update(1)
 
     else:
@@ -146,12 +169,23 @@ def main(raw_cfg: DictConfig) -> None:
             log.info(f"States evaluated: {len(res.states):,}")
             log.info(f"Bound violations: {res.violations:,}")
 
-            f = out_dir / "drift_vs_norm"
-            plot_drift_vs_norm(res, eps, R, save_path=f, theme='publication', formats=['png', 'pdf'])
+            f = figure_path(out_dir, "drift_vs_norm")
+            plot_drift_vs_norm(
+                res,
+                eps,
+                R,
+                save_path=f,
+                theme='publication',
+                formats=['png', 'pdf'],
+                context=ExperimentPlotContext(
+                    experiment_id="verification",
+                    chart_name="plot_drift_vs_norm",
+                ),
+            )
             log.info(f"Saved: {f}.png, {f}.pdf")
 
             if run:
-                run.log({"drift_vs_norm": wandb.Image(str(out_dir / "drift_vs_norm.png"))})
+                run.log({"drift_vs_norm": wandb.Image(str(figure_path(out_dir, "drift_vs_norm").with_suffix(".png")))})
 
             append_metrics_jsonl({
                 "num_servers": int(N),
@@ -161,7 +195,7 @@ def main(raw_cfg: DictConfig) -> None:
                 "epsilon": float(eps),
                 "violations": int(res.violations),
                 "states_evaluated": int(len(res.states))
-            }, out_dir / "metrics.jsonl")
+            }, metrics_path(out_dir))
             progress.update(1)
 
     log.info("Drift verification complete.")

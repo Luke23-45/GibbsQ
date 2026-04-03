@@ -33,6 +33,7 @@ from jaxtyping import PRNGKeyArray, Array, Float
 from jax.flatten_util import ravel_pytree
 from omegaconf import DictConfig
 
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import ExperimentConfig, NeuralConfig, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
 from gibbsq.core.pretraining import extract_bc_data_config
@@ -53,6 +54,7 @@ from gibbsq.utils.model_io import (
     validate_neural_model_shape,
 )
 from gibbsq.utils.progress import create_progress, iter_progress
+from gibbsq.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
 
 log = logging.getLogger(__name__)
 
@@ -658,7 +660,7 @@ class ReinforceTrainer:
         history_reward = []
 
         def save_checkpoint(epoch_idx):
-            ckpt_path = self.run_dir / f"policy_net_epoch_{epoch_idx:03d}.eqx"
+            ckpt_path = artifacts_dir(self.run_dir) / f"policy_net_epoch_{epoch_idx:03d}.eqx"
             eqx.tree_serialise_leaves(ckpt_path, policy_net)
             log.info(f"  [Checkpoint] Saved epoch {epoch_idx} model to {ckpt_path.name}")
 
@@ -1001,55 +1003,60 @@ class ReinforceTrainer:
                     if len(cast_epochs) < 10 or epoch == n_epochs - 1:
                         cast_epochs.append(epoch_profile)
 
-                if epoch == 0:
-                    ema_base_idx, ema_corr, ema_ev = base_regime_index, float(policy_aux.get("corr", 0.0)), float(policy_aux.get("ev", 0.0))
-                else:
-                    ema_base_idx = alpha * base_regime_index + (1 - alpha) * ema_base_idx
-                    ema_corr = alpha * float(policy_aux.get("corr", 0.0)) + (1 - alpha) * ema_corr
-                    ema_ev = alpha * float(policy_aux.get("ev", 0.0)) + (1 - alpha) * ema_ev
+                    if epoch == 0:
+                        ema_base_idx = base_regime_index
+                        ema_corr = float(policy_aux.get("corr", 0.0))
+                        ema_ev = float(policy_aux.get("ev", 0.0))
+                    else:
+                        ema_base_idx = alpha * base_regime_index + (1 - alpha) * ema_base_idx
+                        ema_corr = alpha * float(policy_aux.get("corr", 0.0)) + (1 - alpha) * ema_corr
+                        ema_ev = alpha * float(policy_aux.get("ev", 0.0)) + (1 - alpha) * ema_ev
 
-                history_loss.append(float(policy_loss))
-                history_reward.append(base_regime_index)
-                if epoch % 5 == 0:
-                    log.info(f"Epoch {epoch:4d} | mean_queue: {mean_queue:5.3f} | base_regime_index: {base_regime_index:6.1f}% (EMA: {ema_base_idx:6.1f}%) | "
-                            f"Loss: {float(policy_loss):.4f} | V-Loss: {float(value_loss):.4f}")
-                    log.info(f"   -> Signaling | EV: {ema_ev:6.3f} [EMA], Corr: {ema_corr:6.4f} [EMA]")
+                    history_loss.append(float(policy_loss))
+                    history_reward.append(base_regime_index)
+                    if epoch % 5 == 0:
+                        log.info(
+                            f"Epoch {epoch:4d} | mean_queue: {mean_queue:5.3f} | "
+                            f"base_regime_index: {base_regime_index:6.1f}% (EMA: {ema_base_idx:6.1f}%) | "
+                            f"Loss: {float(policy_loss):.4f} | V-Loss: {float(value_loss):.4f}"
+                        )
+                        log.info(f"   -> Signaling | EV: {ema_ev:6.3f} [EMA], Corr: {ema_corr:6.4f} [EMA]")
 
-                metrics = {
-                    "epoch": epoch,
-                    "policy_loss": float(policy_loss),
-                    "value_loss": float(value_loss),
-                    "base_regime_index": float(base_regime_index),
-                    "base_regime_index_ema": float(ema_base_idx),
-                    "performance_index": float(base_regime_index),
-                    "performance_index_ema": float(ema_base_idx),
-                    "mean_queue": float(mean_queue),
-                    "ev_ema": float(ema_ev),
-                    "corr_ema": float(ema_corr),
-                    "jsq_limit": float(jsq_limit),
-                    "random_analytical": float(random_limit),
-                    "random_empirical": float(random_queue),
-                    "arrival_count": int(np.mean([t.arrival_count for t in trajectories])),
-                    "mean_adv": float(policy_aux.get("mean_adv", 0.0)),
-                    "mean_logp": float(policy_aux.get("mean_logp", 0.0)),
-                    "policy_grad_norm": float(policy_grad_norm) if 'policy_grad_norm' in locals() else 0.0,
-                    "value_grad_norm": float(value_grad_norm) if 'value_grad_norm' in locals() else 0.0,
-                    "entropy": float(policy_aux.get("entropy", 0.0)),
-                }
-                append_metrics_jsonl(metrics, self.run_dir / "reinforce_metrics.jsonl")
-                if self.run_logger:
-                    self.run_logger.log(metrics)
+                    metrics = {
+                        "epoch": epoch,
+                        "policy_loss": float(policy_loss),
+                        "value_loss": float(value_loss),
+                        "base_regime_index": float(base_regime_index),
+                        "base_regime_index_ema": float(ema_base_idx),
+                        "performance_index": float(base_regime_index),
+                        "performance_index_ema": float(ema_base_idx),
+                        "mean_queue": float(mean_queue),
+                        "ev_ema": float(ema_ev),
+                        "corr_ema": float(ema_corr),
+                        "jsq_limit": float(jsq_limit),
+                        "random_analytical": float(random_limit),
+                        "random_empirical": float(random_queue),
+                        "arrival_count": int(np.mean([t.arrival_count for t in trajectories])),
+                        "mean_adv": float(policy_aux.get("mean_adv", 0.0)),
+                        "mean_logp": float(policy_aux.get("mean_logp", 0.0)),
+                        "policy_grad_norm": float(policy_grad_norm) if 'policy_grad_norm' in locals() else 0.0,
+                        "value_grad_norm": float(value_grad_norm) if 'value_grad_norm' in locals() else 0.0,
+                        "entropy": float(policy_aux.get("entropy", 0.0)),
+                    }
+                    append_metrics_jsonl(metrics, metrics_path(self.run_dir, "reinforce_metrics.jsonl"))
+                    if self.run_logger:
+                        self.run_logger.log(metrics)
 
-                epoch_bar.set_postfix(
-                    {
-                        "queue": f"{mean_queue:.3f}",
-                        "pi": f"{base_regime_index:.1f}%",
-                    },
-                    refresh=False,
-                )
-                epoch_bar.update(1)
+                    epoch_bar.set_postfix(
+                        {
+                            "queue": f"{mean_queue:.3f}",
+                            "pi": f"{base_regime_index:.1f}%",
+                        },
+                        refresh=False,
+                    )
+                    epoch_bar.update(1)
 
-                last_successful_epoch = epoch
+                    last_successful_epoch = epoch
 
             training_complete = True
 
@@ -1090,39 +1097,29 @@ class ReinforceTrainer:
         from gibbsq.analysis.theme import apply_theme, THEMES
         from gibbsq.utils.chart_exporter import save_chart
 
-        policy_path = self.run_dir / "n_gibbsq_reinforce_weights.eqx"
+        artifacts = artifacts_dir(self.run_dir)
+        policy_path = artifacts / "n_gibbsq_reinforce_weights.eqx"
         eqx.tree_serialise_leaves(policy_path, policy_net)
 
-        value_path = self.run_dir / "value_network_weights.eqx"
+        value_path = artifacts / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
         from gibbsq.analysis.plotting import plot_training_dashboard
         import json
 
-        metrics_path = self.run_dir / "reinforce_metrics.jsonl"
+        metrics_file = metrics_path(self.run_dir, "reinforce_metrics.jsonl")
         dashboard_metrics: dict = {
             "epoch": [], "base_regime_index": [], "base_regime_index_ema": [],
             "policy_loss": [], "value_loss": [], "ev_ema": [], "corr_ema": [],
             "policy_grad_norm": [], "value_grad_norm": [], "entropy": [],
         }
-        if metrics_path.exists():
-            with open(metrics_path, "r") as f:
+        if metrics_file.exists():
+            with open(metrics_file, "r") as f:
                 for line in f:
                     row = json.loads(line.strip())
                     for key in dashboard_metrics:
                         if key in row:
                             dashboard_metrics[key].append(row[key])
-
-        plot_path = self.run_dir / "reinforce_training_curve"
-        fig = plot_training_dashboard(
-            metrics=dashboard_metrics,
-            jsq_baseline=100.0,  # JSQ = 100% on Performance Index scale
-            random_baseline=0.0,  # Random = 0% on Performance Index scale
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-        )
-        plt.close(fig)
 
         pointer_dir = self.run_dir.parent.parent
         _PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -1191,12 +1188,36 @@ class ReinforceTrainer:
             }
             if execute_start is not None:
                 stage_profile["total_wall_seconds"] = float(time.perf_counter() - execute_start)
-            stage_profile_path = self.run_dir / "reinforce_stage_profile.json"
+            stage_profile_path = metrics_path(self.run_dir, "reinforce_stage_profile.json")
             stage_profile_path.write_text(json.dumps(stage_profile, indent=2), encoding="utf-8")
             log.info("Stage profile written to %s", stage_profile_path)
         log.info(f"Deterministic Policy Score: {final_mean:.2f}% ± {final_std:.2f}%")
         log.info(f"JSQ Target: 100.0% | Random Floor: 0.0% (Performance Index Scale)")
         log.info("-------------------------------------------------------")
+
+        dashboard_metrics.update(
+            {
+                "final_eval_mean": float(final_mean),
+                "final_eval_std": float(final_std),
+                "final_eval_count": int(len(eval_indices)),
+                "train_epochs": int(self.cfg.train_epochs),
+                "run_label": "debug" if int(self.cfg.train_epochs) <= 5 else "training",
+            }
+        )
+        plot_path = figure_path(self.run_dir, "reinforce_training_curve")
+        fig = plot_training_dashboard(
+            metrics=dashboard_metrics,
+            jsq_baseline=100.0,  # JSQ = 100% on Performance Index scale
+            random_baseline=0.0,  # Random = 0% on Performance Index scale
+            save_path=plot_path,
+            theme="publication",
+            formats=["png", "pdf"],
+            context=ExperimentPlotContext(
+                experiment_id="training",
+                chart_name="plot_training_dashboard",
+            ),
+        )
+        plt.close(fig)
 
         log.info(f"Training Complete! Final Loss: {history_loss[-1]:.4f}")
         log.info(f"Final Base-Regime Index Proxy: {history_reward[-1]:.2f}")

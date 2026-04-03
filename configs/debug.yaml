@@ -28,7 +28,9 @@ drift:
 
 stress:
   n_values: [4, 8]
-  critical_rhos: [0.9]
+  # Keep debug fast, but use more than one boundary point so the critical
+  # experiment produces a meaningful curve instead of a single-point smoke plot.
+  critical_rhos: [0.90, 0.95, 0.98]
   mu_het: [10.0, 0.1, 0.1, 0.1]
   sample_interval: 1.0
   massive_n_rho: 0.8
@@ -90,9 +92,13 @@ domain_randomization:
   rho_max: 0.98
 
 generalization:
-  rho_boundary_vals: [0.95]
+  # Critical-load.py sweeps generalization.rho_boundary_vals, so keep this aligned
+  # with stress.critical_rhos for easier review and validation.
+  rho_boundary_vals: [0.90, 0.95, 0.98]
   scale_vals: [0.5, 2.0]
   rho_grid_vals: [0.5, 0.85]
+  rho_boundary_threshold: 0.95
+
 
 jax:
   enabled: false
