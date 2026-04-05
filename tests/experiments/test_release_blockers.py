@@ -11,8 +11,10 @@ def test_check_configs_discovers_profile_configs_and_public_paths():
         EXPERIMENT_BLOCK_NAMES,
         PUBLIC_EXPERIMENT_BASE_CONFIGS,
         _public_experiment_overrides,
+        _resolve_for_validation,
         _discover_root_config_names,
     )
+    from hydra import compose, initialize_config_dir
     from gibbsq.core.config import PROFILE_CONFIG_NAMES
     from scripts.execution.experiment_runner import EXPERIMENTS
 
@@ -41,6 +43,13 @@ def test_check_configs_discovers_profile_configs_and_public_paths():
         experiment_name for experiment_name in EXPERIMENTS if experiment_name != "check_configs"
     ]
     assert all(PUBLIC_EXPERIMENT_BASE_CONFIGS[name] == "default" for name in PUBLIC_EXPERIMENT_BASE_CONFIGS)
+
+    config_dir = str(Path("configs").resolve())
+    with initialize_config_dir(config_dir=config_dir, version_base=None):
+        raw_cfg = compose(config_name="final_experiment")
+        resolved = _resolve_for_validation(raw_cfg, "ablation", profile_name="final_experiment")
+    assert int(resolved.train_epochs) == 15
+    assert int(resolved.batch_size) == 16
 
 
 def test_profile_configs_and_resolved_drift_paths_now_validate():

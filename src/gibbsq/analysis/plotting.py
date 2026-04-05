@@ -679,7 +679,7 @@ def plot_gradient_scatter(
     ax.set_ylabel(plot_profile.axis_labels.get("y", "REINFORCE Gradient (estimate)"))
     ax.set_title(plot_profile.figure_title or "Gradient Estimator Agreement")
     ax.set_aspect("equal", adjustable="box")
-    ax.legend(loc="upper left")
+    ax.legend(loc="lower right")
 
     if summary_stats:
         text_parts = []
@@ -1005,7 +1005,9 @@ def plot_training_dashboard(
                 label=final_label,
             )
         if len(epochs) > 1:
-            fig.legend(legend_handles, legend_labels, loc="upper right", frameon=True)
+            fig.legend(legend_handles, legend_labels, loc="upper center", 
+                       ncol=min(len(legend_handles), 5), bbox_to_anchor=(0.5, 0.94),
+                       frameon=True, fontsize=8)
 
     footer_parts = []
     if metrics.get("run_label"):
@@ -1021,8 +1023,8 @@ def plot_training_dashboard(
     if len(epochs) <= 1:
         fig.text(0.5, 0.985, "Partial history", ha="center", va="top", fontsize=8, color=contour)
 
-    fig.suptitle(plot_profile.figure_title or "REINFORCE Training Dashboard", fontsize=14, fontweight="bold")
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    fig.suptitle(plot_profile.figure_title or "REINFORCE Training Dashboard", y=0.98, fontsize=14, fontweight="bold")
+    fig.tight_layout(rect=[0, 0.03, 1, 0.85])
 
     if save_path:
         save_chart(fig, Path(save_path), formats or list(plot_profile.preferred_formats))
@@ -1553,7 +1555,7 @@ def plot_critical_load(
             ax.get_xlim()[1],
             alpha=0.08,
             color="#D55E00",
-            label=f"Near-critical (rho > {critical_rho})",
+            label=f"Near-critical (rho >= {critical_rho})",
         )
 
     ax.legend(loc="upper left")

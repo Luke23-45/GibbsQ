@@ -8,6 +8,7 @@ from gibbsq.core.config import (
     validate,
     validate_profile_config,
     resolve_experiment_config,
+    resolve_experiment_config_chain,
 )
 from gibbsq.utils.progress import iter_progress
 from scripts.execution.experiment_runner import (
@@ -31,6 +32,16 @@ PUBLIC_EXPERIMENT_BASE_CONFIGS = {
 
 def _public_experiment_overrides(experiment_name: str) -> list[str]:
     return default_hydra_overrides_for_experiment(experiment_name, [])
+
+
+def _resolve_for_validation(raw_cfg, experiment_name: str, profile_name: str):
+    if experiment_name == "ablation":
+        return resolve_experiment_config_chain(
+            raw_cfg,
+            ["reinforce_train", "ablation"],
+            profile_name=profile_name,
+        )
+    return resolve_experiment_config(raw_cfg, experiment_name, profile_name=profile_name)
 
 def main():
     root_config_names = _discover_root_config_names()
@@ -68,7 +79,7 @@ def main():
             try:
                 cfg = compose(config_name=profile_name, overrides=overrides)
                 validate_profile_config(cfg)
-                resolved = resolve_experiment_config(cfg, experiment_name, profile_name=profile_name)
+                resolved = _resolve_for_validation(cfg, experiment_name, profile_name=profile_name)
                 validated = hydra_to_config(resolved)
                 validate(validated)
                 print(
@@ -93,7 +104,7 @@ def main():
             try:
                 cfg = compose(config_name=base_config, overrides=overrides)
                 validate_profile_config(cfg)
-                resolved = resolve_experiment_config(cfg, experiment_name, profile_name=base_config)
+                resolved = _resolve_for_validation(cfg, experiment_name, profile_name=base_config)
                 validated = hydra_to_config(resolved)
                 validate(validated)
                 print(

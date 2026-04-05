@@ -456,7 +456,7 @@ def test_experiment_aware_stress_heatmap_and_critical_semantics():
     )
     legend = critical.axes[0].get_legend()
     critical_labels = [text.get_text() for text in legend.get_texts()]
-    assert any("Near-critical" in label for label in critical_labels)
+    assert "Near-critical (rho >= 0.9)" in critical_labels
 
 
 def test_experiment_aware_remaining_experiment_profiles():
