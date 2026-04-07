@@ -252,6 +252,7 @@ def write_bc_reuse_metadata(
     """Write BC warm-start metadata used by reinforce_train compatibility checks."""
     metadata_path = get_bc_metadata_path(model_path)
     metadata = build_bc_reuse_compatibility_record(cfg, bc_data_config=bc_data_config)
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True),
         encoding="utf-8",

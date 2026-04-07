@@ -471,6 +471,13 @@ class ReinforceTrainer:
         self.num_servers = cfg.system.num_servers
         self.service_rates = np.array(cfg.system.service_rates, dtype=np.float64)
         self.service_rates_jax = jnp.array(self.service_rates)
+        self.last_warm_start_meta: dict[str, str | bool | None] = {
+            "source": "uninitialized",
+            "pointer_path": None,
+            "model_path": None,
+            "loaded": False,
+            "reason": "not_bootstrapped",
+        }
 
         self.batch_size = cfg.batch_size
         self.sim_time = cfg.simulation.ssa.sim_time
@@ -521,7 +528,8 @@ class ReinforceTrainer:
             bc_data_config=self.bc_data_config,
         )
 
-        return policy_net, value_net, warm_start_meta
+        self.last_warm_start_meta = warm_start_meta
+        return policy_net, value_net
 
     def execute(self, key: PRNGKeyArray, n_epochs: int = 100):
         """Execute the REINFORCE training loop."""
@@ -632,14 +640,14 @@ class ReinforceTrainer:
             # Uses pre-bootstrap baselines when computing the initial denominator.
             key, bootstrap_key = jax.random.split(key)
             bootstrap_started = time.perf_counter()
-            policy_net, value_net, warm_start_meta = self.bootstrap_from_expert(
+            policy_net, value_net = self.bootstrap_from_expert(
                 policy_net, value_net, bootstrap_key, jsq_limit, random_limit, denom
             )
             setup_profile = dict(stage_profile["setup"])
             setup_profile.update(
                 {
                     "bootstrap_seconds": time.perf_counter() - bootstrap_started,
-                    "warm_start": warm_start_meta,
+                    "warm_start": dict(self.last_warm_start_meta),
                 }
             )
             stage_profile["setup"] = setup_profile

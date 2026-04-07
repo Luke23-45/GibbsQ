@@ -128,3 +128,12 @@ python scripts/execution/experiment_runner.py --config-name final_experiment --p
 python scripts/execution/experiment_runner.py --config-name final_experiment --progress off critical
 python scripts/execution/experiment_runner.py --config-name final_experiment --progress off ablation
 ```
+
+
+python scripts/execution/final/phase1_pipeline.py --config-name final_experiment --progress off
+python scripts/execution/experiment_runner.py --config-name final_experiment --progress off reinforce_train
+python scripts/execution/final/phase3_pipeline.py --config-name final_experiment --progress off
+python scripts/execution/experiment_runner.py --config-name final_experiment --progress off stress
+python scripts/execution/experiment_runner.py --config-name final_experiment --progress off generalize
+python scripts/execution/experiment_runner.py --config-name final_experiment --progress off critical
+python scripts/execution/experiment_runner.py --config-name final_experiment --progress off ablation

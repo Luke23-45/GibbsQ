@@ -392,6 +392,41 @@ def test_runner_injects_publication_safe_defaults():
     assert default_hydra_overrides_for_experiment("stats", ["++active_experiment=custom"]) == []
 
 
+def test_final_phase_pipelines_preserve_explicit_config_name(monkeypatch):
+    import scripts.execution.final.phase1_pipeline as phase1
+    import scripts.execution.final.phase3_pipeline as phase3
+
+    launched: list[tuple[str, list[str]]] = []
+
+    def fake_run_experiment(experiment, hydra_args=None, dry_run=False, progress_mode="auto"):
+        launched.append((experiment, list(hydra_args or [])))
+        return 0
+
+    class DummyProgress:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def update(self, *args, **kwargs):
+            return None
+
+    monkeypatch.setattr(phase1, "run_experiment", fake_run_experiment)
+    monkeypatch.setattr(phase1, "create_progress", lambda **kwargs: DummyProgress())
+    monkeypatch.setattr(sys, "argv", ["phase1_pipeline.py", "--config-name", "final_experiment", "--dry-run"])
+    assert phase1.main() == 0
+
+    monkeypatch.setattr(phase3, "run_experiment", fake_run_experiment)
+    monkeypatch.setattr(phase3, "create_progress", lambda **kwargs: DummyProgress())
+    monkeypatch.setattr(sys, "argv", ["phase3_pipeline.py", "--config-name", "final_experiment", "--dry-run"])
+    assert phase3.main() == 0
+
+    assert launched
+    for _, hydra_args in launched:
+        assert hydra_args[:2] == ["--config-name", "final_experiment"]
+
+
 def test_publication_baselines_follow_active_policy_config():
     from gibbsq.core.config import ExperimentConfig
     from gibbsq.engines.jax_engine import policy_name_to_type

@@ -86,7 +86,6 @@ def main() -> int:
     print(f"  Experiments: {', '.join(experiments)}")
 
     failed: list[str] = []
-    global_hydra_args = list(hydra_args)
     try:
         with create_progress(total=len(experiments), desc="final-phase1", mode=args.progress, unit="experiment") as progress:
             for idx, experiment in enumerate(experiments, start=1):
