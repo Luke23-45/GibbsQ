@@ -7,10 +7,12 @@ configurations are caught before experiment execution.
 
 Derived quantities mirror the proof exactly:
 
-    Λ  = Σ μ_i                             (total capacity)
-    ρ  = λ / Λ                             (load factor)
-    R  = (λ log N) / α + (λ + Λ) / 2       (drift constant)
-    ε  = min((Λ − λ) / N, min_i μ_i)       (contraction rate)
+    Λ  = Σ μ_i                                    (total capacity)
+    ρ  = λ / Λ                                    (load factor)
+    Raw: R = (λ log N) / α + (λ + Λ) / 2          (drift constant)
+    Raw: ε = min((Λ − λ) / N, min_i μ_i)          (contraction rate)
+    UAS: R = (λ N) / Λ + N / 2                    (drift constant)
+    UAS: ε = (Λ − λ) / Λ                          (contraction rate)
 """
 
 from __future__ import annotations
@@ -754,24 +756,24 @@ def load_factor(cfg: ExperimentConfig) -> float:
 
 def drift_constant_R(cfg: ExperimentConfig) -> float:
     """
-    R = (λ log N) / α  +  C₁
+    R = (λ N) / Λ  +  N / 2      [UAS]
+    R = (λ log N) / α  +  C₁     [Raw]
 
     Standard:    C₁ = (λ + Λ) / 2
-    Archimedean: C₁ = λ/(2·min_μ) + N/2
+    Archimedean: R = (λ N)/Λ + N/2
     """
     s = cfg.system
     if cfg.policy.name == PolicyName.UAS.value:
-        min_mu = min(s.service_rates)
-        C1 = (s.arrival_rate / (2.0 * min_mu)) + (s.num_servers / 2.0)
-    else:
-        C1 = (s.arrival_rate + total_capacity(cfg)) / 2.0
+        cap = total_capacity(cfg)
+        return (s.arrival_rate * s.num_servers) / cap + (s.num_servers / 2.0)
+    C1 = (s.arrival_rate + total_capacity(cfg)) / 2.0
     return (s.arrival_rate * math.log(s.num_servers)) / s.alpha + C1
 
 def drift_rate_epsilon(cfg: ExperimentConfig) -> float:
     """
     ε = min( (Λ − λ) / N,  min_i μ_i )   > 0    [proof, Step 5]
 
-    For UAS, the effective service rate in the weighted space is 1.0.
+    For UAS, the weighted proof gives ε = (Λ − λ) / Λ.
     """
     s = cfg.system
     cap = total_capacity(cfg)

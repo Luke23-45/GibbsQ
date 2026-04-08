@@ -269,17 +269,15 @@ class UASRouting:
     """
     Unified Archimedean Softmax (UAS) routing.
     
-    This is the **capacity-weighted** GibbsQ policy for heterogeneous servers:
+    This is the heterogeneous entropy-regularized GibbsQ routing law:
     
         p_i(Q) ∝ μ_i · exp(-α · s_i) = μ_i · exp(-α · (Q_i + 1) / μ_i)
     
-    The μ_i weighting provides:
-    
-    1. **Capacity-aware routing**: Faster servers receive proportionally more traffic
-       even when look-ahead potentials are equal.
-    2. **Improved performance**: Test results show 21-45% improvement over
-       UnweightedPotentialSoftmax in heterogeneous high-load scenarios.
-    3. **GOLD parity**: Achieves performance matching or exceeding JSQ baseline.
+    The μ_i weighting and the look-ahead potential together provide a
+    capacity-aware softmax law for heterogeneous servers. In the paper
+    narrative, this policy is treated as a theorem-backed extension with
+    its own prior-weighted variational derivation and weighted Lyapunov
+    argument.
     
     Parameters
     ----------
@@ -290,7 +288,7 @@ class UASRouting:
     
     References
     ----------
-    .. [1] See `docs/softmax_usa.md` for full specification.
+    .. [1] See `docs/softmax_uas.md` for the supporting derivation note.
     """
     
     __slots__ = ("_mu", "_alpha")

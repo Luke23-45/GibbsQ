@@ -445,6 +445,22 @@ class TestConfigNumericalStability:
         eps = drift_rate_epsilon(cfg)
         assert eps > 0.0
         assert eps < 1e-9
+
+    def test_uas_archimedean_constants_match_weighted_jensen_closure(self):
+        cfg = ExperimentConfig(
+            system=SystemConfig(
+                num_servers=3,
+                arrival_rate=1.0,
+                service_rates=[2.0, 3.0, 4.0],
+                alpha=0.25,
+            ),
+            policy=PolicyConfig(name=PolicyName.UAS.value),
+        )
+        validate(cfg)
+        R = drift_constant_R(cfg)
+        eps = drift_rate_epsilon(cfg)
+        assert R == pytest.approx((1.0 * 3.0) / 9.0 + 1.5)
+        assert eps == pytest.approx((9.0 - 1.0) / 9.0)
     
     def test_floating_point_service_rates(self):
         rates = [0.1, 0.2, 0.3, 0.4, 0.5]

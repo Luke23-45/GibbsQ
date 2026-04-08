@@ -1,240 +1,128 @@
-Yes — **the raw-queue theorem is essentially correct**, but the report needs a few precise corrections so it is mathematically honest.
+# Final Review: GibbsQ Paper Alignment
 
-The main adjustment is exactly what you said: **do not call the Step 2 object “Gibbs free energy” as if it were literal thermodynamics**. In this manuscript, it is best described as an **entropy-regularized variational objective** or **Gibbs variational principle**. That is the correct mathematical name.
+## Repo Truth
 
-There is one more important correction:
+The repository already implements three distinct layers and should describe them that way in all public materials.
 
-**Your theorem proves stability for the raw softmax policy**
-[
-p_i(Q)=\frac{e^{-\alpha Q_i}}{\sum_j e^{-\alpha Q_j}},
-]
-but it does **not automatically prove** the UAS policy in the second half unless you give UAS its own variational derivation.
+**1. GibbsQ as the framework**
 
-So the report should be split into two layers:
+`GibbsQ` is best understood as the umbrella framework for entropy-regularized queue-routing policies in parallel-server systems. It is not just one routing formula and it is not the name of a literal thermodynamic model.
 
-1. **Theory**: raw softmax stability proof.
-2. **Application**: UAS as a separate heterogeneity-aware routing policy.
+**2. Raw softmax as the baseline theorem policy**
 
----
+The raw softmax policy
 
-# What is correct already
+\[
+p_i(Q)=\frac{\exp(-\alpha Q_i)}{\sum_{j=1}^N \exp(-\alpha Q_j)}
+\]
 
-The following part is mathematically fine:
+is the simplest theorem-backed routing baseline in the repo. It is the clean baseline for the Foster-Lyapunov proof and for the variational softmin argument.
 
-* The CTMC setup for (N) parallel queues.
-* The bounded total jump rate (\lambda+\Lambda), so non-explosion is fine.
-* The Lyapunov function (V(Q)=\tfrac12\sum_i Q_i^2).
-* The generator drift calculation.
-* The entropy-regularized softmin bound.
-* The final Foster–Lyapunov conclusion under (\lambda<\Lambda).
+**3. UAS as the heterogeneous theorem-backed extension**
 
-So the core proof works.
+The repository operationalizes UAS in policy definitions, pretraining, empirical comparisons, and drift verification. The intended UAS routing law is
 
----
+\[
+p_i(Q,\mu)=
+\frac{\mu_i \exp\!\left(-\alpha \frac{Q_i+1}{\mu_i}\right)}
+{\sum_{j=1}^N \mu_j \exp\!\left(-\alpha \frac{Q_j+1}{\mu_j}\right)}.
+\]
 
-# What must be corrected
+This policy is not a corollary of raw softmax. It must be presented with its own variational derivation and its own Lyapunov-based stability argument.
 
-## 1. Rename the paper
+**4. N-GibbsQ as the learned policy**
 
-Your current title is too strong and a bit inaccurate.
+`N-GibbsQ` is the neural policy trained through behavior cloning and REINFORCE against theorem-backed routing baselines. It should remain clearly distinguished from the analytical routing theorems.
 
-Better:
-**Positive Harris Recurrence of Parallel Queues under Entropy-Regularized Softmax Routing**
+## Theorem Truth
 
-Why:
+The manuscript should present two separate theorem layers.
 
-* “queueing networks” is broader than what you actually prove.
-* “absolute stability” overclaims.
-* “via entropy bounds” is okay, but the main object is the softmax/Foster–Lyapunov proof.
+**1. Raw softmax theorem**
 
----
+The existing raw-softmax proof is already close to final form:
 
-## 2. Replace “Gibbs free energy” wording
+- CTMC regularity and non-explosion
+- irreducibility under the queueing assumptions
+- quadratic Lyapunov function
+- entropy-regularized variational inequality for softmax
+- Foster-Lyapunov conclusion yielding positive Harris recurrence
 
-In Section 2, say:
+**2. UAS theorem**
 
-* **entropy-regularized variational objective**
-* or **Gibbs variational principle**
-* or **softmin/log-sum-exp variational bound**
+UAS must be stated separately, not as an automatic extension of the raw-softmax theorem.
 
-Do **not** say the paper proves literal thermodynamic Gibbs free energy unless you introduce a real physical state model and dynamics.
+The paper should explicitly include:
 
-So this line:
+- the UAS potential
+  \[
+  \Phi_i(Q,\mu)=\frac{Q_i+1}{\mu_i}-\frac{1}{\alpha}\log \mu_i
+  \]
+- the entropy-regularized variational objective whose minimizer yields the UAS formula
+- the UAS routing proposition
+- the Archimedean Lyapunov candidate
+  \[
+  V(Q)=\frac12 \sum_{i=1}^N \frac{Q_i^2}{\mu_i}
+  \]
+- the generator drift expression and recurrence constants
+- the final positive-recurrence theorem under the stated load condition
 
-> “We recognize (p(Q)) as the Gibbs distribution minimizing the free energy…”
+With that structure, both raw softmax and UAS are theorem-backed, but through separate arguments: raw softmax through the standard entropy bound and UAS through the prior-weighted KL/Jensen closure.
 
-should become something like:
+## Language Corrections
 
-> “We recognize (p(Q)) as the minimizer of an entropy-regularized linear objective over the simplex.”
+The repo should use one precise vocabulary everywhere public.
 
-That is precise and defensible.
+Replace these phrases:
 
----
+- `Gibbs free energy` when used as a literal physical claim
+- `absolute stability`
+- `thermal soft-damping`
+- `fundamental capacity condition`
 
-## 3. The theorem should explicitly be about the raw softmax baseline
+Use these instead:
 
-The theorem as written proves stability for:
-[
-p_i(Q)=\frac{e^{-\alpha Q_i}}{\sum_j e^{-\alpha Q_j}}.
-]
+- `entropy-regularized variational objective`
+- `Gibbs variational principle`
+- `positive Harris recurrence`
+- `Foster-Lyapunov stability`
+- `load condition \lambda < \sum_i \mu_i`
 
-It does **not** prove UAS.
+The word `Gibbs` is still appropriate in the project name and in variational language, but it should be used in the mathematical softmax/entropy sense, not as an unqualified thermodynamic statement.
 
-So in the report, keep the theorem tied to the raw softmax baseline only.
+Performance language should also be separated from theorem language. Terms such as `superior` or `certified` belong in empirical summaries only if they are tied to reported results, not inside theorem exposition.
 
----
+## Publication Recommendation
 
-## 4. UAS needs its own separate proposition
+The final paper should be submitted with the following architecture:
 
-Your UAS formula
-[
-p_i(Q,\mu) = \frac{\mu_i e^{-\alpha (Q_i+1)/\mu_i}}{\sum_j \mu_j e^{-\alpha (Q_j+1)/\mu_j}}
-]
-can be justified cleanly, but only if you define the right objective.
+**1. Framework level**
 
-The correct variational energy is:
-[
-E_i^{\mathrm{UAS}}(Q)
-=====================
+Present `GibbsQ` as the general entropy-regularized routing framework.
 
-## \frac{Q_i+1}{\mu_i}
+**2. Analytical level**
 
-\frac{1}{\alpha}\log \mu_i.
-]
+Present two theorem-backed routing laws:
 
-Then define
-[
-\mathcal G_{\mathrm{UAS}}(p)
-============================
+- raw softmax as the simplest baseline theorem
+- UAS as the heterogeneous theorem-backed extension with its own derivation, weighted drift identity, and prior-weighted variational closure
 
-\sum_{i=1}^N p_i E_i^{\mathrm{UAS}}(Q)
-+
-\frac{1}{\alpha}\sum_{i=1}^N p_i\log p_i.
-]
+**3. Learning level**
 
-Its minimizer is exactly:
-[
-p_i(Q,\mu)
-==========
+Present `N-GibbsQ` as the learned neural policy trained and benchmarked against those theorem-backed routing standards.
 
-\frac{\mu_i e^{-\alpha (Q_i+1)/\mu_i}}{\sum_j \mu_j e^{-\alpha (Q_j+1)/\mu_j}}.
-]
+This resolves the earlier inconsistency in the repo:
 
-That is the mathematically honest way to derive UAS.
+- older review language treated UAS as not yet automatically proved
+- other docs and code already treated UAS as theorem-facing
 
-So: if you want UAS in the theory section, add a separate proposition. Otherwise, present it as the applied/empirical policy.
+The final paper resolves that contradiction by making the UAS theorem explicit rather than implied.
 
----
+## Final Recommendation
 
-## 5. Do not call UAS “profoundly superior” in the theorem section
+Proceed with a two-theorem manuscript:
 
-That is a claim about performance, not a theorem.
+- first theorem: raw softmax positive Harris recurrence
+- second proposition/theorem chain: UAS weighted variational derivation, weighted drift identity, and positive recurrence via the prior-weighted Jensen bound
 
-Better:
-
-* “capacity-weighted”
-* “heterogeneity-aware”
-* “used for neural-policy initialization and empirical experiments”
-
----
-
-# What the revised report should say
-
-Here is the clean report structure you should use.
-
-## A. Title
-
-Use:
-**Positive Harris Recurrence of Parallel Queues under Entropy-Regularized Softmax Routing**
-
-## B. Abstract
-
-Use:
-
-> We study (N) parallel heterogeneous queues with Poisson arrivals and exponential service. Jobs are routed according to an entropy-regularized softmax policy. We show that, under the load condition (\lambda<\sum_i \mu_i), the resulting CTMC is nonexplosive, irreducible, and positive Harris recurrent. We further introduce a heterogeneity-aware extension, UAS, and derive it from a separate entropy-regularized variational objective.
-
-## C. Section 2 heading
-
-Replace:
-**The Gibbs Free Energy Bound**
-
-with:
-**The Entropy-Regularized Variational Bound**
-
-## D. Proof language
-
-Replace:
-
-* “Gibbs free energy”
-* “thermal soft-damping”
-* “absolute stability”
-* “fundamental capacity condition”
-
-with:
-
-* “entropy-regularized objective”
-* “softmax routing”
-* “positive Harris recurrence”
-* “load condition (\lambda<\Lambda)”
-
----
-
-# What to do with the current manuscript
-
-## Keep:
-
-* the queueing model,
-* the Lyapunov proof,
-* the raw softmax theorem,
-* the stability condition (\lambda<\Lambda).
-
-## Change:
-
-* the title,
-* the abstract,
-* the terminology around Gibbs,
-* the claim that UAS is already proved by the same theorem.
-
-## Add:
-
-* a separate proposition deriving UAS from its own variational objective,
-* or clearly label UAS as the empirical/engineering policy.
-
----
-
-# A clean mathematical statement for UAS
-
-You can add this as a proposition:
-
-**Proposition (UAS variational form).**
-Define
-[
-\mathcal G_{\mathrm{UAS}}(p)
-============================
-
-\sum_{i=1}^N p_i\left(\frac{Q_i+1}{\mu_i}-\frac{1}{\alpha}\log\mu_i\right)
-+
-\frac{1}{\alpha}\sum_{i=1}^N p_i\log p_i.
-]
-Then the unique minimizer over (\Delta_{N-1}) is
-[
-p_i(Q,\mu)=\frac{\mu_i e^{-\alpha(Q_i+1)/\mu_i}}{\sum_j \mu_j e^{-\alpha(Q_j+1)/\mu_j}}.
-]
-
-That makes the UAS formula mathematically clean.
-
----
-
-# Final verdict
-
-So the honest answer is:
-
-* **Yes**, the main proof is correct in substance for the raw softmax policy.
-* **Yes**, the “Gibbs” language should be renamed to something mathematically accurate.
-* **No**, the UAS section is not automatically covered by the theorem unless you give it its own variational derivation.
-* **Yes**, the report can be made clean and publishable with those corrections.
-
-The main thing to do now is:
-**separate the rigorous theorem from the applied architecture**.
-
-That is the safest and strongest version of the paper.
+Then keep all neural results clearly framed as empirical learning against theorem-backed routing baselines.

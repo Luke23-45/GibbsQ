@@ -1,6 +1,10 @@
-# GibbsQ — Softmax-Routed Queueing Network Stability Verification
+# GibbsQ — Entropy-Regularized Queue Routing And Neural Approximation
 
-Empirical verification of the proof that softmax (Boltzmann) routing yields positive Harris recurrence for a system of $N$ parallel heterogeneous queues.
+GibbsQ is a research codebase for entropy-regularized routing in parallel queueing systems. It distinguishes three layers:
+
+- `SoftmaxRouting`: the theorem-backed raw queue softmax baseline
+- `UASRouting`: the theorem-backed heterogeneous Unified Archimedean Softmax extension
+- `N-GibbsQ`: the learned neural policy trained and benchmarked against those analytical baselines
 
 
 > **Hardware note:** The full default-config pipeline (especially the stress test with
@@ -17,8 +21,11 @@ Empirical verification of the proof that softmax (Boltzmann) routing yields posi
 # Install dependencies
 pip install -e ".[dev]"
 
-# Run unit tests
-pytest tests/ -v
+# Run the public proof/publication verification suite
+pytest tests/ -q
+
+# Run the broader internal engineering regression suite
+pytest development_tests/ -q
 
 # Run gradient validation (Track 5)
 python scripts/execution/experiment_runner.py reinforce_check
@@ -95,10 +102,27 @@ python scripts/execution/experiment_runner.py drift system.alpha=5.0 simulation.
 python scripts/execution/experiment_runner.py policy --config-name small
 ```
 
-## Key Theoretical Result
+## Key Theoretical Results
 
-For $N$ parallel servers with Poisson arrivals at rate $\lambda$ and exponential service rates $\mu_i$, the softmax routing policy
+For $N$ parallel servers with Poisson arrivals at rate $\lambda$ and exponential service rates $\mu_i$, the raw softmax routing policy
 
 $$p_i(Q) = \frac{\exp(-\alpha Q_i)}{\sum_j \exp(-\alpha Q_j)}$$
 
-yields a positive Harris recurrent CTMC for any $\alpha > 0$, provided the strict capacity condition $\Lambda = \sum_i \mu_i > \lambda$ holds. The proof uses a quadratic Lyapunov function $V(Q) = \frac{1}{2}\|Q\|_2^2$ and the Gibbs free energy characterization of softmax to establish the Foster-Lyapunov drift condition.
+yields a positive Harris recurrent CTMC for any $\alpha > 0$, provided the strict load condition $\Lambda = \sum_i \mu_i > \lambda$ holds. The proof uses a quadratic Lyapunov function and an entropy-regularized variational bound to establish the Foster-Lyapunov drift condition.
+
+The framework also includes the heterogeneous UAS routing policy
+
+$$p_i(Q,\mu)=\frac{\mu_i \exp\left(-\alpha \frac{Q_i+1}{\mu_i}\right)}{\sum_j \mu_j \exp\left(-\alpha \frac{Q_j+1}{\mu_j}\right)},$$
+
+for which the repo gives a prior-weighted entropy-regularized variational derivation, an exact weighted drift identity, and a Foster-Lyapunov closure proving positive Harris recurrence under the same load condition. `N-GibbsQ` is the empirical neural layer trained against these theorem-backed analytical baselines.
+
+## Testing
+
+The published `tests/` directory is intentionally small and focused on the paper claims:
+
+- raw softmax drift proof checks
+- UAS weighted-Jensen drift closure checks
+- theorem-consumer constant checks
+- publication-run release-safety checks
+
+The broader engineering regression suite lives in `development_tests/` for internal development and maintenance.

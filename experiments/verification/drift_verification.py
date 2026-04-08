@@ -68,10 +68,12 @@ def main(raw_cfg: DictConfig) -> None:
     mu = sc.service_rates
     alpha = sc.alpha
     drift_mode = _require_theorem_supported_policy(cfg.policy.name)
+    theorem_label = "raw softmax theorem path" if drift_mode == "raw" else "UAS theorem path"
 
     R = drift_constant_R(cfg)
     eps = drift_rate_epsilon(cfg)
     log.info(f"System: N={N}, lam={lam}, alpha={alpha}, cap={sum(mu):.4f}")
+    log.info("Analytical certification path: %s", theorem_label)
     log.info(f"Proof bounds: R={R:.4f}, eps={eps:.6f}")
 
     if N <= 3 and cfg.drift.use_grid:
@@ -88,12 +90,12 @@ def main(raw_cfg: DictConfig) -> None:
                 log.error(
                     f"VIOLATIONS DETECTED: {res.violations:,} states have exact drift "
                     f"exceeding the analytical upper bound. "
-                    f"Foster-Lyapunov proof FAILS for alpha={alpha}, "
+                    f"Foster-Lyapunov bound check FAILS for the {theorem_label} with alpha={alpha}, "
                     f"lam={lam}, cap={sum(mu):.4f}. All results are INVALID."
                 )
                 raise RuntimeError(
                     f"Proof violation at {res.violations} states. "
-                    "Halt: paper results cannot be generated from an invalid proof basis."
+                    f"Halt: paper results cannot be generated from an invalid {theorem_label}."
                 )
 
 

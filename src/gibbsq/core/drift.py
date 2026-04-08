@@ -15,13 +15,14 @@ Key formulas  (§2 of the proof)
 
     C(Q)  = λ/2  +  ½ Σ μ_i 𝟙(Q_i > 0)
 
-Intermediate bound  (Step 4):
+Intermediate bound  (Step 4, raw):
     𝓛V(Q) ≤  −(Λ − λ) Q_min  −  Σ μ_i Δ_i  +  R
 
-Simplified bound  (Step 5):
-    𝓛V(Q) ≤  −ε |Q|₁  +  R
+Simplified bounds:
+    Raw: 𝓛V(Q) ≤  −ε |Q|₁  +  R
+    UAS: 𝓛V(Q) ≤  −((Λ−λ)/Λ) |Q|₁  +  λN/Λ + N/2
 
-where  R = (λ log N)/α + (λ + Λ)/2,   ε = min((Λ−λ)/N, min_i μ_i).
+where raw  R = (λ log N)/α + (λ + Λ)/2,   ε = min((Λ−λ)/N, min_i μ_i).
 
 Vectorisation strategy
 ----------------------
@@ -133,8 +134,8 @@ def upper_bound(
     delta = Q_f - Q_min
 
     if mode == "uas":
-        # Archimedean Step-5 bound from docs/softmax_uas.md.
-        R = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+        # Archimedean Foster-Lyapunov closure from docs/softmax_uas.md.
+        R = (lam * N) / cap + (N / 2.0)
         eps = (cap - lam) / cap
         return float(-eps * Q_f.sum() + R)
     else:
@@ -158,7 +159,7 @@ def simplified_bound(
 
     if mode == "uas":
         eps = (cap - lam) / cap
-        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+        R   = (lam * N) / cap + (N / 2.0)
     else:
         eps = min((cap - lam) / N, mu_f.min())
         R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
@@ -257,7 +258,7 @@ def _vectorised_drift(
 
     if mode == "uas":
         eps = (cap - lam) / cap
-        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+        R   = (lam * N) / cap + (N / 2.0)
     else:
         eps = min((cap - lam) / N, mu_f.min())
         R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
@@ -267,7 +268,7 @@ def _vectorised_drift(
     Q_1   = Q.sum(axis=1)
 
     if mode == "uas":
-        # Archimedean Step-5 bound from docs/softmax_uas.md.
+        # Archimedean Foster-Lyapunov closure from docs/softmax_uas.md.
         ub = -eps * Q_1 + R
     else:
         ub = -(cap - lam) * Q_min - (delta @ mu_f) + R
@@ -352,7 +353,7 @@ def compute_adaptive_q_max(
     -----
     Archimedean Constants (for UAS):
         ε = (Λ − λ) / Λ
-        R = (λ log N) / α + λ / (2 * min_μ) + N / 2
+        R = (λ N) / Λ + N / 2
 
     Standard Constants (for Raw Softmax):
         ε = min((Λ − λ) / N, min_i μ_i)
@@ -367,7 +368,7 @@ def compute_adaptive_q_max(
     # Branch constants by mode (Foster-Lyapunov Proof alignment)
     if mode == "uas":
         eps = (cap - lam) / cap
-        R   = (lam * math.log(N)) / alpha + (lam / (2.0 * mu_f.min())) + (N / 2.0)
+        R   = (lam * N) / cap + (N / 2.0)
     else:
         eps = min((cap - lam) / N, mu_f.min())
         R   = (lam * math.log(N)) / alpha + (lam + cap) / 2.0
