@@ -902,13 +902,14 @@ _FINAL_PROFILE_LOCKS: dict[str, dict[str, object]] = {
         "batch_size": 16,
     },
     "generalize": {
-        "simulation.num_replications": 2,
-        "simulation.ssa.sim_time": 10000.0,
-        "generalization.scale_vals": [0.5, 1.0, 2.0],
-        "generalization.rho_grid_vals": [0.5, 0.7, 0.85],
+        "simulation.num_replications": 3,
+        "simulation.ssa.sim_time": 15000.0,
+        "generalization.scale_vals": [0.5, 1.0, 2.0, 5.0],
+        "generalization.rho_grid_vals": [0.5, 0.7, 0.85, 0.96],
     },
     "critical": {
         "simulation.num_replications": 2,
+        "generalization.rho_boundary_vals": [0.90, 0.95, 0.97, 0.98],
     },
 }
 

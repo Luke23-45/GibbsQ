@@ -812,14 +812,14 @@ class TestHydraConversion:
             assert int(reinforce.batch_size) == 16
 
             generalize = resolve_experiment_config(raw_cfg, "generalize", profile_name="final_experiment")
-            assert int(generalize.simulation.num_replications) == 2
-            assert float(generalize.simulation.ssa.sim_time) == pytest.approx(10000.0)
-            assert list(generalize.generalization.scale_vals) == [0.5, 1.0, 2.0]
-            assert list(generalize.generalization.rho_grid_vals) == [0.5, 0.7, 0.85]
+            assert int(generalize.simulation.num_replications) == 3
+            assert float(generalize.simulation.ssa.sim_time) == pytest.approx(15000.0)
+            assert list(generalize.generalization.scale_vals) == [0.5, 1.0, 2.0, 5.0]
+            assert list(generalize.generalization.rho_grid_vals) == [0.5, 0.7, 0.85, 0.95]
 
             critical = resolve_experiment_config(raw_cfg, "critical", profile_name="final_experiment")
             assert int(critical.simulation.num_replications) == 2
-            assert list(critical.generalization.rho_boundary_vals) == [0.9, 0.92, 0.95, 0.97, 0.98, 0.985, 0.99]
+            assert list(critical.generalization.rho_boundary_vals) == [0.9, 0.95, 0.97, 0.98]
 
             ablation = resolve_experiment_config_chain(
                 raw_cfg,
