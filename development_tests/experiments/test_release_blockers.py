@@ -289,6 +289,53 @@ def test_ablation_standard_error_uses_sample_std():
     assert _standard_error(values) == expected
 
 
+def test_ablation_training_cfg_applies_only_training_overrides():
+    from omegaconf import OmegaConf
+
+    from experiments.evaluation.n_gibbsq_evals.ablation_ssa import _build_ablation_training_cfg
+    from gibbsq.core.config import ExperimentConfig
+
+    base_cfg = ExperimentConfig()
+    base_cfg.train_epochs = 15
+    base_cfg.batch_size = 16
+    base_cfg.simulation.ssa.sim_time = 1000.0
+    base_cfg.neural_training.eval_batches = 5
+    base_cfg.neural_training.eval_trajs_per_batch = 10
+    base_cfg.neural_training.checkpoint_freq = 25
+
+    raw_cfg = OmegaConf.create(
+        {
+            "ablation_training": {
+                "train_epochs": 8,
+                "batch_size": 8,
+                "simulation": {"ssa": {"sim_time": 750.0}},
+                "neural_training": {
+                    "eval_batches": 1,
+                    "eval_trajs_per_batch": 3,
+                    "checkpoint_freq": 10,
+                },
+            }
+        }
+    )
+
+    trainer_cfg = _build_ablation_training_cfg(base_cfg, raw_cfg)
+
+    assert trainer_cfg is not base_cfg
+    assert int(base_cfg.train_epochs) == 15
+    assert int(base_cfg.batch_size) == 16
+    assert float(base_cfg.simulation.ssa.sim_time) == pytest.approx(1000.0)
+    assert int(base_cfg.neural_training.eval_batches) == 5
+    assert int(base_cfg.neural_training.eval_trajs_per_batch) == 10
+    assert int(base_cfg.neural_training.checkpoint_freq) == 25
+
+    assert int(trainer_cfg.train_epochs) == 8
+    assert int(trainer_cfg.batch_size) == 8
+    assert float(trainer_cfg.simulation.ssa.sim_time) == pytest.approx(750.0)
+    assert int(trainer_cfg.neural_training.eval_batches) == 1
+    assert int(trainer_cfg.neural_training.eval_trajs_per_batch) == 3
+    assert int(trainer_cfg.neural_training.checkpoint_freq) == 10
+
+
 def test_bc_pretraining_entrypoint_forwards_seed_and_alpha(monkeypatch, tmp_path):
     import experiments.training.pretrain_bc as module
     from gibbsq.core.config import ExperimentConfig

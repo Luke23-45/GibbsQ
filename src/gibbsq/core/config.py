@@ -897,15 +897,18 @@ _FINAL_PROFILE_LOCKS: dict[str, dict[str, object]] = {
         "batch_size": 16,
     },
     "ablation": {
-        "simulation.ssa.sim_time": 1000.0,
-        "train_epochs": 15,
-        "batch_size": 16,
+        "ablation_training.train_epochs": 8,
+        "ablation_training.batch_size": 8,
+        "ablation_training.simulation.ssa.sim_time": 750.0,
+        "ablation_training.neural_training.eval_batches": 1,
+        "ablation_training.neural_training.eval_trajs_per_batch": 3,
+        "ablation_training.neural_training.checkpoint_freq": 25,
     },
     "generalize": {
         "simulation.num_replications": 3,
         "simulation.ssa.sim_time": 15000.0,
         "generalization.scale_vals": [0.5, 1.0, 2.0, 5.0],
-        "generalization.rho_grid_vals": [0.5, 0.7, 0.85, 0.96],
+        "generalization.rho_grid_vals": [0.5, 0.7, 0.85, 0.95],
     },
     "critical": {
         "simulation.num_replications": 2,

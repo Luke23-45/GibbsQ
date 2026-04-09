@@ -22,11 +22,11 @@ import jax
 import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import PRNGKeyArray
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.core.config import ExperimentConfig, load_experiment_config_chain
+from gibbsq.core.config import ExperimentConfig, load_experiment_config_chain, validate
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.numpy_engine import run_replications
 from gibbsq.utils.exporter import append_metrics_jsonl
@@ -115,6 +115,71 @@ def _build_ablation_eval_policy(model, mu_arr: np.ndarray, rho: float):
     )
 
 
+def _build_ablation_training_cfg(
+    base_cfg: ExperimentConfig,
+    resolved_raw_cfg: DictConfig | dict | None,
+) -> ExperimentConfig:
+    """Return the ablation-local training budget without mutating evaluation config."""
+    cfg = copy.deepcopy(base_cfg)
+    if resolved_raw_cfg is None:
+        return cfg
+
+    raw_data = OmegaConf.to_container(resolved_raw_cfg, resolve=True) if isinstance(resolved_raw_cfg, DictConfig) else resolved_raw_cfg
+    if not isinstance(raw_data, dict):
+        return cfg
+
+    overrides = raw_data.get("ablation_training")
+    if overrides is None:
+        return cfg
+    if not isinstance(overrides, dict):
+        raise ValueError("ablation_training must be a mapping when provided.")
+
+    allowed_keys = {"train_epochs", "batch_size", "simulation", "neural_training"}
+    unknown = sorted(set(overrides) - allowed_keys)
+    if unknown:
+        raise ValueError(f"Unsupported ablation_training override(s): {unknown}")
+
+    if "train_epochs" in overrides:
+        cfg.train_epochs = int(overrides["train_epochs"])
+    if "batch_size" in overrides:
+        cfg.batch_size = int(overrides["batch_size"])
+
+    sim_overrides = overrides.get("simulation")
+    if sim_overrides is not None:
+        if not isinstance(sim_overrides, dict):
+            raise ValueError("ablation_training.simulation must be a mapping when provided.")
+        unknown_sim = sorted(set(sim_overrides) - {"ssa"})
+        if unknown_sim:
+            raise ValueError(f"Unsupported ablation_training.simulation override(s): {unknown_sim}")
+        ssa_overrides = sim_overrides.get("ssa")
+        if ssa_overrides is not None:
+            if not isinstance(ssa_overrides, dict):
+                raise ValueError("ablation_training.simulation.ssa must be a mapping when provided.")
+            unknown_ssa = sorted(set(ssa_overrides) - {"sim_time"})
+            if unknown_ssa:
+                raise ValueError(f"Unsupported ablation_training.simulation.ssa override(s): {unknown_ssa}")
+            if "sim_time" in ssa_overrides:
+                cfg.simulation.ssa.sim_time = float(ssa_overrides["sim_time"])
+
+    neural_training_overrides = overrides.get("neural_training")
+    if neural_training_overrides is not None:
+        if not isinstance(neural_training_overrides, dict):
+            raise ValueError("ablation_training.neural_training must be a mapping when provided.")
+        allowed_neural_training = {"eval_batches", "eval_trajs_per_batch", "checkpoint_freq"}
+        unknown_nt = sorted(set(neural_training_overrides) - allowed_neural_training)
+        if unknown_nt:
+            raise ValueError(f"Unsupported ablation_training.neural_training override(s): {unknown_nt}")
+        if "eval_batches" in neural_training_overrides:
+            cfg.neural_training.eval_batches = int(neural_training_overrides["eval_batches"])
+        if "eval_trajs_per_batch" in neural_training_overrides:
+            cfg.neural_training.eval_trajs_per_batch = int(neural_training_overrides["eval_trajs_per_batch"])
+        if "checkpoint_freq" in neural_training_overrides:
+            cfg.neural_training.checkpoint_freq = int(neural_training_overrides["checkpoint_freq"])
+
+    validate(cfg)
+    return cfg
+
+
 def evaluate_policy_ssa(policy, cfg: ExperimentConfig) -> dict:
     """Evaluate a policy on true SSA replications."""
     results = run_replications(
@@ -153,7 +218,7 @@ def _variant_cfg(base_cfg: ExperimentConfig, preprocessing: str | None, init_typ
     return cfg
 
 
-def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
+def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None, resolved_raw_cfg: DictConfig | dict | None = None):
     variants = [
         ("Full Model", None, None),
         ("Ablated: No Log-Norm", "none", None),
@@ -161,22 +226,24 @@ def run_ablation(cfg: ExperimentConfig, run_dir: Path, run_logger=None):
     ]
 
     summary = {}
+    training_cfg = _build_ablation_training_cfg(cfg, resolved_raw_cfg)
 
     with create_progress(total=len(variants) + 1, desc="ablation", unit="variant") as variant_bar:
         for idx, (name, preproc, init_type) in enumerate(variants):
             variant_bar.set_postfix({"variant": name}, refresh=False)
             v_cfg = _variant_cfg(cfg, preproc, init_type)
+            trainer_cfg = _variant_cfg(training_cfg, preproc, init_type)
             v_dir = artifacts_dir(run_dir) / f"variant_{idx+1}_{name.lower().replace(' ', '_').replace(':', '')}"
             v_dir.mkdir(parents=True, exist_ok=True)
             artifacts_dir(v_dir).mkdir(parents=True, exist_ok=True)
 
             log.info("-" * 60)
             log.info(f"Training variant: {name}")
-            log.info(f"  preprocessing={v_cfg.neural.preprocessing}, init_type={v_cfg.neural.init_type}")
+            log.info(f"  preprocessing={trainer_cfg.neural.preprocessing}, init_type={trainer_cfg.neural.init_type}")
 
-            trainer = AblationReinforceTrainer(v_cfg, v_dir, run_logger=None)
-            seed_key = jax.random.PRNGKey(v_cfg.simulation.seed + idx)
-            trainer.execute(seed_key, n_epochs=v_cfg.train_epochs)
+            trainer = AblationReinforceTrainer(trainer_cfg, v_dir, run_logger=None)
+            seed_key = jax.random.PRNGKey(trainer_cfg.simulation.seed + idx)
+            trainer.execute(seed_key, n_epochs=trainer_cfg.train_epochs)
 
             model_path = artifacts_dir(v_dir) / "n_gibbsq_reinforce_weights.eqx"
             skeleton = NeuralRouter(
@@ -261,7 +328,7 @@ def main(raw_cfg: DictConfig):
     log.info("  SSA-Based Ablation Study")
     log.info("=" * 60)
 
-    run_ablation(cfg, run_dir, run_logger)
+    run_ablation(cfg, run_dir, run_logger, resolved_raw_cfg)
 
     if run_logger:
         run_logger.finish()

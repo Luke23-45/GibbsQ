@@ -618,6 +618,7 @@ class TestHydraConversion:
         assert int(ablation.neural_training.eval_trajs_per_batch) == int(
             reinforce.neural_training.eval_trajs_per_batch
         )
+        assert OmegaConf.select(ablation, "ablation_training") is None
 
     def test_layered_experiment_resolution_preserves_ablation_specific_overrides(self):
         raw_cfg = OmegaConf.create(
@@ -738,6 +739,12 @@ class TestHydraConversion:
         raw_cfg.experiments.ablation = {
             "simulation": {"num_replications": 7},
             "neural_training": {"checkpoint_freq": 99},
+            "ablation_training": {
+                "train_epochs": 2,
+                "batch_size": 3,
+                "simulation": {"ssa": {"sim_time": 250.0}},
+                "neural_training": {"eval_batches": 1, "eval_trajs_per_batch": 2},
+            },
         }
 
         resolved = resolve_experiment_config_chain(
@@ -753,6 +760,11 @@ class TestHydraConversion:
         assert int(resolved.neural_training.checkpoint_freq) == 99
         assert int(resolved.neural_training.eval_batches) == 1
         assert int(resolved.neural_training.eval_trajs_per_batch) == 3
+        assert int(OmegaConf.select(resolved, "ablation_training.train_epochs")) == 2
+        assert int(OmegaConf.select(resolved, "ablation_training.batch_size")) == 3
+        assert float(OmegaConf.select(resolved, "ablation_training.simulation.ssa.sim_time")) == pytest.approx(250.0)
+        assert int(OmegaConf.select(resolved, "ablation_training.neural_training.eval_batches")) == 1
+        assert int(OmegaConf.select(resolved, "ablation_training.neural_training.eval_trajs_per_batch")) == 2
 
     def test_profile_invariants_hold_across_active_profiles(self):
         config_dir = str(Path("configs").resolve())
@@ -829,6 +841,12 @@ class TestHydraConversion:
             assert float(ablation.simulation.ssa.sim_time) == pytest.approx(1000.0)
             assert int(ablation.train_epochs) == 15
             assert int(ablation.batch_size) == 16
+            assert int(OmegaConf.select(ablation, "ablation_training.train_epochs")) == 8
+            assert int(OmegaConf.select(ablation, "ablation_training.batch_size")) == 8
+            assert float(OmegaConf.select(ablation, "ablation_training.simulation.ssa.sim_time")) == pytest.approx(750.0)
+            assert int(OmegaConf.select(ablation, "ablation_training.neural_training.eval_batches")) == 1
+            assert int(OmegaConf.select(ablation, "ablation_training.neural_training.eval_trajs_per_batch")) == 3
+            assert int(OmegaConf.select(ablation, "ablation_training.neural_training.checkpoint_freq")) == 25
 
     def test_final_experiment_budget_drift_is_rejected_during_resolution(self):
         config_dir = str(Path("configs").resolve())
@@ -845,6 +863,20 @@ class TestHydraConversion:
         )
         with pytest.raises(ValueError, match="final_experiment budget drift for reinforce_train"):
             resolve_experiment_config(drifted_reinforce, "reinforce_train", profile_name="final_experiment")
+
+        drifted_ablation = OmegaConf.create(OmegaConf.to_container(raw_cfg, resolve=True))
+        OmegaConf.update(
+            drifted_ablation,
+            "experiments.ablation.ablation_training.train_epochs",
+            9,
+            force_add=True,
+        )
+        with pytest.raises(ValueError, match="final_experiment budget drift for ablation"):
+            resolve_experiment_config_chain(
+                drifted_ablation,
+                ["reinforce_train", "ablation"],
+                profile_name="final_experiment",
+            )
 
     def test_parameter_freeze_ledger_covers_all_active_parameters(self):
         config_dir = str(Path("configs").resolve())

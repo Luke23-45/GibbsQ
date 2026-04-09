@@ -262,15 +262,25 @@ experiments:
         sim_time: 15000.0
     generalization:
       scale_vals: [0.5, 1.0, 2.0, 5.0]
-      rho_grid_vals: [0.5, 0.7, 0.85, 0.96]
+      rho_grid_vals: [0.5, 0.7, 0.85, 0.95]
   ablation:
-    # Ablation inherits the finalized reinforce_train budget via config-chain
-    # resolution and should stay aligned with that training contract.
+    # Ablation keeps the same evaluation-facing config chain, but it uses a
+    # cheaper trainer-only budget for the per-variant REINFORCE runs.
     jax:
       enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
+    ablation_training:
+      train_epochs: 8
+      batch_size: 8
+      simulation:
+        ssa:
+          sim_time: 750.0
+      neural_training:
+        eval_batches: 1
+        eval_trajs_per_batch: 3
+        checkpoint_freq: 25
   critical:
     # Final critical-load coverage remains standalone with a trimmed
     # near-critical grid to stay within the runtime budget.
