@@ -823,6 +823,11 @@ class TestHydraConversion:
             assert int(reinforce.train_epochs) == 15
             assert int(reinforce.batch_size) == 16
 
+            policy = resolve_experiment_config(raw_cfg, "policy", profile_name="final_experiment")
+            assert int(policy.simulation.num_replications) == 32
+            assert float(policy.simulation.ssa.sim_time) == pytest.approx(15000.0)
+            assert list(policy.generalization.rho_grid_vals) == [0.5, 0.7, 0.85, 0.95]
+
             generalize = resolve_experiment_config(raw_cfg, "generalize", profile_name="final_experiment")
             assert int(generalize.simulation.num_replications) == 3
             assert float(generalize.simulation.ssa.sim_time) == pytest.approx(15000.0)
@@ -863,6 +868,16 @@ class TestHydraConversion:
         )
         with pytest.raises(ValueError, match="final_experiment budget drift for reinforce_train"):
             resolve_experiment_config(drifted_reinforce, "reinforce_train", profile_name="final_experiment")
+
+        drifted_policy = OmegaConf.create(OmegaConf.to_container(raw_cfg, resolve=True))
+        OmegaConf.update(
+            drifted_policy,
+            "experiments.policy.simulation.num_replications",
+            24,
+            force_add=True,
+        )
+        with pytest.raises(ValueError, match="final_experiment budget drift for policy"):
+            resolve_experiment_config(drifted_policy, "policy", profile_name="final_experiment")
 
         drifted_ablation = OmegaConf.create(OmegaConf.to_container(raw_cfg, resolve=True))
         OmegaConf.update(

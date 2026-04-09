@@ -891,6 +891,11 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
 _CONFIGS_DIR = Path(__file__).resolve().parents[3] / "configs"
 _MISSING = object()
 _FINAL_PROFILE_LOCKS: dict[str, dict[str, object]] = {
+    "policy": {
+        "simulation.num_replications": 32,
+        "simulation.ssa.sim_time": 15000.0,
+        "generalization.rho_grid_vals": [0.5, 0.7, 0.85, 0.95],
+    },
     "reinforce_train": {
         "simulation.ssa.sim_time": 1000.0,
         "train_epochs": 15,

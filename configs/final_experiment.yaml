@@ -216,11 +216,19 @@ experiments:
       precision: float32
       fallback_to_cpu: true
   policy:
+    # Final CPU policy comparison: trim replications, horizon, and optional
+    # grid coverage so tier+grid remains practical without changing logic.
     jax:
       enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
+    simulation:
+      num_replications: 32
+      ssa:
+        sim_time: 15000.0
+    generalization:
+      rho_grid_vals: [0.5, 0.7, 0.85, 0.95]
     wandb:
       enabled: true
       mode: offline
