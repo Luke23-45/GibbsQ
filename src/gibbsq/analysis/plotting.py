@@ -1277,12 +1277,12 @@ def plot_improvement_heatmap(
 ) -> plt.Figure:
     """Annotated diverging heatmap for improvement-ratio grids.
 
-    Used by gen_sweep.py for GibbsQ/Neural improvement ratios.
+    Used by gen_sweep.py for closed-form-baseline / Neural improvement ratios.
 
     Parameters
     ----------
     grid : array (n_y, n_x)
-        Improvement ratio values.  >1.0 means GibbsQ wins.
+        Improvement ratio values.  >1.0 means the closed-form baseline wins.
     x_labels, y_labels : lists of str
         Tick labels for each axis.
     center : float
@@ -1311,10 +1311,10 @@ def plot_improvement_heatmap(
     cbar = plt.colorbar(
         im,
         ax=ax,
-        label=plot_profile.axis_labels.get("colorbar", "Improvement Ratio (GibbsQ / Neural)"),
+        label=plot_profile.axis_labels.get("colorbar", "Improvement Ratio (Calibrated UAS / Neural)"),
     )
 
-    cbar.ax.set_title("GibbsQ\nSuperior", fontsize=spec.annotation_fontsize - 1, fontweight="bold", pad=12)
+    cbar.ax.set_title("Calibrated UAS\nSuperior", fontsize=spec.annotation_fontsize - 1, fontweight="bold", pad=12)
     cbar.ax.text(0.5, -0.015, "Neural\nSuperior", transform=cbar.ax.transAxes, 
                  ha="center", va="top", fontsize=spec.annotation_fontsize - 1, fontweight="bold")
 
@@ -1793,7 +1793,7 @@ def plot_critical_load(
         markersize=spec.marker_size,
         linewidth=spec.line_width,
         color=PAIR_GIBBSQ,
-        label="GibbsQ",
+        label="Calibrated UAS",
         alpha=spec.line_alpha,
     )
     ax.plot(

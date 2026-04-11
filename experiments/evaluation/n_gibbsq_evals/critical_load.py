@@ -1,11 +1,12 @@
 """
 N-GibbsQ critical load test.
 
-Tests N-GibbsQ as rho -> 1, where queueing systems become unstable.
+Tests N-GibbsQ as rho -> 1 against the publication closed-form baseline,
+Calibrated UAS, where queueing systems become unstable.
 """
 
-from pathlib import Path
 import logging
+from pathlib import Path
 
 import equinox as eqx
 import hydra
@@ -16,8 +17,8 @@ import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
-from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
+from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
@@ -29,9 +30,12 @@ from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointe
 from gibbsq.utils.progress import create_progress, iter_progress
 from gibbsq.utils.run_artifacts import figure_path, metrics_path
 
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
 NEURAL_EVAL_MODE = "deterministic"
+PUBLICATION_BASELINE_POLICY_NAME = "calibrated_uas"
+PUBLICATION_BASELINE_LABEL = "Calibrated UAS"
 
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
@@ -39,8 +43,13 @@ def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float
     return model(Q)
 
 
+def _publication_baseline_spec() -> tuple[str, int]:
+    """Return the canonical publication baseline for critical-load evaluation."""
+    return PUBLICATION_BASELINE_POLICY_NAME, policy_name_to_type(PUBLICATION_BASELINE_POLICY_NAME)
+
+
 class CriticalLoadTest:
-    """Evaluates N-GibbsQ at high load factors."""
+    """Evaluate N-GibbsQ at high load factors."""
 
     def __init__(self, cfg, run_dir: Path, run_logger):
         self.cfg = cfg
@@ -53,7 +62,7 @@ class CriticalLoadTest:
         self.rho_vals = list(cfg.generalization.rho_boundary_vals)
 
     def execute(self, key: PRNGKeyArray):
-        """Sweeps rho and measures stability."""
+        """Sweep rho and measure stability."""
         k_load, _ = jax.random.split(key)
 
         project_root = Path(__file__).resolve().parents[3]
@@ -76,13 +85,13 @@ class CriticalLoadTest:
 
         total_capacity = jnp.sum(self.service_rates)
         neural_results = []
-        gibbs_results = []
+        baseline_results = []
         num_reps = int(self.cfg.simulation.num_replications)
-        baseline_policy_name = self.cfg.policy.name
-        baseline_policy_type = policy_name_to_type(baseline_policy_name)
+        baseline_policy_name, baseline_policy_type = _publication_baseline_spec()
 
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
+        log.info(f"Publication baseline: {PUBLICATION_BASELINE_LABEL} ({baseline_policy_name})")
         try:
             with create_progress(total=len(self.rho_vals), desc="critical", unit="rho") as rho_bar:
                 for idx, rho in enumerate(self.rho_vals):
@@ -91,7 +100,6 @@ class CriticalLoadTest:
                     log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
 
                     rho_sim_time = critical_load_sim_time(self.cfg, float(rho))
-
                     max_samples = int(rho_sim_time / self.ssa_sample_interval) + 1
                     mu_np = np.array(self.service_rates, dtype=np.float64)
                     rho_seed = self.cfg.simulation.seed + idx * 1000
@@ -111,11 +119,12 @@ class CriticalLoadTest:
                         max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
                         scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
                     )
-                    g_vals = []
+
+                    baseline_vals = []
                     for rep_idx in iter_progress(
                         range(num_reps),
                         total=num_reps,
-                        desc=f"critical GibbsQ rho={rho:.3f}",
+                        desc=f"critical {PUBLICATION_BASELINE_LABEL} rho={rho:.3f}",
                         unit="rep",
                         leave=False,
                     ):
@@ -135,9 +144,10 @@ class CriticalLoadTest:
                             final_time=float(np_times[-1]),
                             num_servers=self.num_servers,
                         )
-                        g_vals.append(float(time_averaged_queue_lengths(
-                            res, self.cfg.simulation.burn_in_fraction).sum()))
-                    g_loss = float(np.mean(g_vals))
+                        baseline_vals.append(
+                            float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum())
+                        )
+                    baseline_loss = float(np.mean(baseline_vals))
 
                     neural_policy = build_neural_eval_policy(
                         model,
@@ -146,7 +156,7 @@ class CriticalLoadTest:
                         mode=NEURAL_EVAL_MODE,
                     )
                     max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
-                    n_vals = []
+                    neural_vals = []
                     for rep_idx in iter_progress(
                         range(num_reps),
                         total=num_reps,
@@ -165,56 +175,69 @@ class CriticalLoadTest:
                             rng=rng,
                             max_events=max_events,
                         )
-                        n_vals.append(float(time_averaged_queue_lengths(
-                            res_n, self.cfg.simulation.burn_in_fraction).sum()))
-                    n_loss = float(np.mean(n_vals))
+                        neural_vals.append(
+                            float(time_averaged_queue_lengths(res_n, self.cfg.simulation.burn_in_fraction).sum())
+                        )
+                    neural_loss = float(np.mean(neural_vals))
 
-                    neural_results.append(n_loss)
-                    gibbs_results.append(g_loss)
-                    log.info(f"   => N-GibbsQ E[Q]: {n_loss:.2f} | GibbsQ E[Q]: {g_loss:.2f}")
+                    neural_results.append(neural_loss)
+                    baseline_results.append(baseline_loss)
+                    log.info(
+                        f"   => N-GibbsQ E[Q]: {neural_loss:.2f} | "
+                        f"{PUBLICATION_BASELINE_LABEL} E[Q]: {baseline_loss:.2f}"
+                    )
 
                     append_metrics_jsonl(
-                        {"rho": float(rho), "neural_eq": n_loss, "gibbs_eq": g_loss},
+                        {
+                            "rho": float(rho),
+                            "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
+                            "baseline_label": PUBLICATION_BASELINE_LABEL,
+                            "neural_eq": neural_loss,
+                            "baseline_eq": baseline_loss,
+                            "calibrated_uas_eq": baseline_loss,
+                            "gibbs_eq": baseline_loss,
+                        },
                         metrics_path(self.run_dir),
                     )
-                    self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, gibbs_results)
+                    self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, baseline_results)
                     rho_bar.update(1)
         finally:
-            self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, gibbs_results)
+            self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, baseline_results)
 
         if neural_results:
             self._assert_curve_artifacts()
 
-        relative_ratios = [
-            float(n / max(g, 1e-8))
-            for n, g in zip(neural_results, gibbs_results)
-        ]
+        relative_ratios = [float(n / max(b, 1e-8)) for n, b in zip(neural_results, baseline_results)]
         return {
             "rho_vals": list(self.rho_vals),
+            "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
+            "baseline_label": PUBLICATION_BASELINE_LABEL,
             "neural_eq": neural_results,
-            "gibbs_eq": gibbs_results,
+            "baseline_eq": baseline_results,
+            "calibrated_uas_eq": baseline_results,
+            "gibbs_eq": baseline_results,
             "max_neural_to_gibbs_ratio": max(relative_ratios) if relative_ratios else float("inf"),
             "mean_neural_to_gibbs_ratio": float(np.mean(relative_ratios)) if relative_ratios else float("inf"),
         }
 
-    def _plot_progress(self, rho_vals, neural_r, gibbs_r) -> None:
+    def _plot_progress(self, rho_vals, neural_r, baseline_r) -> None:
         """Persist the best available critical-load curve when results exist."""
-        if not rho_vals or not neural_r or not gibbs_r:
+        if not rho_vals or not neural_r or not baseline_r:
             return
         try:
-            self._plot(rho_vals, neural_r, gibbs_r)
+            self._plot(rho_vals, neural_r, baseline_r)
         except Exception:
             log.exception(
                 "Failed to persist critical-load curve for %d point(s). "
-                "rho_vals=%s neural_eq=%s gibbs_eq=%s",
+                "rho_vals=%s neural_eq=%s baseline_eq=%s",
                 len(rho_vals),
                 rho_vals,
                 neural_r,
-                gibbs_r,
+                baseline_r,
             )
             raise
 
-    def _plot(self, rho_vals, neural_r, gibbs_r):
+    def _plot(self, rho_vals, neural_r, baseline_r):
         """Generate the critical-load curve."""
         from gibbsq.analysis.plotting import plot_critical_load
 
@@ -222,7 +245,7 @@ class CriticalLoadTest:
         fig = plot_critical_load(
             rho_values=np.array(rho_vals),
             neural_eq=np.array(neural_r),
-            gibbs_eq=np.array(gibbs_r),
+            gibbs_eq=np.array(baseline_r),
             save_path=plot_path,
             theme="publication",
             formats=["png", "pdf"],
@@ -240,14 +263,21 @@ class CriticalLoadTest:
         log.info(f"Critical load test complete. Curve saved to {plot_path}.png, {plot_path}.pdf")
 
         if self.run_logger:
-            self.run_logger.log({
-                "critical_load/rho": rho_vals,
-                "critical_load/neural_eq": neural_r,
-                "critical_load/gibbs_eq": gibbs_r,
-            })
+            self.run_logger.log(
+                {
+                    "critical_load/rho": rho_vals,
+                    "critical_load/neural_eq": neural_r,
+                    "critical_load/baseline_eq": baseline_r,
+                    "critical_load/calibrated_uas_eq": baseline_r,
+                    "critical_load/gibbs_eq": baseline_r,
+                }
+            )
             try:
                 import wandb
-                self.run_logger.log({"critical_load_curve": wandb.Image(str(figure_path(self.run_dir, "critical_load_curve").with_suffix(".png")))})
+
+                self.run_logger.log(
+                    {"critical_load_curve": wandb.Image(str(figure_path(self.run_dir, "critical_load_curve").with_suffix(".png")))}
+                )
             except Exception:
                 pass
 
@@ -271,7 +301,13 @@ def main(raw_cfg: DictConfig):
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "critical")
 
     run_dir, run_id = get_run_config(cfg, "critical", resolved_raw_cfg)
-    run_logger = setup_wandb(cfg, resolved_raw_cfg, default_group="n_gibbsq_verification", run_id=run_id, run_dir=run_dir)
+    run_logger = setup_wandb(
+        cfg,
+        resolved_raw_cfg,
+        default_group="n_gibbsq_verification",
+        run_id=run_id,
+        run_dir=run_dir,
+    )
 
     log.info("=" * 60)
     log.info("  Phase VIII: The Critical Stability Boundary")

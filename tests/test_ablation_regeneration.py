@@ -7,6 +7,7 @@ import pytest
 
 matplotlib.use("Agg")
 
+from experiments.evaluation.n_gibbsq_evals.ablation_ssa import variant_catalog
 from gibbsq.analysis.ablation_regeneration import (
     AblationRecord,
     CANONICAL_VARIANTS,
@@ -14,7 +15,6 @@ from gibbsq.analysis.ablation_regeneration import (
     load_validated_ablation_records,
     regenerate_ablation_figure,
 )
-from gibbsq.analysis.plotting import plot_ablation_dual_panel
 
 
 def _write_summary(path, rows):
@@ -27,32 +27,116 @@ def _write_summary(path, rows):
 def _sample_rows():
     return [
         {
-            "variant": "Full Model",
+            "variant": "No Log-Norm",
+            "variant_kind": "neural",
+            "panel": "architecture",
+            "preprocessing": "none",
+            "init_type": "standard",
+            "bootstrap_mode": "expert",
+            "teacher_policy": "uas",
+            "mean_q_total": 11.22,
+            "se_q_total": 0.08,
+            "ci95_half_width": 0.16,
+            "delta_vs_calibrated_uas_mean": 0.98,
+            "delta_vs_best_neural_mean": 0.31,
+        },
+        {
+            "variant": "Zero-Init Final",
+            "variant_kind": "neural",
+            "panel": "architecture",
             "preprocessing": "log1p",
             "init_type": "zero_final",
-            "mean_q_total": 12.997737203495632,
-            "se_q_total": 0.09170239423903785,
+            "bootstrap_mode": "expert",
+            "teacher_policy": "uas",
+            "mean_q_total": 11.48,
+            "se_q_total": 0.08,
+            "ci95_half_width": 0.16,
+            "delta_vs_calibrated_uas_mean": 1.24,
+            "delta_vs_best_neural_mean": 0.57,
         },
         {
-            "variant": "Ablated: No Log-Norm",
-            "preprocessing": "none",
-            "init_type": "zero_final",
-            "mean_q_total": 13.027426654182273,
-            "se_q_total": 0.09396965078099717,
-        },
-        {
-            "variant": "Ablated: No Zero-Init",
+            "variant": "BC from UAS -> REINFORCE",
+            "variant_kind": "neural",
+            "panel": "teacher",
             "preprocessing": "log1p",
             "init_type": "standard",
-            "mean_q_total": 12.540652309612984,
-            "se_q_total": 0.09167882318080789,
+            "bootstrap_mode": "expert",
+            "teacher_policy": "uas",
+            "mean_q_total": 10.91,
+            "se_q_total": 0.07,
+            "ci95_half_width": 0.14,
+            "delta_vs_calibrated_uas_mean": 0.67,
+            "delta_vs_best_neural_mean": 0.0,
         },
         {
-            "variant": "Uniform Routing (Baseline)",
+            "variant": "BC from Calibrated UAS -> REINFORCE",
+            "variant_kind": "neural",
+            "panel": "teacher",
+            "preprocessing": "log1p",
+            "init_type": "standard",
+            "bootstrap_mode": "expert",
+            "teacher_policy": "calibrated_uas",
+            "mean_q_total": 10.52,
+            "se_q_total": 0.06,
+            "ci95_half_width": 0.12,
+            "delta_vs_calibrated_uas_mean": 0.28,
+            "delta_vs_best_neural_mean": -0.32,
+        },
+        {
+            "variant": "REINFORCE from Scratch",
+            "variant_kind": "neural",
+            "panel": "architecture",
+            "preprocessing": "log1p",
+            "init_type": "standard",
+            "bootstrap_mode": "scratch",
+            "teacher_policy": "n/a",
+            "mean_q_total": 11.95,
+            "se_q_total": 0.09,
+            "ci95_half_width": 0.18,
+            "delta_vs_calibrated_uas_mean": 1.71,
+            "delta_vs_best_neural_mean": 1.04,
+        },
+        {
+            "variant": "JSSQ",
+            "variant_kind": "reference",
+            "panel": "teacher",
             "preprocessing": "n/a",
             "init_type": "n/a",
-            "mean_q_total": 802.6844569288389,
-            "se_q_total": 6.734918674865772,
+            "bootstrap_mode": "expert",
+            "teacher_policy": "n/a",
+            "mean_q_total": 11.02,
+            "se_q_total": 0.03,
+            "ci95_half_width": 0.06,
+            "delta_vs_calibrated_uas_mean": 0.78,
+            "delta_vs_best_neural_mean": 0.18,
+        },
+        {
+            "variant": "Calibrated UAS",
+            "variant_kind": "reference",
+            "panel": "teacher",
+            "preprocessing": "n/a",
+            "init_type": "n/a",
+            "bootstrap_mode": "expert",
+            "teacher_policy": "n/a",
+            "mean_q_total": 10.24,
+            "se_q_total": 0.02,
+            "ci95_half_width": 0.04,
+            "delta_vs_calibrated_uas_mean": 0.0,
+            "delta_vs_best_neural_mean": -0.60,
+        },
+        {
+            "variant": "UAS (alpha=10.0)",
+            "variant_kind": "reference",
+            "panel": "teacher",
+            "preprocessing": "n/a",
+            "init_type": "n/a",
+            "bootstrap_mode": "expert",
+            "teacher_policy": "n/a",
+            "mean_q_total": 11.49,
+            "se_q_total": 0.03,
+            "ci95_half_width": 0.06,
+            "delta_vs_calibrated_uas_mean": 1.25,
+            "delta_vs_best_neural_mean": 0.65,
         },
     ]
 
@@ -67,24 +151,58 @@ def _workspace_case_dir(name: str) -> Path:
     return case_dir
 
 
-def test_load_validated_ablation_records_accepts_frozen_summary():
+def test_variant_catalog_exposes_new_publication_ready_schema():
+    catalog = variant_catalog()
+
+    assert [row["name"] for row in catalog] == CANONICAL_VARIANTS
+    assert any(row["name"] == "BC from Calibrated UAS -> REINFORCE" for row in catalog)
+    assert any(row["name"] == "Calibrated UAS" and row["variant_kind"] == "reference" for row in catalog)
+
+
+def test_load_validated_ablation_records_accepts_new_summary_schema():
     summary_path = _workspace_case_dir("accepts-summary") / "metrics" / "ablation_ssa_metrics.jsonl"
     _write_summary(summary_path, _sample_rows())
 
     records = load_validated_ablation_records(summary_path)
 
     assert [record.variant for record in records] == CANONICAL_VARIANTS
-    assert records[0].mean_q_total == pytest.approx(12.997737203495632)
-    assert records[3].se_q_total == pytest.approx(6.734918674865772)
+    assert records[0].variant == "No Log-Norm"
+    assert records[3].teacher_policy == "calibrated_uas"
+    assert records[6].delta_vs_calibrated_uas_mean == pytest.approx(0.0)
 
 
-def test_load_validated_ablation_records_rejects_bad_order():
-    rows = _sample_rows()
-    rows[1], rows[2] = rows[2], rows[1]
-    summary_path = _workspace_case_dir("rejects-order") / "metrics" / "ablation_ssa_metrics.jsonl"
+def test_load_validated_ablation_records_rejects_missing_variant():
+    rows = _sample_rows()[:-1]
+    summary_path = _workspace_case_dir("rejects-missing") / "metrics" / "ablation_ssa_metrics.jsonl"
     _write_summary(summary_path, rows)
 
-    with pytest.raises(ValueError, match="Unexpected variant order"):
+    with pytest.raises(ValueError, match="Expected 8 ablation rows"):
+        load_validated_ablation_records(summary_path)
+
+
+def test_load_validated_ablation_records_rejects_legacy_duplicate_neural_base_schema():
+    rows = _sample_rows()
+    rows.insert(
+        0,
+        {
+            "variant": "Neural-Base",
+            "variant_kind": "neural",
+            "panel": "architecture",
+            "preprocessing": "log1p",
+            "init_type": "standard",
+            "bootstrap_mode": "expert",
+            "teacher_policy": "uas",
+            "mean_q_total": 10.84,
+            "se_q_total": 0.07,
+            "ci95_half_width": 0.14,
+            "delta_vs_calibrated_uas_mean": 0.60,
+            "delta_vs_best_neural_mean": -0.07,
+        },
+    )
+    summary_path = _workspace_case_dir("rejects-legacy-schema") / "metrics" / "ablation_ssa_metrics.jsonl"
+    _write_summary(summary_path, rows)
+
+    with pytest.raises(ValueError, match="Expected 8 ablation rows"):
         load_validated_ablation_records(summary_path)
 
 
@@ -104,26 +222,17 @@ def test_regenerate_ablation_figure_writes_outputs_from_summary():
 
     payload = json.loads(data_path.read_text(encoding="utf-8"))
     assert payload["variants"] == CANONICAL_VARIANTS
-    assert payload["mean_q_total"][0] == pytest.approx(12.997737203495632)
-    assert payload["delta_pct_vs_full_model"][1] == pytest.approx(
-        ((_sample_rows()[1]["mean_q_total"] - _sample_rows()[0]["mean_q_total"]) / _sample_rows()[0]["mean_q_total"]) * 100.0
-    )
+    assert payload["panel"][0] == "architecture"
+    assert payload["delta_vs_calibrated_uas_mean"][6] == pytest.approx(0.0)
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert metadata["data_source"] == "summary_jsonl"
 
 
-def test_plot_ablation_dual_panel_builds_zoomed_premium_layout():
+def test_build_ablation_plot_payload_tracks_teacher_and_delta_fields():
     payload = build_ablation_plot_payload(_sample_records())
 
-    fig = plot_ablation_dual_panel(
-        variant_names=payload["variants"],
-        mean_values=payload["mean_q_total"],
-        se_values=payload["se_q_total"],
-    )
-
-    assert len(fig.axes) == 2
-    assert fig.axes[0].get_ylim()[1] > 800.0
-    assert fig.axes[1].get_ylim()[1] < 20.0
-    assert "Component Contributions" in fig.axes[0].get_title()
-    assert any("Zoom on learned variants" in text.get_text() for text in fig.axes[1].texts)
+    assert payload["variant_kind"][0] == "neural"
+    assert payload["teacher_policy"][3] == "calibrated_uas"
+    assert payload["ci95_half_width"][6] == pytest.approx(0.04)
+    assert payload["delta_vs_best_neural_mean"][4] == pytest.approx(1.04)

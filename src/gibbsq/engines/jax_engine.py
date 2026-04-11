@@ -27,6 +27,7 @@ POLICY_NAME_TO_TYPE = {
     "power_of_d": 4,
     "jssq": 5,
     "uas": 6,
+    "calibrated_uas": 7,
     "refined_uas": 7,
 }
 

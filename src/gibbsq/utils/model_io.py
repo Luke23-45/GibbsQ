@@ -220,6 +220,8 @@ def build_bc_reuse_compatibility_record(
             "sample_interval": float(normalized_bc_data["sample_interval"]),
             "augmentation_noise_min": int(normalized_bc_data["augmentation_noise_min"]),
             "augmentation_noise_max": int(normalized_bc_data["augmentation_noise_max"]),
+            "expert_policy_name": str(normalized_bc_data.get("expert_policy_name", "uas")),
+            "expert_policy_params": dict(normalized_bc_data.get("expert_policy_params", {})),
         },
     }
     canonical = json.dumps(compatibility, sort_keys=True, separators=(",", ":"))

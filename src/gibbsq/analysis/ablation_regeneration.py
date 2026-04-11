@@ -1,4 +1,4 @@
-"""Regenerate premium ablation figures from saved run artifacts."""
+"""Regenerate empirical ablation figures from saved run artifacts."""
 
 from __future__ import annotations
 
@@ -13,48 +13,43 @@ import equinox as eqx
 import jax
 import numpy as np
 
-from gibbsq.analysis.plotting import plot_ablation_dual_panel
+from gibbsq.analysis.plotting import plot_ablation_bars
 from gibbsq.core.config import ExperimentConfig
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.chart_exporter import save_data
 from gibbsq.utils.run_artifacts import artifacts_dir, config_path, figure_path, metrics_path
 
-CANONICAL_VARIANTS = [
-    "Full Model",
-    "Ablated: No Log-Norm",
-    "Ablated: No Zero-Init",
-    "Uniform Routing (Baseline)",
-]
-
-VARIANT_SPECS = [
-    {
-        "variant": "Full Model",
-        "preprocessing": "log1p",
-        "init_type": "zero_final",
-        "artifact_dir": "variant_1_full_model",
-    },
-    {
-        "variant": "Ablated: No Log-Norm",
-        "preprocessing": "none",
-        "init_type": "zero_final",
-        "artifact_dir": "variant_2_ablated_no_log-norm",
-    },
-    {
-        "variant": "Ablated: No Zero-Init",
-        "preprocessing": "log1p",
-        "init_type": "standard",
-        "artifact_dir": "variant_3_ablated_no_zero-init",
-    },
-]
+from experiments.evaluation.n_gibbsq_evals.ablation_ssa import (
+    ALL_VARIANTS,
+    NEURAL_VARIANTS,
+    REFERENCE_VARIANTS,
+    _build_ablation_eval_policy,
+    _reference_policy,
+    evaluate_policy_ssa,
+)
 
 
 @dataclass(frozen=True)
 class AblationRecord:
     variant: str
+    variant_kind: str
+    panel: str
     preprocessing: str
     init_type: str
+    bootstrap_mode: str
+    teacher_policy: str
     mean_q_total: float
     se_q_total: float
+    ci95_half_width: float
+    delta_vs_calibrated_uas_mean: float | None = None
+    delta_vs_calibrated_uas_se: float | None = None
+    delta_vs_calibrated_uas_ci95_half_width: float | None = None
+    delta_vs_best_neural_mean: float | None = None
+    delta_vs_best_neural_se: float | None = None
+    delta_vs_best_neural_ci95_half_width: float | None = None
+
+
+CANONICAL_VARIANTS = [spec.name for spec in ALL_VARIANTS]
 
 
 def _load_jsonl_records(path: Path) -> list[dict]:
@@ -74,6 +69,26 @@ def _load_jsonl_records(path: Path) -> list[dict]:
     return rows
 
 
+def _optional_float(payload: dict, key: str) -> float | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+    try:
+        cast_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Field '{key}' must be numeric when present.") from exc
+    if not np.isfinite(cast_value):
+        raise ValueError(f"Field '{key}' must be finite when present.")
+    return cast_value
+
+
+def _optional_float_compat(payload: dict, primary_key: str, legacy_key: str) -> float | None:
+    value = _optional_float(payload, primary_key)
+    if value is not None:
+        return value
+    return _optional_float(payload, legacy_key)
+
+
 def load_validated_ablation_records(path: Path) -> list[AblationRecord]:
     rows = _load_jsonl_records(path)
     if len(rows) != len(CANONICAL_VARIANTS):
@@ -81,42 +96,56 @@ def load_validated_ablation_records(path: Path) -> list[AblationRecord]:
             f"Expected {len(CANONICAL_VARIANTS)} ablation rows in {path}, found {len(rows)}"
         )
 
-    seen: set[str] = set()
+    expected_set = set(CANONICAL_VARIANTS)
+    found_set = {row.get("variant") for row in rows}
+    if found_set != expected_set:
+        missing = sorted(expected_set - found_set)
+        unexpected = sorted(found_set - expected_set)
+        raise ValueError(
+            f"Ablation variants in {path} do not match expected schema. "
+            f"Missing={missing}, Unexpected={unexpected}"
+        )
+
+    row_map = {row["variant"]: row for row in rows}
+    ordered_rows = [row_map[name] for name in CANONICAL_VARIANTS]
+
     validated: list[AblationRecord] = []
-    for idx, (payload, expected_variant) in enumerate(zip(rows, CANONICAL_VARIANTS), start=1):
+    for payload in ordered_rows:
         variant = payload.get("variant")
-        if variant != expected_variant:
-            raise ValueError(
-                f"Unexpected variant order in {path} at row {idx}: "
-                f"expected '{expected_variant}', found '{variant}'"
-            )
-        if variant in seen:
-            raise ValueError(f"Duplicate variant '{variant}' in {path}")
-        seen.add(variant)
-
-        preprocessing = payload.get("preprocessing")
-        init_type = payload.get("init_type")
-        if not isinstance(preprocessing, str) or not isinstance(init_type, str):
-            raise ValueError(f"Variant '{variant}' is missing preprocessing/init_type metadata")
-
+        if not isinstance(variant, str):
+            raise ValueError("Each ablation row must define a string 'variant'.")
+        for key in ("variant_kind", "panel", "preprocessing", "init_type", "bootstrap_mode", "teacher_policy"):
+            if not isinstance(payload.get(key), str):
+                raise ValueError(f"Variant '{variant}' is missing string field '{key}'.")
         try:
             mean_q_total = float(payload["mean_q_total"])
             se_q_total = float(payload["se_q_total"])
+            ci95_half_width = float(payload["ci95_half_width"])
         except KeyError as exc:
             raise ValueError(f"Variant '{variant}' is missing metric '{exc.args[0]}'") from exc
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Variant '{variant}' has non-numeric metrics") from exc
-
-        if not np.isfinite(mean_q_total) or not np.isfinite(se_q_total):
-            raise ValueError(f"Variant '{variant}' has non-finite metrics")
+            raise ValueError(f"Variant '{variant}' has non-numeric primary metrics") from exc
+        if not all(np.isfinite(x) for x in (mean_q_total, se_q_total, ci95_half_width)):
+            raise ValueError(f"Variant '{variant}' has non-finite primary metrics")
 
         validated.append(
             AblationRecord(
                 variant=variant,
-                preprocessing=preprocessing,
-                init_type=init_type,
+                variant_kind=payload["variant_kind"],
+                panel=payload["panel"],
+                preprocessing=payload["preprocessing"],
+                init_type=payload["init_type"],
+                bootstrap_mode=payload["bootstrap_mode"],
+                teacher_policy=payload["teacher_policy"],
                 mean_q_total=mean_q_total,
                 se_q_total=se_q_total,
+                ci95_half_width=ci95_half_width,
+                delta_vs_calibrated_uas_mean=_optional_float_compat(payload, "delta_vs_calibrated_uas_mean", "delta_vs_refined_uas_mean"),
+                delta_vs_calibrated_uas_se=_optional_float_compat(payload, "delta_vs_calibrated_uas_se", "delta_vs_refined_uas_se"),
+                delta_vs_calibrated_uas_ci95_half_width=_optional_float_compat(payload, "delta_vs_calibrated_uas_ci95_half_width", "delta_vs_refined_uas_ci95_half_width"),
+                delta_vs_best_neural_mean=_optional_float(payload, "delta_vs_best_neural_mean"),
+                delta_vs_best_neural_se=_optional_float(payload, "delta_vs_best_neural_se"),
+                delta_vs_best_neural_ci95_half_width=_optional_float(payload, "delta_vs_best_neural_ci95_half_width"),
             )
         )
 
@@ -138,28 +167,20 @@ def _load_experiment_config(run_dir: Path) -> ExperimentConfig:
 
 
 def _reconstruct_records_from_artifacts(run_dir: Path) -> list[AblationRecord]:
-    from experiments.evaluation.n_gibbsq_evals.ablation_ssa import (
-        UniformRouting,
-        _build_ablation_eval_policy,
-        evaluate_policy_ssa,
-    )
-
     cfg = _load_experiment_config(run_dir)
     reconstructed: list[AblationRecord] = []
 
-    for idx, spec in enumerate(VARIANT_SPECS):
-        variant_dir = artifacts_dir(run_dir) / spec["artifact_dir"]
+    for idx, spec in enumerate(NEURAL_VARIANTS):
+        variant_dir = artifacts_dir(run_dir) / (spec.artifact_dir or f"variant_{idx + 1}")
         model_path = artifacts_dir(variant_dir) / "n_gibbsq_reinforce_weights.eqx"
         if not model_path.exists():
             raise FileNotFoundError(f"Missing checkpoint for fallback regeneration: {model_path}")
 
-        neural_cfg = cfg.neural
-        if spec["preprocessing"] != neural_cfg.preprocessing or spec["init_type"] != neural_cfg.init_type:
-            neural_cfg = dataclasses.replace(
-                neural_cfg,
-                preprocessing=spec["preprocessing"],
-                init_type=spec["init_type"],
-            )
+        neural_cfg = dataclasses.replace(
+            cfg.neural,
+            preprocessing=spec.preprocessing or cfg.neural.preprocessing,
+            init_type=spec.init_type or cfg.neural.init_type,
+        )
         variant_cfg = dataclasses.replace(cfg, neural=neural_cfg)
 
         skeleton = NeuralRouter(
@@ -175,24 +196,36 @@ def _reconstruct_records_from_artifacts(run_dir: Path) -> list[AblationRecord]:
         metrics = evaluate_policy_ssa(policy, variant_cfg)
         reconstructed.append(
             AblationRecord(
-                variant=spec["variant"],
-                preprocessing=spec["preprocessing"],
-                init_type=spec["init_type"],
+                variant=spec.name,
+                variant_kind=spec.variant_kind,
+                panel=spec.panel,
+                preprocessing=spec.preprocessing or "n/a",
+                init_type=spec.init_type or "n/a",
+                bootstrap_mode=spec.bootstrap_mode,
+                teacher_policy=spec.expert_policy_name or "n/a",
                 mean_q_total=metrics["mean_q_total"],
                 se_q_total=metrics["se_q_total"],
+                ci95_half_width=metrics["ci95_half_width"],
             )
         )
 
-    baseline = evaluate_policy_ssa(UniformRouting(), cfg)
-    reconstructed.append(
-        AblationRecord(
-            variant="Uniform Routing (Baseline)",
-            preprocessing="n/a",
-            init_type="n/a",
-            mean_q_total=baseline["mean_q_total"],
-            se_q_total=baseline["se_q_total"],
+    for spec in REFERENCE_VARIANTS:
+        metrics = evaluate_policy_ssa(_reference_policy(spec, cfg), cfg)
+        reconstructed.append(
+            AblationRecord(
+                variant=spec.name,
+                variant_kind=spec.variant_kind,
+                panel=spec.panel,
+                preprocessing="n/a",
+                init_type="n/a",
+                bootstrap_mode=spec.bootstrap_mode,
+                teacher_policy="n/a",
+                mean_q_total=metrics["mean_q_total"],
+                se_q_total=metrics["se_q_total"],
+                ci95_half_width=metrics["ci95_half_width"],
+            )
         )
-    )
+
     return reconstructed
 
 
@@ -220,17 +253,19 @@ def build_ablation_plot_payload(records: Iterable[AblationRecord]) -> dict:
     if not ordered:
         raise ValueError("Ablation plot payload requires at least one record")
 
-    full_model = ordered[0].mean_q_total
     return {
         "variants": [record.variant for record in ordered],
+        "variant_kind": [record.variant_kind for record in ordered],
+        "panel": [record.panel for record in ordered],
         "preprocessing": [record.preprocessing for record in ordered],
         "init_type": [record.init_type for record in ordered],
+        "bootstrap_mode": [record.bootstrap_mode for record in ordered],
+        "teacher_policy": [record.teacher_policy for record in ordered],
         "mean_q_total": [record.mean_q_total for record in ordered],
         "se_q_total": [record.se_q_total for record in ordered],
-        "delta_pct_vs_full_model": [
-            ((record.mean_q_total - full_model) / full_model) * 100.0
-            for record in ordered
-        ],
+        "ci95_half_width": [record.ci95_half_width for record in ordered],
+        "delta_vs_calibrated_uas_mean": [record.delta_vs_calibrated_uas_mean for record in ordered],
+        "delta_vs_best_neural_mean": [record.delta_vs_best_neural_mean for record in ordered],
     }
 
 
@@ -256,10 +291,10 @@ def regenerate_ablation_figure(
     data_target = metrics_path(target_dir, "ablation_ssa_regenerated_data")
     metadata_target = metrics_path(target_dir, "ablation_ssa_regenerated_metadata")
 
-    plot_ablation_dual_panel(
+    plot_ablation_bars(
         variant_names=payload["variants"],
         mean_values=payload["mean_q_total"],
-        se_values=payload["se_q_total"],
+        se_values=payload["ci95_half_width"],
         save_path=figures_target,
         theme=theme,
         formats=["png", "pdf"],

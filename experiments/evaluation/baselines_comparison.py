@@ -7,7 +7,7 @@ Smoking Gun #4 (Parity Benchmark Is Self-Referential).
 
 The corrected baseline hierarchy used by this experiment:
 - Tier 2: Structural dispatch baselines (JSQ, JSSQ)
-- Tier 3: Capacity-aware GibbsQ baselines (UAS and refined-UAS variants)
+- Tier 3: Capacity-aware GibbsQ baselines (UAS and Calibrated UAS)
 - Tier 4: Blind/fixed-weight baselines (Proportional, Uniform)
 - Tier 5: Neural candidate (N-GibbsQ trained with REINFORCE)
 
@@ -95,10 +95,8 @@ CORRECTED_POLICIES = [
     {"tier": 2, "name": "jsq", "label": "JSQ (Min Queue)", "requires_mu": False},
     {"tier": 2, "name": "jssq", "label": "JSSQ (Min Sojourn)", "requires_mu": True},
 
-    {"tier": 3, "name": "uas", "label": "UAS (alpha=1.0)", "requires_mu": True, "alpha": 1.0},
-    {"tier": 3, "name": "uas", "label": "UAS (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
-    {"tier": 3, "name": "uas", "label": "UAS (alpha=5.0)", "requires_mu": True, "alpha": 5.0},
-    {"tier": 3, "name": "refined_uas", "label": "Refined UAS (alpha=20.0)", "requires_mu": True, "alpha": 20.0},
+    {"tier": 3, "name": "uas", "label": "UAS", "requires_mu": True, "alpha": 10.0},
+    {"tier": 3, "name": "calibrated_uas", "label": "Calibrated UAS", "requires_mu": True, "alpha": 20.0},
 
     # Tier 4: Blind / fixed-weight baselines
     {"tier": 4, "name": "proportional", "label": "Proportional (mu/Lambda)", "requires_mu": True},
@@ -343,7 +341,7 @@ def run_corrected_comparison(
 
 def _generate_comparison_plot(results: dict, run_dir: Path):
     """Generate comparison bar chart with chart-type-aware styling."""
-    from gibbsq.analysis.plotting import plot_tier_comparison_bars
+    from gibbsq.analysis.plotting import plot_policy_dual_panel
 
     sorted_results = sorted(results.items(), key=lambda x: (x[1]["tier"], x[1]["mean_q_total"]))
 
@@ -353,7 +351,7 @@ def _generate_comparison_plot(results: dict, run_dir: Path):
     tiers = [r["tier"] for _, r in sorted_results]
 
     plot_path = figure_path(run_dir, "corrected_policy_comparison")
-    fig = plot_tier_comparison_bars(
+    fig = plot_policy_dual_panel(
         labels=labels,
         q_values=q_values,
         q_errors=q_errors,

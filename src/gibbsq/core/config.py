@@ -89,6 +89,7 @@ class PolicyName(str, Enum):
     POWER_OF_D    = "power_of_d"
     JSSQ          = "jssq"
     UAS           = "uas"
+    CALIBRATED_UAS = "calibrated_uas"
     REFINED_UAS   = "refined_uas"
 
 @dataclass

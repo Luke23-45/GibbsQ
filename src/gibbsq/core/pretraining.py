@@ -22,7 +22,7 @@ from jaxtyping import PRNGKeyArray
 from gibbsq.core.config import ExperimentConfig
 from gibbsq.core.neural_policies import NeuralRouter, ValueNetwork
 from gibbsq.core.features import look_ahead_potential
-from gibbsq.core.policies import UASRouting
+from gibbsq.core.policies import CalibratedUASRouting, UASRouting
 from gibbsq.engines.numpy_engine import simulate
 from gibbsq.utils.progress import create_progress
 
@@ -36,6 +36,11 @@ DEFAULT_BC_DATA_CONFIG = {
     "sample_interval": 1.0,
     "augmentation_noise_min": -1,
     "augmentation_noise_max": 1,
+}
+
+DEFAULT_EXPERT_POLICY_CONFIG = {
+    "name": "uas",
+    "params": {},
 }
 
 
@@ -110,6 +115,42 @@ def extract_bc_data_config(raw_cfg) -> dict:
         return normalize_bc_data_config(dict(candidate))
     raise TypeError(f"Unsupported bc_data config type: {type(candidate)}")
 
+
+def _resolve_expert_policy_config(bc_cfg: dict) -> tuple[str, dict]:
+    """Return the BC expert policy family and parameter overrides."""
+    expert_name = str(bc_cfg.get("expert_policy_name", DEFAULT_EXPERT_POLICY_CONFIG["name"])).strip().lower()
+    expert_params = dict(DEFAULT_EXPERT_POLICY_CONFIG["params"])
+    raw_params = bc_cfg.get("expert_policy_params", {})
+    if raw_params is not None:
+        if not isinstance(raw_params, dict):
+            raise TypeError("bc_data.expert_policy_params must be a mapping when provided.")
+        expert_params.update(dict(raw_params))
+    return expert_name, expert_params
+
+
+def _build_bc_expert(
+    expert_name: str,
+    *,
+    scaled_service_rates: np.ndarray,
+    alpha: float,
+    expert_params: dict,
+):
+    """Construct the closed-form teacher used for BC data generation."""
+    if expert_name == "uas":
+        return UASRouting(scaled_service_rates, alpha=float(expert_params.get("alpha", alpha)))
+    if expert_name in {"calibrated_uas", "refined_uas"}:
+        return CalibratedUASRouting(
+            scaled_service_rates,
+            alpha=float(expert_params.get("alpha", 20.0)),
+            beta=float(expert_params.get("beta", 0.85)),
+            gamma=float(expert_params.get("gamma", 0.5)),
+            c=float(expert_params.get("c", 0.5)),
+        )
+    raise ValueError(
+        f"Unsupported bc_data expert policy '{expert_name}'. "
+        "Expected 'uas', 'calibrated_uas', or 'refined_uas'."
+    )
+
 def compute_value_bootstrap_targets(
     queue_totals: jnp.ndarray,
     random_limit: float,
@@ -136,6 +177,7 @@ def collect_robust_expert_data(
         rhos=rhos,
         samples_per_rho=samples_per_rho,
     )
+    expert_name, expert_params = _resolve_expert_policy_config(bc_cfg)
     
     all_states = []
     all_rhos = []
@@ -148,7 +190,12 @@ def collect_robust_expert_data(
     
     for mu_scale in mu_scales:
         scaled_service_rates = service_rates * mu_scale
-        expert = UASRouting(scaled_service_rates, alpha=alpha)
+        expert = _build_bc_expert(
+            expert_name,
+            scaled_service_rates=scaled_service_rates,
+            alpha=alpha,
+            expert_params=expert_params,
+        )
         total_capacity = np.sum(scaled_service_rates)
         
         for rho in bc_cfg["rhos"]:

@@ -449,16 +449,20 @@ def summarize_reinforce_run(run_dir: Path) -> dict[str, Any]:
 
 
 def summarize_policy_results(results: dict[str, Any]) -> dict[str, Any]:
-    neural = results["N-GibbsQ (Platinum)"]
+    neural = results.get("N-GibbsQ (Proposed)") or results.get("N-GibbsQ (Platinum)")
+    if neural is None:
+        raise KeyError("Policy comparison results are missing the N-GibbsQ row.")
     parity = str(neural.get("parity", "FAILED"))
     jssq = results.get("JSSQ (Min Sojourn)", {})
-    uas = results.get("UAS (alpha=1.0)", {})
+    uas = results.get("UAS", results.get("UAS (alpha=10.0)", {}))
+    calibrated = results.get("Calibrated UAS", {})
     return {
         "parity": parity,
         "parity_numeric": PARITY_ORDER.get(parity, 0),
         "neural_mean_q_total": float(neural["mean_q_total"]),
         "jssq_mean_q_total": float(jssq.get("mean_q_total", float("inf"))),
         "uas_mean_q_total": float(uas.get("mean_q_total", float("inf"))),
+        "calibrated_uas_mean_q_total": float(calibrated.get("mean_q_total", float("inf"))),
     }
 
 

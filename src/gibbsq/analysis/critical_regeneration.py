@@ -40,7 +40,12 @@ def regenerate_critical_figure(
     
     rho_values = np.array([r["rho"] for r in records])
     neural_eq = np.array([r["neural_eq"] for r in records])
-    gibbs_eq = np.array([r["gibbs_eq"] for r in records])
+    baseline_eq = np.array(
+        [
+            r.get("calibrated_uas_eq", r.get("baseline_eq", r["gibbs_eq"]))
+            for r in records
+        ]
+    )
 
     out_path = Path(output_dir) if output_dir else run_dir / "figures"
     out_path.mkdir(parents=True, exist_ok=True)
@@ -50,7 +55,7 @@ def regenerate_critical_figure(
     plot_critical_load(
         rho_values=rho_values,
         neural_eq=neural_eq,
-        gibbs_eq=gibbs_eq,
+        gibbs_eq=baseline_eq,
         save_path=fig_base,
         theme=theme,
         formats=["png", "pdf"],

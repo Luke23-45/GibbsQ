@@ -35,6 +35,7 @@ __all__ = [
     "PowerOfDRouting",
     "JSSQRouting",
     "UASRouting",
+    "CalibratedUASRouting",
     "RefinedUASRouting",
     "make_policy",
 ]
@@ -330,9 +331,10 @@ class UASRouting:
         return f"UASRouting(α={self._alpha}, N={len(self._mu)})"
 
 @ComponentRegistry.register_policy("refined_uas")
-class RefinedUASRouting:
+@ComponentRegistry.register_policy("calibrated_uas")
+class CalibratedUASRouting:
     """
-    Refined Archimedean softmax routing.
+    Calibrated Archimedean softmax routing.
 
     This policy extends the current UAS rule to the score family
 
@@ -402,9 +404,13 @@ class RefinedUASRouting:
 
     def __repr__(self) -> str:
         return (
-            f"RefinedUASRouting(alpha={self._alpha}, beta={self._beta}, "
+            f"CalibratedUASRouting(alpha={self._alpha}, beta={self._beta}, "
             f"gamma={self._gamma}, c={self._c}, N={len(self._mu)})"
         )
+
+
+# Backward-compatible alias for pre-publication experiment code.
+RefinedUASRouting = CalibratedUASRouting
 
 
 def make_policy(
@@ -426,7 +432,8 @@ def make_policy(
     ----------
     name : str
         One of  ``"softmax"``, ``"uniform"``, ``"proportional"``,
-        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"uas"``, ``"refined_uas"``.
+        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"uas"``, ``"calibrated_uas"``,
+        ``"refined_uas"``.
     alpha : float
         Inverse temperature (softmax and uas only).
     mu : ndarray
