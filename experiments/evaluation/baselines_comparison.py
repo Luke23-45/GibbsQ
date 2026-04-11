@@ -7,7 +7,7 @@ Smoking Gun #4 (Parity Benchmark Is Self-Referential).
 
 The corrected baseline hierarchy used by this experiment:
 - Tier 2: Structural dispatch baselines (JSQ, JSSQ)
-- Tier 3: Capacity-aware GibbsQ baselines (UAS variants)
+- Tier 3: Capacity-aware GibbsQ baselines (UAS and refined-UAS variants)
 - Tier 4: Blind/fixed-weight baselines (Proportional, Uniform)
 - Tier 5: Neural candidate (N-GibbsQ trained with REINFORCE)
 
@@ -98,6 +98,7 @@ CORRECTED_POLICIES = [
     {"tier": 3, "name": "uas", "label": "UAS (alpha=1.0)", "requires_mu": True, "alpha": 1.0},
     {"tier": 3, "name": "uas", "label": "UAS (alpha=10.0)", "requires_mu": True, "alpha": 10.0},
     {"tier": 3, "name": "uas", "label": "UAS (alpha=5.0)", "requires_mu": True, "alpha": 5.0},
+    {"tier": 3, "name": "refined_uas", "label": "Refined UAS (alpha=20.0)", "requires_mu": True, "alpha": 20.0},
 
     # Tier 4: Blind / fixed-weight baselines
     {"tier": 4, "name": "proportional", "label": "Proportional (mu/Lambda)", "requires_mu": True},
@@ -264,12 +265,13 @@ def run_corrected_comparison(
 
     # Professor's spec at suggestions.md:547-551:
     # GOLD: N-GibbsQ E[Q] ≤ JSSQ E[Q] (matches asymptotic optimum)
-    # SILVER: N-GibbsQ E[Q] ≤ fixed-alpha UAS E[Q] (matches empirical softmax baseline)
+    # SILVER: N-GibbsQ E[Q] ≤ strongest Tier 3 GibbsQ-family baseline
     # BRONZE: N-GibbsQ E[Q] ≤ Proportional E[Q] (exceeds static baseline)
     # FAILED: N-GibbsQ E[Q] > Proportional E[Q]
 
     jssq_result = results.get("JSSQ (Min Sojourn)")
-    sojourn_result = results.get("UAS (alpha=1.0)")
+    tier3_candidates = [payload for payload in results.values() if payload.get("tier") == 3]
+    strongest_tier3_result = min(tier3_candidates, key=lambda payload: payload["mean_q_total"]) if tier3_candidates else None
     proportional_result = results.get("Proportional (mu/Lambda)")
 
     neural_result = results.get(neural_label)
@@ -279,12 +281,16 @@ def run_corrected_comparison(
         log.info(f"{neural_label} ({NEURAL_EVAL_MODE}): E[Q] = {neural_q:.4f}")
 
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
-        sojourn_q = sojourn_result["mean_q_total"] if sojourn_result else float('inf')
+        strongest_tier3_q = strongest_tier3_result["mean_q_total"] if strongest_tier3_result else float('inf')
         proportional_q = proportional_result["mean_q_total"] if proportional_result else float('inf')
 
         log.info(f"Reference thresholds:")
         log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f}")
-        log.info(f"  UAS (Tier 3): E[Q] = {sojourn_q:.4f}")
+        if strongest_tier3_result:
+            log.info(
+                f"  Strongest Tier 3 ({strongest_tier3_result['name']}): "
+                f"E[Q] = {strongest_tier3_q:.4f}"
+            )
         log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f}")
 
         def has_parity(q_agent, se_agent, q_base, se_base):
@@ -298,23 +304,27 @@ def run_corrected_comparison(
         jssq_q = jssq_result["mean_q_total"] if jssq_result else float('inf')
         jssq_se = jssq_result["se_q_total"] if jssq_result else 0.0
 
-        sojourn_q = sojourn_result["mean_q_total"] if sojourn_result else float('inf')
-        sojourn_se = sojourn_result["se_q_total"] if sojourn_result else 0.0
+        strongest_tier3_q = strongest_tier3_result["mean_q_total"] if strongest_tier3_result else float('inf')
+        strongest_tier3_se = strongest_tier3_result["se_q_total"] if strongest_tier3_result else 0.0
 
         proportional_q = proportional_result["mean_q_total"] if proportional_result else float('inf')
         proportional_se = proportional_result["se_q_total"] if proportional_result else 0.0
 
         log.info(f"Reference statistical bounds (95% CI):")
         log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f} ± {jssq_se:.4f}")
-        log.info(f"  UAS (Tier 3): E[Q] = {sojourn_q:.4f} ± {sojourn_se:.4f}")
+        if strongest_tier3_result:
+            log.info(
+                f"  Strongest Tier 3 ({strongest_tier3_result['name']}): "
+                f"E[Q] = {strongest_tier3_q:.4f} ± {strongest_tier3_se:.4f}"
+            )
         log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f} ± {proportional_se:.4f}")
 
         if has_parity(neural_q, se_neural, jssq_q, jssq_se):
             parity = "GOLD"
             log.info(f"PARITY RESULT: GOLD [OK] (Statistically matches asymptotic optimum JSSQ)")
-        elif has_parity(neural_q, se_neural, sojourn_q, sojourn_se):
+        elif has_parity(neural_q, se_neural, strongest_tier3_q, strongest_tier3_se):
             parity = "SILVER"
-            log.info(f"PARITY RESULT: SILVER [OK] (Statistically matches empirical UAS baseline)")
+            log.info(f"PARITY RESULT: SILVER [OK] (Statistically matches strongest Tier 3 GibbsQ-family baseline)")
         elif has_parity(neural_q, se_neural, proportional_q, proportional_se):
             parity = "BRONZE"
             log.info(f"PARITY RESULT: BRONZE [OK] (Statistically matches static blind Proportional baseline)")

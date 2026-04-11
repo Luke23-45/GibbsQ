@@ -136,6 +136,10 @@ class ComponentRegistry:
             if mu is None:
                 raise ValueError("UAS routing requires 'mu'")
             return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
+        elif name == "refined_uas":
+            if mu is None:
+                raise ValueError("Refined UAS routing requires 'mu'")
+            return policy_cls(np.asarray(mu, dtype=np.float64), alpha)
         else:
             return policy_cls()
 

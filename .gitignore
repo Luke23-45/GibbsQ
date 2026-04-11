@@ -42,7 +42,7 @@ docs/logs
 # OS
 .DS_Store
 Thumbs.db
-# outputs
+outputs
 docs
 outputs_legacy
 ledger
@@ -57,3 +57,5 @@ outputs
 docs/notes/FINAL_EXPERIMENT_RUN_GUIDE.md
 docs/notes/FINAL_EXPERIMENT_RUN_GUIDE.md
 logs_r.md
+.test-scratch-ablation
+publication_review

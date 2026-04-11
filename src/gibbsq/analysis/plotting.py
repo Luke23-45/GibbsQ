@@ -61,6 +61,9 @@ __all__ = [
     "plot_raincloud",
     "plot_improvement_heatmap",
     "plot_ablation_bars",
+    "plot_ablation_dual_panel",
+    "plot_tier_comparison_bars",
+    "plot_policy_dual_panel",
     "plot_critical_load",
 ]
 
@@ -478,13 +481,26 @@ def plot_alpha_sweep(
             )
 
     ax.set_xscale("log")
+    import matplotlib.ticker as ticker
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:g}"))
+    ax.set_yscale("log")
     ax.set_title(plot_profile.figure_title or r"System Performance vs Routing Temperature ($\alpha$)")
     ax.set_xlabel(plot_profile.axis_labels.get("x", r"Inverse Temperature $\alpha$"))
-    ax.set_ylabel(plot_profile.axis_labels.get("y", r"Expected Total Queue Length $\mathbb{E}[|Q|_1]$"))
+    ax.set_ylabel(plot_profile.axis_labels.get("y", r"Expected Total Queue Length $\mathbb{E}[|Q|_1]$ (log scale)"))
     
-    # Dynamic headroom for top legends
-    max_y = np.nanmax(mean_q_matrix) if mean_q_matrix.size > 0 else 10.0
-    ax.set_ylim(0, max_y * 1.35) # Reduced headroom for tighter look
+    valid_y = mean_q_matrix[np.isfinite(mean_q_matrix) & (mean_q_matrix > 0)]
+    if valid_y.size > 0:
+        min_y = np.nanmin(valid_y)
+        max_y = np.nanmax(valid_y)
+        ax.set_ylim(min_y * 0.85, max_y * 3.8) # Significant log headroom to clear top legends
+    else:
+        ax.set_ylim(4.0, 400.0)
+
+    import matplotlib.ticker as ticker
+    target_ticks = [5, 10, 20, 50, 100, 200, 400]
+    ax.set_yticks(target_ticks)
+    ax.set_yticklabels([str(t) for t in target_ticks])
+    ax.yaxis.set_minor_locator(ticker.NullLocator())
 
     load_factor_legend = ax.legend(
         title=plot_profile.axis_labels.get("legend_title", "Load Factor"),
@@ -951,9 +967,6 @@ def plot_training_dashboard(
     ax_c.grid(True, linestyle=spec.grid_style, alpha=spec.grid_alpha)
 
     ax_d = axes[1, 1]
-    if "policy_grad_norm" in metrics:
-        ax_d.plot(epochs, metrics["policy_grad_norm"], linewidth=spec.line_width,
-                  color=TRAINING_GRADIENT, label="Policy grad norm")
     if "value_grad_norm" in metrics:
         ax_d.plot(epochs, metrics["value_grad_norm"], linewidth=spec.line_width,
                   color=TRAINING_CRITIC, alpha=0.8, label="Value grad norm")
@@ -1182,15 +1195,15 @@ def plot_raincloud(
                 m = np.mean(body.get_paths()[0].vertices[:, 0])
                 body.get_paths()[0].vertices[:, 0] = np.clip(
                     body.get_paths()[0].vertices[:, 0],
-                    -np.inf if i == 0 else m,
-                    m if i == 0 else np.inf,
+                    -np.inf,
+                    m,
                 )
                 body.set_facecolor(color)
                 body.set_edgecolor(contour)
                 body.set_alpha(spec.fill_alpha)
 
         jitter = np.random.default_rng(42).uniform(-0.08, 0.08, size=len(data))
-        offset = 0.15 if i == 0 else -0.15
+        offset = 0.15
         ax.scatter(
             np.full_like(data, pos + offset) + jitter, data,
             s=spec.marker_size * 6, color=color, alpha=0.7,
@@ -1228,7 +1241,10 @@ def plot_raincloud(
         if "p_value" in stats:
             p = stats["p_value"]
             stars = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
-            parts.append(f"p = {p:.4f} {stars}")
+            if p < 0.0001:
+                parts.append(f"p < 0.0001 {stars}")
+            else:
+                parts.append(f"p = {p:.4f} {stars}")
         if "cohen_d" in stats:
             parts.append(f"d = {stats['cohen_d']:.2f}")
         if "improvement_pct" in stats:
@@ -1298,24 +1314,31 @@ def plot_improvement_heatmap(
         label=plot_profile.axis_labels.get("colorbar", "Improvement Ratio (GibbsQ / Neural)"),
     )
 
+    cbar.ax.set_title("GibbsQ\nSuperior", fontsize=spec.annotation_fontsize - 1, fontweight="bold", pad=12)
+    cbar.ax.text(0.5, -0.015, "Neural\nSuperior", transform=cbar.ax.transAxes, 
+                 ha="center", va="top", fontsize=spec.annotation_fontsize - 1, fontweight="bold")
+
     for i in range(grid.shape[0]):
         for j in range(grid.shape[1]):
             val = grid[i, j]
-            text_color = "white" if abs(val - center) > vmax * 0.6 else "black"
+            text_color = "white" if abs(val - center) > vmax * 0.45 else "black"
             label = f"{val:{spec.value_format}}x"
-            if plot_profile.semantic_flags.get("semantic_cell_labels", False):
-                winner = "GibbsQ wins" if val > center else "Neural wins" if val < center else "Tie"
-                label = f"{label}\n{winner}"
             ax.text(
                 j,
                 i,
                 label,
                 ha="center",
                 va="center",
-                fontsize=spec.annotation_fontsize,
+                fontsize=spec.annotation_fontsize + 1,
                 color=text_color,
                 fontweight="bold",
             )
+
+    ax.grid(False)
+    ax.set_xticks(np.arange(grid.shape[1] + 1) - 0.5, minor=True)
+    ax.set_yticks(np.arange(grid.shape[0] + 1) - 0.5, minor=True)
+    ax.grid(which="minor", color="white", linestyle="-", linewidth=2.0)
+    ax.tick_params(which="minor", bottom=False, left=False)
 
     ax.set_xticks(range(len(x_labels)))
     ax.set_xticklabels(x_labels)
@@ -1419,6 +1442,254 @@ def plot_ablation_bars(
         ax.set_ylim(top=max_label_y)
 
     fig.tight_layout()
+
+    if save_path:
+        save_chart(fig, Path(save_path), formats or ["png", "pdf"])
+
+    return fig
+
+
+def _wrap_variant_label(label: str) -> str:
+    replacements = {
+        "Ablated: No Log-Norm": "Ablated:\nNo Log-Norm",
+        "Ablated: No Zero-Init": "Ablated:\nNo Zero-Init",
+        "Uniform Routing (Baseline)": "Uniform Routing\n(Baseline)",
+    }
+    return replacements.get(label, label)
+
+
+def _style_ablation_axis(
+    ax: plt.Axes,
+    labels: list[str],
+    *,
+    show_grid: bool,
+    show_xticks: bool,
+    plot_profile: ExperimentPlotProfile,
+) -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.set_xticks(np.arange(len(labels)))
+    if show_xticks:
+        ax.set_xticklabels([_wrap_variant_label(label) for label in labels], rotation=0, ha="center")
+    else:
+        ax.set_xticklabels([])
+        ax.tick_params(axis="x", length=0)
+    if show_grid:
+        ax.grid(True, axis="y", linestyle=(0, (3, 3)), alpha=0.28, linewidth=0.8)
+    else:
+        ax.grid(False)
+    ax.set_ylabel(plot_profile.axis_labels.get("y", r"$\mathbb{E}[Q_{total}]$"))
+
+
+def plot_ablation_dual_panel(
+    variant_names: List[str],
+    mean_values: List[float],
+    se_values: List[float],
+    *,
+    metric_name: str = r"$\mathbb{E}[Q_{total}]$",
+    save_path: Optional[Union[str, Path]] = None,
+    theme: Optional[str] = None,
+    formats: Optional[List[str]] = None,
+    profile: str | ExperimentPlotProfile | None = None,
+    context: ExperimentPlotContext | None = None,
+) -> plt.Figure:
+    """Premium dual-panel ablation chart for highly skewed comparisons."""
+    if not variant_names:
+        raise ValueError("variant_names must be non-empty")
+    if len(variant_names) != len(mean_values) or len(variant_names) != len(se_values):
+        raise ValueError("variant_names, mean_values, and se_values must have matching lengths")
+
+    plot_profile = resolve_experiment_plot_profile(
+        "ablation",
+        "plot_ablation_bars",
+        context=context,
+        profile=profile,
+    )
+    spec, theme, contour = _get_chart_style(ChartType.BAR_COMPARISON, theme)
+
+    means = np.asarray(mean_values, dtype=np.float64)
+    ses = np.asarray(se_values, dtype=np.float64)
+    if not np.all(np.isfinite(means)) or not np.all(np.isfinite(ses)):
+        raise ValueError("ablation dual-panel plot requires finite values")
+
+    x = np.arange(len(variant_names))
+    colors = [spec.palette[i % len(spec.palette)] for i in range(len(variant_names))]
+
+    fig, (ax_top, ax_bottom) = plt.subplots(
+        2,
+        1,
+        figsize=(12.5, 9.1),
+        sharex=True,
+        constrained_layout=True,
+        gridspec_kw={"height_ratios": [3.3, 2.2], "hspace": 0.05},
+    )
+
+    bar_kwargs = {
+        "yerr": ses,
+        "capsize": spec.error_bar_capsize,
+        "color": colors,
+        "alpha": 0.88,
+        "edgecolor": contour,
+        "linewidth": 1.2,
+        "zorder": 3,
+    }
+    bars_top = ax_top.bar(x, means, **bar_kwargs)
+    bars_bottom = ax_bottom.bar(x, means, **bar_kwargs)
+
+    top_max = float(np.max(means + ses))
+    lower_max = float(np.max(means[:3] + ses[:3])) if len(means) > 1 else top_max
+    lower_min = float(np.min(np.maximum(means[:3] - ses[:3], 0.0))) if len(means) > 1 else 0.0
+    lower_span = max(lower_max - lower_min, 1.0)
+
+    ax_top.set_ylim(0.0, top_max * 1.35)
+    ax_bottom.set_ylim(max(0.0, lower_min - 0.45 * lower_span), lower_max + 0.85 * lower_span)
+    bottom_ylim = ax_bottom.get_ylim()
+
+    _style_ablation_axis(ax_top, variant_names, show_grid=True, show_xticks=False, plot_profile=plot_profile)
+    _style_ablation_axis(ax_bottom, variant_names, show_grid=True, show_xticks=True, plot_profile=plot_profile)
+    ax_bottom.set_xlabel("Variant")
+    ax_top.set_title(plot_profile.figure_title or "Ablation Study: Component Contributions", pad=14, fontsize=16)
+
+    ax_top.text(
+        0.015,
+        0.92,
+        "Full scale",
+        transform=ax_top.transAxes,
+        fontsize=10,
+        fontweight="bold",
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": contour, "alpha": 0.92},
+    )
+    ax_bottom.text(
+        0.015,
+        0.92,
+        "Zoom on learned variants",
+        transform=ax_bottom.transAxes,
+        fontsize=10,
+        fontweight="bold",
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": contour, "alpha": 0.92},
+    )
+
+    top_value_pad = top_max * 0.02
+    bottom_value_pad = max(lower_span * 0.35, 0.25)
+    for idx, bar in enumerate(bars_top):
+        height = float(bar.get_height())
+        y = height + ses[idx] + top_value_pad
+        ax_top.text(
+            bar.get_x() + bar.get_width() / 2,
+            y,
+            f"{height:{spec.value_format}}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="semibold",
+            clip_on=False,
+            zorder=5,
+        )
+
+    full_model = float(means[0])
+    for idx, bar in enumerate(bars_bottom[: min(3, len(bars_bottom))]):
+        height = float(bar.get_height())
+        value_y = height + ses[idx] + lower_span * 0.06
+        ax_bottom.text(
+            bar.get_x() + bar.get_width() / 2,
+            value_y,
+            f"{height:{spec.value_format}}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="semibold",
+            clip_on=False,
+            zorder=5,
+        )
+        if idx > 0 and full_model > 0:
+            delta = ((height - full_model) / full_model) * 100.0
+            delta_color = "#D55E00" if delta > 0 else "#009E73"
+            sign = "+" if delta > 0 else ""
+            ax_bottom.text(
+                bar.get_x() + bar.get_width() / 2,
+                value_y + lower_span * 0.12,
+                f"{sign}{delta:.1f}%",
+                ha="center",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+                color=delta_color,
+                clip_on=False,
+                zorder=5,
+            )
+
+    if len(bars_bottom) >= 4:
+        bars_bottom[3].set_visible(False)
+        ax_bottom.annotate(
+            "Off-scale\nsee top panel",
+            xy=(x[3], bottom_ylim[1] - 0.03 * lower_span),
+            xytext=(x[3], bottom_ylim[1] - 0.28 * lower_span),
+            ha="center",
+            va="center",
+            fontsize=9,
+            color="#666666",
+            bbox={
+                "boxstyle": "round,pad=0.25",
+                "facecolor": "white",
+                "edgecolor": "#999999",
+                "alpha": 0.96,
+            },
+            arrowprops={
+                "arrowstyle": "-|>",
+                "color": "#999999",
+                "linewidth": 1.0,
+                "shrinkA": 4,
+                "shrinkB": 4,
+            },
+            zorder=6,
+        )
+
+    if len(means) >= 4 and full_model > 0:
+        baseline_delta = ((means[3] - full_model) / full_model) * 100.0
+        label_y = means[3] + ses[3] + top_value_pad
+        ax_top.annotate(
+            f"Baseline: +{baseline_delta:.1f}% vs Full Model",
+            xy=(x[3], label_y + top_max * 0.04),
+            xytext=(x[3], label_y + top_max * 0.10),
+            textcoords="data",
+            ha="center",
+            va="bottom",
+            fontsize=10.5,
+            fontweight="bold",
+            color="#D55E00",
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "#fff7f0",
+                "edgecolor": "#D55E00",
+                "linewidth": 1.0,
+                "alpha": 0.96,
+            },
+            arrowprops={
+                "arrowstyle": "-",
+                "linewidth": 1.2,
+                "color": "#D55E00",
+                "shrinkA": 4,
+                "shrinkB": 6,
+            },
+            zorder=6,
+        )
+
+    kwargs = dict(transform=ax_top.transAxes, color=contour, clip_on=False, linewidth=1.1)
+    ax_top.plot((-0.015, +0.015), (-0.015, +0.015), **kwargs)
+    ax_top.plot((0.985, 1.015), (-0.015, +0.015), **kwargs)
+    kwargs["transform"] = ax_bottom.transAxes
+    ax_bottom.plot((-0.015, +0.015), (1 - 0.015, 1 + 0.015), **kwargs)
+    ax_bottom.plot((0.985, 1.015), (1 - 0.015, 1 + 0.015), **kwargs)
+
+    legend_handles = [
+        Line2D([0], [0], color=colors[0], lw=8, label="Full model"),
+        Line2D([0], [0], color=colors[1], lw=8, label="Ablation: no log-normalization"),
+        Line2D([0], [0], color=colors[2], lw=8, label="Ablation: no zero-initialization"),
+        Line2D([0], [0], color=colors[3], lw=8, label="Uniform routing baseline"),
+    ]
+    ax_top.legend(handles=legend_handles, loc="upper center", frameon=True, ncol=2, fontsize=10)
+
+    fig.align_ylabels([ax_top, ax_bottom])
 
     if save_path:
         save_chart(fig, Path(save_path), formats or ["png", "pdf"])
@@ -1541,6 +1812,12 @@ def plot_critical_load(
     ax.set_ylabel(plot_profile.axis_labels.get("y", r"$\mathbb{E}[|Q|_1]$ (log scale)"))
     ax.set_title(plot_profile.figure_title or r"Critical Load: E[Q] vs $\rho$ Near Stability Boundary")
 
+    import matplotlib.ticker as ticker
+    target_ticks = [15, 20, 30, 40, 50, 60, 80]
+    ax.set_yticks(target_ticks)
+    ax.set_yticklabels([str(t) for t in target_ticks])
+    ax.yaxis.set_minor_locator(ticker.NullLocator())
+
     min_y = min(np.nanmin(neural_eq), np.nanmin(gibbs_eq))
     max_y = max(np.nanmax(neural_eq), np.nanmax(gibbs_eq))
     ax.set_ylim(min_y * 0.8, max_y * 1.25)
@@ -1555,7 +1832,7 @@ def plot_critical_load(
             ax.get_xlim()[1],
             alpha=0.08,
             color="#D55E00",
-            label=f"Near-critical (rho >= {critical_rho})",
+            label=r"Near-critical ($\rho \geq %s$)" % critical_rho,
         )
 
     ax.legend(loc="upper left")
@@ -1650,6 +1927,151 @@ def plot_tier_comparison_bars(
 
     fig.tight_layout()
 
+    if save_path:
+        save_chart(fig, Path(save_path), formats or list(plot_profile.preferred_formats))
+        
+        
+    return fig
+
+def plot_policy_dual_panel(
+    labels: List[str],
+    q_values: List[float],
+    q_errors: List[float],
+    tiers: List[int],
+    *,
+    metric_name: str = r"$\mathbb{E}[Q_{total}]$",
+    save_path: Optional[Union[str, Path]] = None,
+    theme: Optional[str] = None,
+    formats: Optional[List[str]] = None,
+    profile: str | ExperimentPlotProfile | None = None,
+    context: ExperimentPlotContext | None = None,
+) -> plt.Figure:
+    """Premium dual-panel policy comparison chart for highly skewed distributions."""
+    if not labels or len(labels) != len(q_values) or len(labels) != len(q_errors):
+        raise ValueError("labels, q_values, and q_errors must have matching non-empty lengths")
+
+    plot_profile = resolve_experiment_plot_profile(
+        "policy",
+        "plot_tier_comparison_bars",
+        context=context,
+        profile=profile,
+    )
+    spec, theme, contour = _get_chart_style(ChartType.BAR_COMPARISON, theme)
+    palette = spec.palette
+    
+    tier_colors = {
+        1: "#999999",
+        2: "#DDAA33",
+        3: "#CC6677",
+        4: "#7A7A7A",
+        5: "#117733",
+    }
+    colors = [tier_colors.get(t, palette[0]) for t in tiers]
+    
+    fig, (ax_top, ax_bottom) = plt.subplots(
+        2,
+        1,
+        figsize=(12.5, 9.5),
+        sharex=True,
+        constrained_layout=True,
+        gridspec_kw={"height_ratios": [3.3, 2.2], "hspace": 0.05},
+    )
+    
+    x = np.arange(len(labels))
+    bar_kwargs = {
+        "yerr": q_errors,
+        "capsize": spec.error_bar_capsize,
+        "color": colors,
+        "alpha": spec.fill_alpha,
+        "edgecolor": contour,
+        "linewidth": 1.2,
+        "zorder": 3,
+    }
+    bars_top = ax_top.bar(x, q_values, **bar_kwargs)
+    bars_bottom = ax_bottom.bar(x, q_values, **bar_kwargs)
+    
+    top_max = float(np.max(np.asarray(q_values) + np.asarray(q_errors)))
+    
+    median_val = np.median(q_values)
+    zoom_vals = [v + e for v, e in zip(q_values, q_errors) if v < 10 * median_val]
+    zoom_max = float(np.max(zoom_vals)) if zoom_vals else top_max
+    
+    ax_top.set_ylim(0, top_max * 1.35)
+    ax_bottom.set_ylim(0, zoom_max * 1.55)
+    bottom_ylim = ax_bottom.get_ylim()
+    
+    for ax in (ax_top, ax_bottom):
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(True, axis="y", linestyle=(0, (3, 3)), alpha=0.28, linewidth=0.8)
+        ax.set_ylabel(plot_profile.axis_labels.get("y", r"Expected Total Queue Length $\mathbb{E}[Q_{total}]$"))
+    
+    ax_bottom.set_xticks(x)
+    ax_bottom.set_xticklabels(labels, rotation=45, ha="right")
+    ax_top.tick_params(axis="x", length=0)
+    
+    ax_top.set_title(plot_profile.figure_title or "Corrected Policy Comparison", pad=14, fontsize=16)
+    
+    ax_top.text(
+        0.015, 0.92, "Full scale", transform=ax_top.transAxes, fontsize=10, fontweight="bold",
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": contour, "alpha": 0.92},
+    )
+    ax_bottom.text(
+        0.015, 0.92, "Zoom on competitive policies", transform=ax_bottom.transAxes, fontsize=10, fontweight="bold",
+        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "edgecolor": contour, "alpha": 0.92},
+    )
+    
+    ax_top.text(
+        0.985, 0.92, "Lower is better", transform=ax_top.transAxes, ha="right", fontsize=9, color=contour,
+        bbox=dict(boxstyle="round,pad=0.25", facecolor="white", alpha=0.85, edgecolor=contour),
+    )
+    
+    top_value_pad = top_max * 0.03
+    for idx, bar in enumerate(bars_top):
+        h = float(bar.get_height())
+        if h > bottom_ylim[1]:
+            ax_top.text(
+                bar.get_x() + bar.get_width() / 2, h + q_errors[idx] + top_value_pad,
+                f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5,
+            )
+        
+    for idx, (bar, h) in enumerate(zip(bars_bottom, q_values)):
+        if h > bottom_ylim[1]:
+            bar.set_visible(False)
+            ax_bottom.annotate(
+                "Off-scale\nsee top panel",
+                xy=(x[idx], bottom_ylim[1] - 0.03 * zoom_max),
+                xytext=(x[idx], bottom_ylim[1] - 0.28 * zoom_max),
+                ha="center", va="center", fontsize=9, color="#666666",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="#999999", alpha=0.96),
+                arrowprops=dict(arrowstyle="-|>", color="#999999", linewidth=1.0, shrinkA=4, shrinkB=4),
+                zorder=6,
+            )
+        else:
+            value_y = h + q_errors[idx] + zoom_max * 0.15
+            ax_bottom.text(
+                bar.get_x() + bar.get_width() / 2, value_y,
+                f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5,
+            )
+            
+    kwargs = dict(transform=ax_top.transAxes, color=contour, clip_on=False, linewidth=1.1)
+    ax_top.plot((-0.015, +0.015), (-0.015, +0.015), **kwargs)
+    ax_top.plot((0.985, 1.015), (-0.015, +0.015), **kwargs)
+    kwargs["transform"] = ax_bottom.transAxes
+    ax_bottom.plot((-0.015, +0.015), (1 - 0.015, 1 + 0.015), **kwargs)
+    ax_bottom.plot((0.985, 1.015), (1 - 0.015, 1 + 0.015), **kwargs)
+    
+    from matplotlib.patches import Patch
+    tier_labels_str = {
+        1: "Tier 1: Blind", 2: "Tier 2: Structural", 3: "Tier 3: UAS",
+        4: "Tier 4: Blind/Fixed-weight", 5: "Tier 5: Proposed",
+    }
+    legend_elements = [Patch(facecolor=c, label=tier_labels_str.get(t, f'Tier {t}'), alpha=spec.fill_alpha)
+                       for t, c in sorted(tier_colors.items()) if t in tiers]
+    ax_top.legend(handles=legend_elements, loc="upper center", frameon=True, ncol=len(legend_elements)//2 or 1, fontsize=10)
+    
+    fig.align_ylabels([ax_top, ax_bottom])
+    
     if save_path:
         save_chart(fig, Path(save_path), formats or list(plot_profile.preferred_formats))
         

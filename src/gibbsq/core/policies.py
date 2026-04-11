@@ -35,6 +35,7 @@ __all__ = [
     "PowerOfDRouting",
     "JSSQRouting",
     "UASRouting",
+    "RefinedUASRouting",
     "make_policy",
 ]
 
@@ -328,6 +329,84 @@ class UASRouting:
     def __repr__(self) -> str:
         return f"UASRouting(α={self._alpha}, N={len(self._mu)})"
 
+@ComponentRegistry.register_policy("refined_uas")
+class RefinedUASRouting:
+    """
+    Refined Archimedean softmax routing.
+
+    This policy extends the current UAS rule to the score family
+
+        score_i = gamma * log(mu_i) - alpha * (Q_i + c) / mu_i**beta
+
+    with benchmark-tuned defaults beta=0.85, gamma=0.5, c=0.5.
+    The current UAS rule is recovered by beta=1, gamma=1, c=1.
+    """
+
+    __slots__ = ("_mu", "_alpha", "_beta", "_gamma", "_c")
+
+    def __init__(
+        self,
+        mu: np.ndarray,
+        alpha: float = 20.0,
+        *,
+        beta: float = 0.85,
+        gamma: float = 0.5,
+        c: float = 0.5,
+    ) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        if beta <= 0:
+            raise ValueError(f"beta must be > 0, got {beta}")
+        if c < 0:
+            raise ValueError(f"c must be >= 0, got {c}")
+        self._mu = mu
+        self._alpha = float(alpha)
+        self._beta = float(beta)
+        self._gamma = float(gamma)
+        self._c = float(c)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    @property
+    def beta(self) -> float:
+        return self._beta
+
+    @property
+    def gamma(self) -> float:
+        return self._gamma
+
+    @property
+    def c(self) -> float:
+        return self._c
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        q = Q.astype(np.float64)
+        logits = self._gamma * np.log(self._mu)
+        logits = logits - self._alpha * ((q + self._c) / (self._mu ** self._beta))
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return (
+            f"RefinedUASRouting(alpha={self._alpha}, beta={self._beta}, "
+            f"gamma={self._gamma}, c={self._c}, N={len(self._mu)})"
+        )
+
+
 def make_policy(
     name: str,
     *,
@@ -347,7 +426,7 @@ def make_policy(
     ----------
     name : str
         One of  ``"softmax"``, ``"uniform"``, ``"proportional"``,
-        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"uas"``.
+        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"uas"``, ``"refined_uas"``.
     alpha : float
         Inverse temperature (softmax and uas only).
     mu : ndarray

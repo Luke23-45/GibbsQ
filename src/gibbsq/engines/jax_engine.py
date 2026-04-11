@@ -27,6 +27,7 @@ POLICY_NAME_TO_TYPE = {
     "power_of_d": 4,
     "jssq": 5,
     "uas": 6,
+    "refined_uas": 7,
 }
 
 def policy_name_to_type(name: str) -> int:
@@ -84,8 +85,8 @@ def _validate_inputs(
             "max_samples must cover the full sampling grid through sim_time: "
             f"required >= {required_samples}, got {max_samples}"
         )
-    if policy_type not in (0, 1, 2, 3, 4, 5, 6):
-        raise ValueError(f"policy_type must be one of 0..6, got {policy_type}")
+    if policy_type not in (0, 1, 2, 3, 4, 5, 6, 7):
+        raise ValueError(f"policy_type must be one of 0..7, got {policy_type}")
     if d < 1:
         raise ValueError(f"d must be >= 1, got {d}")
 
@@ -165,6 +166,17 @@ def get_probs(Q: jnp.ndarray, params: SimParams, key: jax.random.PRNGKey) -> jnp
         potential = (Q.astype(params.service_rates.dtype) + 1.0) / params.service_rates
         logits = -params.alpha * potential
         logits = logits + jnp.log(params.service_rates)
+        max_logit = jnp.max(logits)
+        exp_logits = jnp.exp(logits - max_logit)
+        return exp_logits / jnp.sum(exp_logits)
+        
+    elif params.policy_type == 7:
+        beta = jnp.asarray(0.85, dtype=params.service_rates.dtype)
+        gamma = jnp.asarray(0.5, dtype=params.service_rates.dtype)
+        c = jnp.asarray(0.5, dtype=params.service_rates.dtype)
+        q = Q.astype(params.service_rates.dtype)
+        logits = gamma * jnp.log(params.service_rates)
+        logits = logits - params.alpha * ((q + c) / (params.service_rates ** beta))
         max_logit = jnp.max(logits)
         exp_logits = jnp.exp(logits - max_logit)
         return exp_logits / jnp.sum(exp_logits)

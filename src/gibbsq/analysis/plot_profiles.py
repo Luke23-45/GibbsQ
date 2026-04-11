@@ -140,7 +140,7 @@ _PROFILE_REGISTRY: dict[tuple[str, str], ExperimentPlotProfile] = {
         axis_labels={
             "x": r"Load Factor $\rho$",
             "y": "Service Rate Scale (x base distribution)",
-            "colorbar": "Improvement Ratio (GibbsQ / Neural)",
+            "colorbar": "Improvement Ratio (N-GibbsQ / GibbsQ)",
         },
         annotations_mode="improvement_semantic",
         thresholds={"center": 1.0, "win_threshold": 1.0},
