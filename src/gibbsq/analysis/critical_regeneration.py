@@ -40,12 +40,12 @@ def regenerate_critical_figure(
     
     rho_values = np.array([r["rho"] for r in records])
     neural_eq = np.array([r["neural_eq"] for r in records])
-    baseline_eq = np.array(
-        [
-            r.get("calibrated_uas_eq", r.get("baseline_eq", r["gibbs_eq"]))
-            for r in records
-        ]
-    )
+    try:
+        baseline_eq = np.array([r["calibrated_uas_eq"] for r in records], dtype=np.float64)
+    except KeyError as exc:
+        raise ValueError(
+            "Critical regeneration requires v3 metrics with 'calibrated_uas_eq' in every row."
+        ) from exc
 
     out_path = Path(output_dir) if output_dir else run_dir / "figures"
     out_path.mkdir(parents=True, exist_ok=True)

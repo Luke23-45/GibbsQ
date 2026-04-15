@@ -206,6 +206,18 @@ def test_load_validated_ablation_records_rejects_legacy_duplicate_neural_base_sc
         load_validated_ablation_records(summary_path)
 
 
+def test_load_validated_ablation_records_ignores_legacy_refined_delta_keys_without_v3_fields():
+    rows = _sample_rows()
+    rows[0].pop("delta_vs_calibrated_uas_mean", None)
+    rows[0]["delta_vs_refined_uas_mean"] = 0.98
+    summary_path = _workspace_case_dir("rejects-legacy-refined-delta") / "metrics" / "ablation_ssa_metrics.jsonl"
+    _write_summary(summary_path, rows)
+
+    records = load_validated_ablation_records(summary_path)
+
+    assert records[0].delta_vs_calibrated_uas_mean is None
+
+
 def test_regenerate_ablation_figure_writes_outputs_from_summary():
     run_dir = _workspace_case_dir("regenerate-summary") / "ablation_run"
     summary_path = run_dir / "metrics" / "ablation_ssa_metrics.jsonl"

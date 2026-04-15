@@ -59,3 +59,5 @@ docs/notes/FINAL_EXPERIMENT_RUN_GUIDE.md
 logs_r.md
 .test-scratch-ablation
 publication_review
+erroors.md
+tests/_tmp_critical_numeric/metrics/metrics.jsonl

@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from omegaconf import OmegaConf
 
 
@@ -106,6 +107,86 @@ def test_critical_regeneration_prefers_calibrated_uas_metric(monkeypatch):
 
     import shutil
     shutil.rmtree(workspace_tmp)
+
+
+def test_critical_regeneration_requires_v3_calibrated_uas_metric():
+    from gibbsq.analysis.critical_regeneration import regenerate_critical_figure
+
+    workspace_tmp = Path("tests") / "_tmp_publication_release_missing_v3"
+    if workspace_tmp.exists():
+        import shutil
+        shutil.rmtree(workspace_tmp)
+    run_dir = workspace_tmp / "critical_run"
+    metrics_dir = run_dir / "metrics"
+    metrics_dir.mkdir(parents=True)
+    (metrics_dir / "metrics.jsonl").write_text(
+        '{"rho": 0.9, "neural_eq": 9.8, "baseline_eq": 10.2, "gibbs_eq": 11.1}\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="requires v3 metrics"):
+        regenerate_critical_figure(run_dir)
+
+    import shutil
+    shutil.rmtree(workspace_tmp)
+
+
+def test_critical_load_keeps_plot_baseline_series_numeric(monkeypatch):
+    from experiments.evaluation.n_gibbsq_evals import critical_load
+
+    cfg = SimpleNamespace(
+        system=SimpleNamespace(num_servers=2, service_rates=[1.0, 1.5], alpha=20.0),
+        simulation=SimpleNamespace(
+            ssa=SimpleNamespace(sim_time=10.0, sample_interval=1.0),
+            num_replications=2,
+            seed=7,
+            burn_in_fraction=0.0,
+        ),
+        generalization=SimpleNamespace(rho_boundary_vals=[0.9], rho_boundary_threshold=0.95),
+        neural=SimpleNamespace(),
+    )
+
+    captured = {}
+
+    class DummySimResult:
+        pass
+
+    monkeypatch.setattr(critical_load, "resolve_model_pointer", lambda *args, **kwargs: Path("dummy.eqx"))
+    monkeypatch.setattr(critical_load, "NeuralRouter", lambda *args, **kwargs: object())
+    monkeypatch.setattr(critical_load.eqx, "tree_deserialise_leaves", lambda *args, **kwargs: object())
+    monkeypatch.setattr("gibbsq.utils.model_io.validate_neural_model_shape", lambda *args, **kwargs: None)
+    monkeypatch.setattr(critical_load, "build_policy_by_name", lambda *args, **kwargs: object())
+    monkeypatch.setattr(critical_load, "build_neural_eval_policy", lambda *args, **kwargs: object())
+    monkeypatch.setattr(critical_load, "compute_poisson_max_steps", lambda *args, **kwargs: 100)
+    monkeypatch.setattr(critical_load, "critical_load_sim_time", lambda *args, **kwargs: 5.0)
+    monkeypatch.setattr(
+        critical_load,
+        "run_replications",
+        lambda **kwargs: [DummySimResult(), DummySimResult()],
+    )
+    monkeypatch.setattr(critical_load, "simulate", lambda **kwargs: DummySimResult())
+    monkeypatch.setattr(critical_load, "time_averaged_queue_lengths", lambda *args, **kwargs: critical_load.np.array([3.0, 4.0]))
+    monkeypatch.setattr(
+        critical_load.CriticalLoadTest,
+        "_assert_curve_artifacts",
+        lambda self: None,
+    )
+
+    def fake_plot_progress(self, rho_vals, neural_r, baseline_r):
+        captured["rho_vals"] = list(rho_vals)
+        captured["neural_r"] = list(neural_r)
+        captured["baseline_r"] = list(baseline_r)
+
+    monkeypatch.setattr(critical_load.CriticalLoadTest, "_plot_progress", fake_plot_progress)
+
+    test = critical_load.CriticalLoadTest(cfg, Path("tests/_tmp_critical_numeric"), None)
+    result = test.execute(critical_load.jax.random.PRNGKey(cfg.simulation.seed))
+
+    assert captured["rho_vals"] == [0.9]
+    assert captured["neural_r"] == [7.0]
+    assert captured["baseline_r"] == [7.0]
+    assert all(isinstance(value, float) for value in captured["baseline_r"])
+    assert result["calibrated_uas_eq"] == [7.0]
 
 
 def test_final_phase_pipelines_preserve_explicit_config_name(monkeypatch):

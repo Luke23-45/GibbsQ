@@ -82,13 +82,6 @@ def _optional_float(payload: dict, key: str) -> float | None:
     return cast_value
 
 
-def _optional_float_compat(payload: dict, primary_key: str, legacy_key: str) -> float | None:
-    value = _optional_float(payload, primary_key)
-    if value is not None:
-        return value
-    return _optional_float(payload, legacy_key)
-
-
 def load_validated_ablation_records(path: Path) -> list[AblationRecord]:
     rows = _load_jsonl_records(path)
     if len(rows) != len(CANONICAL_VARIANTS):
@@ -140,9 +133,9 @@ def load_validated_ablation_records(path: Path) -> list[AblationRecord]:
                 mean_q_total=mean_q_total,
                 se_q_total=se_q_total,
                 ci95_half_width=ci95_half_width,
-                delta_vs_calibrated_uas_mean=_optional_float_compat(payload, "delta_vs_calibrated_uas_mean", "delta_vs_refined_uas_mean"),
-                delta_vs_calibrated_uas_se=_optional_float_compat(payload, "delta_vs_calibrated_uas_se", "delta_vs_refined_uas_se"),
-                delta_vs_calibrated_uas_ci95_half_width=_optional_float_compat(payload, "delta_vs_calibrated_uas_ci95_half_width", "delta_vs_refined_uas_ci95_half_width"),
+                delta_vs_calibrated_uas_mean=_optional_float(payload, "delta_vs_calibrated_uas_mean"),
+                delta_vs_calibrated_uas_se=_optional_float(payload, "delta_vs_calibrated_uas_se"),
+                delta_vs_calibrated_uas_ci95_half_width=_optional_float(payload, "delta_vs_calibrated_uas_ci95_half_width"),
                 delta_vs_best_neural_mean=_optional_float(payload, "delta_vs_best_neural_mean"),
                 delta_vs_best_neural_se=_optional_float(payload, "delta_vs_best_neural_se"),
                 delta_vs_best_neural_ci95_half_width=_optional_float(payload, "delta_vs_best_neural_ci95_half_width"),

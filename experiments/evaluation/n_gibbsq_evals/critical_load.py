@@ -109,7 +109,7 @@ class CriticalLoadTest:
                         mu=mu_np,
                     )
                     max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
-                    baseline_results = run_replications(
+                    baseline_replications = run_replications(
                         num_replications=num_reps,
                         num_servers=self.num_servers,
                         arrival_rate=float(arrival_rate),
@@ -124,7 +124,7 @@ class CriticalLoadTest:
 
                     baseline_vals = [
                         float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum())
-                        for res in baseline_results
+                        for res in baseline_replications
                     ]
                     baseline_loss = float(np.mean(baseline_vals))
 
