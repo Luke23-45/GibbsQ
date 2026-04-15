@@ -42,7 +42,7 @@ docs/logs
 # OS
 .DS_Store
 Thumbs.db
-outputs
+
 docs
 outputs_legacy
 ledger

@@ -28,6 +28,7 @@ EXPERIMENTS = {
     "check_configs": "experiments.testing.check_configs",
     "hyperqual": "experiments.studies.hyperparameter_qualification",
     "reinforce_check": "experiments.testing.reinforce_gradient_check",
+    "engine_parity": "experiments.verification.engine_parity",
 
     # Phase 1: Foundational Metrics & Baselines
     "drift": "experiments.verification.drift_verification",

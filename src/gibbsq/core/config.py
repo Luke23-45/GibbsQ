@@ -67,6 +67,7 @@ EXPERIMENT_BLOCK_NAMES = (
     "check_configs",
     "hyperqual",
     "reinforce_check",
+    "engine_parity",
     "drift",
     "sweep",
     "stress",
@@ -246,6 +247,23 @@ class VerificationThresholds:
     gradient_shake_scale: float = 0.10
 
 @dataclass
+class EngineParityConfig:
+    """Configuration for NumPy-vs-JAX engine equivalence verification."""
+    mode: str = "quick"  # quick or full
+    policies: List[str] = field(default_factory=lambda: ["jsq", "jssq", "uas", "calibrated_uas"])
+    include_policy_contract: bool = True
+    include_stats_contract: bool = True
+    include_generalize_contract: bool = True
+    include_critical_contract: bool = True
+    quick_num_replications: int = 4
+    full_num_replications: int = 16
+    quick_generalize_max_cells: int = 4
+    quick_critical_max_rhos: int = 2
+    equivalence_ci_level: float = 0.90
+    equivalence_abs_margin: float = 0.25
+    equivalence_rel_margin: float = 0.02
+
+@dataclass
 class WandbConfig:
     """
     Weights & Biases integration.
@@ -412,6 +430,7 @@ class ExperimentConfig:
     jax_engine: JAXEngineConfig  = field(default_factory=JAXEngineConfig)
     neural:     NeuralConfig     = field(default_factory=NeuralConfig)
     verification: VerificationThresholds = field(default_factory=VerificationThresholds)
+    engine_parity: EngineParityConfig = field(default_factory=EngineParityConfig)
     generalization: GeneralizationConfig = field(default_factory=GeneralizationConfig)
     stress:         StressConfig         = field(default_factory=StressConfig)
     stability_sweep: StabilitySweepConfig = field(default_factory=StabilitySweepConfig)
@@ -667,6 +686,34 @@ def validate(cfg: ExperimentConfig) -> None:
     if ver.gradient_shake_scale < 0:
         raise ValueError(f"verification.gradient_shake_scale must be >= 0, got {ver.gradient_shake_scale}")
 
+    ep = cfg.engine_parity
+    if ep.mode not in {"quick", "full"}:
+        raise ValueError(f"engine_parity.mode must be 'quick' or 'full', got {ep.mode}")
+    if not ep.policies:
+        raise ValueError("engine_parity.policies must contain at least one supported policy.")
+    valid_engine_parity_policies = {"jsq", "jssq", "uas", "calibrated_uas", "refined_uas"}
+    for i, policy_name in enumerate(ep.policies):
+        if policy_name not in valid_engine_parity_policies:
+            raise ValueError(
+                f"engine_parity.policies[{i}] must be one of {sorted(valid_engine_parity_policies)}, got {policy_name}"
+            )
+    _validate_positive_int("engine_parity.quick_num_replications", ep.quick_num_replications)
+    _validate_positive_int("engine_parity.full_num_replications", ep.full_num_replications)
+    _validate_positive_int("engine_parity.quick_generalize_max_cells", ep.quick_generalize_max_cells)
+    _validate_positive_int("engine_parity.quick_critical_max_rhos", ep.quick_critical_max_rhos)
+    if not (0.5 < ep.equivalence_ci_level < 1.0):
+        raise ValueError(
+            f"engine_parity.equivalence_ci_level must be in (0.5, 1.0), got {ep.equivalence_ci_level}"
+        )
+    if ep.equivalence_abs_margin <= 0:
+        raise ValueError(
+            f"engine_parity.equivalence_abs_margin must be > 0, got {ep.equivalence_abs_margin}"
+        )
+    if ep.equivalence_rel_margin <= 0:
+        raise ValueError(
+            f"engine_parity.equivalence_rel_margin must be > 0, got {ep.equivalence_rel_margin}"
+        )
+
     valid_wandb_modes = {"online", "offline", "disabled"}
     if cfg.wandb.mode not in valid_wandb_modes:
         raise ValueError(f"wandb.mode must be one of {sorted(valid_wandb_modes)}, got {cfg.wandb.mode}")
@@ -878,6 +925,7 @@ def hydra_to_config(raw: DictConfig) -> ExperimentConfig:
         jax_engine=JAXEngineConfig(**d.get("jax_engine", {})),
         neural=NeuralConfig(**d.get("neural", {})),
         verification=VerificationThresholds(**d.get("verification", {})),  # type: ignore[arg-type]
+        engine_parity=EngineParityConfig(**d.get("engine_parity", {})),  # type: ignore[arg-type]
         generalization=GeneralizationConfig(**d.get("generalization", {})),
         stress=StressConfig(**d.get("stress", {})),  # type: ignore[arg-type]
         stability_sweep=StabilitySweepConfig(**d.get("stability_sweep", {})),

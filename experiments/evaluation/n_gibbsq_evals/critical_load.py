@@ -19,11 +19,11 @@ from omegaconf import DictConfig
 
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.analysis.plot_profiles import ExperimentPlotContext
+from gibbsq.core.builders import build_policy_by_name
 from gibbsq.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
-from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
-from gibbsq.engines.numpy_engine import SimResult, simulate
+from gibbsq.engines.numpy_engine import run_replications, simulate
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
@@ -45,7 +45,7 @@ def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float
 
 def _publication_baseline_spec() -> tuple[str, int]:
     """Return the canonical publication baseline for critical-load evaluation."""
-    return PUBLICATION_BASELINE_POLICY_NAME, policy_name_to_type(PUBLICATION_BASELINE_POLICY_NAME)
+    return PUBLICATION_BASELINE_POLICY_NAME, int(0)
 
 
 class CriticalLoadTest:
@@ -87,7 +87,7 @@ class CriticalLoadTest:
         neural_results = []
         baseline_results = []
         num_reps = int(self.cfg.simulation.num_replications)
-        baseline_policy_name, baseline_policy_type = _publication_baseline_spec()
+        baseline_policy_name, _ = _publication_baseline_spec()
 
         log.info(f"System Capacity: {total_capacity:.2f}")
         log.info(f"Targeting Load Boundary: {self.rho_vals}")
@@ -100,53 +100,32 @@ class CriticalLoadTest:
                     log.info(f"Evaluating Boundary rho={rho:.3f} (Arrival={arrival_rate:.3f})...")
 
                     rho_sim_time = critical_load_sim_time(self.cfg, float(rho))
-                    max_samples = int(rho_sim_time / self.ssa_sample_interval) + 1
                     mu_np = np.array(self.service_rates, dtype=np.float64)
                     rho_seed = self.cfg.simulation.seed + idx * 1000
 
-                    times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                    baseline_policy = build_policy_by_name(
+                        baseline_policy_name,
+                        alpha=float(self.cfg.system.alpha),
+                        mu=mu_np,
+                    )
+                    max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
+                    baseline_results = run_replications(
                         num_replications=num_reps,
                         num_servers=self.num_servers,
                         arrival_rate=float(arrival_rate),
-                        service_rates=jnp.array(mu_np),
-                        alpha=float(self.cfg.system.alpha),
+                        service_rates=mu_np,
+                        policy=baseline_policy,
                         sim_time=rho_sim_time,
                         sample_interval=self.ssa_sample_interval,
                         base_seed=rho_seed,
-                        max_samples=max_samples,
-                        policy_type=baseline_policy_type,
-                        max_events_multiplier=self.cfg.jax_engine.max_events_safety_multiplier,
-                        max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
-                        scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
+                        max_events=max_events,
+                        progress_desc=f"critical {PUBLICATION_BASELINE_LABEL} rho={rho:.3f}",
                     )
 
-                    baseline_vals = []
-                    for rep_idx in iter_progress(
-                        range(num_reps),
-                        total=num_reps,
-                        desc=f"critical {PUBLICATION_BASELINE_LABEL} rho={rho:.3f}",
-                        unit="rep",
-                        leave=False,
-                    ):
-                        np_times = np.array(times_g[rep_idx])
-                        np_states = np.array(states_g[rep_idx])
-                        valid_mask = np_times > 0
-                        valid_mask[0] = True
-                        valid_len = int(np.sum(valid_mask))
-                        np_times = np_times[:valid_len]
-                        np_states = np_states[:valid_len]
-
-                        res = SimResult(
-                            times=np_times,
-                            states=np_states,
-                            arrival_count=int(arrs_g[rep_idx]),
-                            departure_count=int(deps_g[rep_idx]),
-                            final_time=float(np_times[-1]),
-                            num_servers=self.num_servers,
-                        )
-                        baseline_vals.append(
-                            float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum())
-                        )
+                    baseline_vals = [
+                        float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum())
+                        for res in baseline_results
+                    ]
                     baseline_loss = float(np.mean(baseline_vals))
 
                     neural_policy = build_neural_eval_policy(
@@ -155,7 +134,6 @@ class CriticalLoadTest:
                         rho=rho,
                         mode=NEURAL_EVAL_MODE,
                     )
-                    max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
                     neural_vals = []
                     for rep_idx in iter_progress(
                         range(num_reps),

@@ -136,6 +136,21 @@ verification:
   gradient_check_error_threshold: 0.40
   gradient_shake_scale: 0.1
 
+engine_parity:
+  mode: quick
+  policies: [jsq, jssq, uas, calibrated_uas]
+  include_policy_contract: true
+  include_stats_contract: true
+  include_generalize_contract: true
+  include_critical_contract: true
+  quick_num_replications: 4
+  full_num_replications: 16
+  quick_generalize_max_cells: 4
+  quick_critical_max_rhos: 2
+  equivalence_ci_level: 0.90
+  equivalence_abs_margin: 0.25
+  equivalence_rel_margin: 0.02
+
 output_dir: outputs
 log_dir: ${output_dir}/logs
 train_epochs: 30
@@ -190,6 +205,12 @@ experiments:
       gradient_check_cosine_threshold: 0.9
       gradient_check_error_threshold: 0.40
       gradient_shake_scale: 0.1
+  engine_parity:
+    jax:
+      enabled: true
+      platform: auto
+      precision: float32
+      fallback_to_cpu: true
   drift:
     system:
       num_servers: 2
@@ -297,7 +318,7 @@ experiments:
       fallback_to_cpu: true
   stats:
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
@@ -305,7 +326,7 @@ experiments:
       num_replications: 30
   generalize:
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true
@@ -317,7 +338,7 @@ experiments:
       fallback_to_cpu: true
   critical:
     jax:
-      enabled: true
+      enabled: false
       platform: auto
       precision: float32
       fallback_to_cpu: true

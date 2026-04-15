@@ -41,11 +41,11 @@ from omegaconf import DictConfig
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.analysis.plot_profiles import ExperimentPlotContext
 from gibbsq.core import constants
+from gibbsq.core.builders import build_policy_by_name
 from gibbsq.core.config import load_experiment_config
 from gibbsq.core.neural_policies import NeuralRouter
-from gibbsq.engines.jax_engine import policy_name_to_type, run_replications_jax
 from gibbsq.engines.jax_ssa import compute_poisson_max_steps
-from gibbsq.engines.numpy_engine import SimResult, simulate
+from gibbsq.engines.numpy_engine import run_replications, simulate
 from gibbsq.utils.exporter import append_metrics_jsonl
 from gibbsq.utils.logging import get_run_config, setup_wandb
 from gibbsq.utils.model_io import build_neural_eval_policy, resolve_model_pointer
@@ -67,7 +67,7 @@ def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float
 
 def _publication_baseline_spec() -> tuple[str, int]:
     """Return the canonical publication baseline for generalization sweeps."""
-    return PUBLICATION_BASELINE_POLICY_NAME, policy_name_to_type(PUBLICATION_BASELINE_POLICY_NAME)
+    return PUBLICATION_BASELINE_POLICY_NAME, int(0)
 
 
 class GeneralizationSweeper:
@@ -113,10 +113,9 @@ class GeneralizationSweeper:
             raise RuntimeError(f"Model shape mismatch: {e}") from e
 
         cell_reps = int(self.cfg.simulation.num_replications)
-        max_samples = int(self.ssa_sim_time / self.ssa_sample_interval) + 1
         total_cells = len(scale_vals) * len(rho_vals)
         cell_keys = jax.random.split(k_grid, total_cells)
-        baseline_policy_name, baseline_policy_type = _publication_baseline_spec()
+        baseline_policy_name, _ = _publication_baseline_spec()
 
         log.info(
             f"Evaluating N-GibbsQ improvement ratio ({PUBLICATION_BASELINE_LABEL} / Neural) "
@@ -141,44 +140,31 @@ class GeneralizationSweeper:
                         rho=rho,
                         mode=NEURAL_EVAL_MODE,
                     )
-                    times_g, states_g, (arrs_g, deps_g) = run_replications_jax(
+                    baseline_policy = build_policy_by_name(
+                        baseline_policy_name,
+                        alpha=float(self.cfg.system.alpha),
+                        mu=mu_np,
+                    )
+                    max_events = compute_poisson_max_steps(lambda_rate, mu_np, self.ssa_sim_time)
+                    baseline_results = run_replications(
                         num_replications=cell_reps,
                         num_servers=self.cfg.system.num_servers,
                         arrival_rate=lambda_rate,
-                        service_rates=jnp.array(mu_np),
-                        alpha=float(self.cfg.system.alpha),
+                        service_rates=mu_np,
+                        policy=baseline_policy,
                         sim_time=self.ssa_sim_time,
                         sample_interval=self.ssa_sample_interval,
                         base_seed=cell_seed,
-                        max_samples=max_samples,
-                        policy_type=baseline_policy_type,
-                        max_events_multiplier=self.cfg.jax_engine.max_events_safety_multiplier,
-                        max_events_buffer=self.cfg.jax_engine.max_events_additive_buffer,
-                        scan_sampling_chunk=self.cfg.jax_engine.scan_sampling_chunk,
+                        max_events=max_events,
+                        progress_desc=f"generalize baseline scale={scale:.2f} rho={rho:.2f}",
                     )
 
-                    baseline_vals = []
-                    for rep_idx in range(cell_reps):
-                        np_times = np.array(times_g[rep_idx])
-                        np_states = np.array(states_g[rep_idx])
-                        valid_mask = np_times > 0
-                        valid_mask[0] = True
-                        valid_len = int(np.sum(valid_mask))
-                        np_times = np_times[:valid_len]
-                        np_states = np_states[:valid_len]
-
-                        res = SimResult(
-                            times=np_times,
-                            states=np_states,
-                            arrival_count=int(arrs_g[rep_idx]),
-                            departure_count=int(deps_g[rep_idx]),
-                            final_time=float(np_times[-1]),
-                            num_servers=self.cfg.system.num_servers,
-                        )
-                        baseline_vals.append(float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum()))
+                    baseline_vals = [
+                        float(time_averaged_queue_lengths(res, self.cfg.simulation.burn_in_fraction).sum())
+                        for res in baseline_results
+                    ]
                     baseline_loss = float(np.mean(baseline_vals))
 
-                    max_events = compute_poisson_max_steps(lambda_rate, mu_np, self.ssa_sim_time)
                     neural_vals = []
                     for rep_idx in iter_progress(
                         range(cell_reps),

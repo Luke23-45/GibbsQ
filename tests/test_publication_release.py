@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from omegaconf import OmegaConf
 
 
 def test_drift_verification_accepts_theorem_backed_policy_paths():
@@ -27,6 +28,31 @@ def test_publication_neural_evaluation_runners_pin_calibrated_uas_baseline():
     assert stats_spec()[0] == "calibrated_uas"
     assert generalize_spec()[0] == "calibrated_uas"
     assert critical_spec()[0] == "calibrated_uas"
+
+
+@pytest.mark.parametrize(
+    "config_name",
+    ["debug", "small", "default", "final_experiment"],
+)
+def test_publication_comparison_configs_disable_jax_for_mixed_backend_runners(config_name):
+    cfg = OmegaConf.load(Path("configs") / f"{config_name}.yaml")
+
+    assert cfg.experiments.stats.jax.enabled is False
+    assert cfg.experiments.generalize.jax.enabled is False
+    assert cfg.experiments.critical.jax.enabled is False
+
+
+def test_engine_parity_experiment_is_registered_and_policy_set_is_publication_safe():
+    from scripts.execution.experiment_runner import EXPERIMENTS
+    from gibbsq.core.config import EXPERIMENT_BLOCK_NAMES
+    from experiments.verification.engine_parity import _policy_label, _policy_contract_alpha
+
+    assert "engine_parity" in EXPERIMENTS
+    assert "engine_parity" in EXPERIMENT_BLOCK_NAMES
+    assert _policy_label("calibrated_uas") == "Calibrated UAS"
+    assert _policy_contract_alpha("uas", 1.0) == pytest.approx(10.0)
+    assert _policy_contract_alpha("calibrated_uas", 1.0) == pytest.approx(20.0)
+    assert _policy_contract_alpha("jsq", 1.0) == pytest.approx(1.0)
 
 
 def test_hyperqual_summarizes_clean_policy_labels():
