@@ -1,0 +1,251 @@
+% Shared preamble for the GibbsQ manuscript.
+% Loaded via \input{preamble} from main.tex.
+
+% Packages
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{textcomp}
+\usepackage{newtxtext}
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\usepackage{amsmath,amsthm}
+\let\openbox\relax
+\usepackage{newtxmath}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{mathrsfs}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage[protrusion=true,expansion=true]{microtype}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{thmtools}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+% Figure search path
+\graphicspath{
+  {data/policy/final_20260414_113920/figures/}
+  {data/ablation/final_20260414_113804/figures/}
+  {data/critical/final_20260415_032426/figures/}
+  {data/generalize/final_20260415_024645/figures/}
+  {data/stats/final_20260415_024532/figures/}
+  {data/drift/final_20260411_202133/figures/}
+  {data/reinforce_check/final_20260411_202109/figures/}
+  {data/reinforce_train/final_20260411_202209/figures/}
+  {data/sweep/final_20260411_202209/figures/}
+  {data/stress/final_20260411_203420/figures/}
+}
+
+% Tables and floats
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.8}
+\setlength{\textfloatsep}{9pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 1pt}
+\setlength{\intextsep}{8pt plus 2pt minus 1pt}
+\renewcommand{\arraystretch}{1.15}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\allowdisplaybreaks[2]
+
+% --- State-of-the-Art Section Hierarchy (Top-Tier Standard) ---
+
+% Level 1: Major Section (The Anchor)
+% Standard: Left-aligned, Small Caps, NO bold, NO horizontal rule
+\titleformat{\section}
+  {\normalfont\large\scshape}
+  {\thesection.}
+  {0.5em}
+  {}
+\titlespacing*{\section}{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+% Level 2: Minor Section (The Pivot)
+% Standard: Left-aligned, Bold, Classical separator
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries}
+  {\thesubsection.}
+  {0.5em}
+  {}
+\titlespacing*{\subsection}{0pt}{2.25ex plus 1ex minus .2ex}{1ex plus .2ex}
+
+% Level 3: SubHeading (The Detail)
+% Standard: Left-aligned, Italicized
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\itshape}
+  {\thesubsubsection.}
+  {0.5em}
+  {}
+\titlespacing*{\subsubsection}{0pt}{1.5ex plus 0.5ex minus .2ex}{1ex plus .2ex}
+
+% Level 4: Micro-Detail (Paragraph)
+% Standard: Run-in style, Italicized, with auto-appended period terminator
+\titleformat{\paragraph}[runin]
+  {\normalfont\normalsize\itshape}
+  {}
+  {0pt}
+  {}
+  [.\hspace{0.5em}]
+\titlespacing*{\paragraph}{0pt}{1.5ex plus 0.2ex}{0em}
+
+% Caption and list styling
+\captionsetup{
+  font=small,
+  labelfont=bf,
+  labelsep=period,
+  skip=6pt
+}
+\captionsetup[table]{position=top}
+\setlist[itemize]{leftmargin=1.5em, itemsep=2pt, topsep=4pt, parsep=0pt, partopsep=0pt}
+\setlist[enumerate]{leftmargin=1.7em, itemsep=2pt, topsep=4pt, parsep=0pt, partopsep=0pt}
+
+% Manual replacements for missing packages
+\newcommand{\coloneqq}{\mathrel{\mathop:}=}
+\newcommand{\eqqcolon}{=\mathrel{\mathop:}}
+\newcommand{\cref}[1]{\autoref{#1}}
+
+% Fix autoref names for shared-counter theorem environments
+\def\definitionautorefname{Definition}
+\def\propositionautorefname{Proposition}
+\def\lemmaautorefname{Lemma}
+\def\remarkautorefname{Remark}
+\def\corollaryautorefname{Corollary}
+
+% Theorem environments
+\declaretheoremstyle[
+  spaceabove=8pt,
+  spacebelow=8pt,
+  headfont=\bfseries,
+  bodyfont=\itshape,
+  headpunct={.},
+  postheadspace=0.6em
+]{resultstyle}
+\declaretheoremstyle[
+  spaceabove=8pt,
+  spacebelow=8pt,
+  headfont=\bfseries,
+  bodyfont=\normalfont,
+  headpunct={.},
+  postheadspace=0.6em
+]{definitionstyle}
+\declaretheoremstyle[
+  spaceabove=6pt,
+  spacebelow=6pt,
+  headfont=\itshape,
+  bodyfont=\normalfont,
+  headpunct={.},
+  postheadspace=0.55em
+]{remarkstyle}
+\declaretheorem[style=resultstyle, numberwithin=section, name=Theorem]{theorem}
+\declaretheorem[style=resultstyle, sibling=theorem, name=Proposition]{proposition}
+\declaretheorem[style=resultstyle, sibling=theorem, name=Lemma]{lemma}
+\declaretheorem[style=resultstyle, sibling=theorem, name=Corollary]{corollary}
+\declaretheorem[style=definitionstyle, sibling=theorem, name=Definition]{definition}
+\declaretheorem[style=remarkstyle, sibling=theorem, name=Remark]{remark}
+\renewcommand*{\theHtheorem}{\thesection.\arabic{theorem}}
+\renewcommand*{\theHproposition}{\theHtheorem}
+\renewcommand*{\theHlemma}{\theHtheorem}
+\renewcommand*{\theHcorollary}{\theHtheorem}
+\renewcommand*{\theHdefinition}{\theHtheorem}
+\renewcommand*{\theHremark}{\theHtheorem}
+
+% Notation macros
+% System parameters
+\newcommand{\Nservers}{N}
+\newcommand{\arrate}{\lambda}
+\newcommand{\srvrate}{\mu}
+\newcommand{\totcap}{\Lambda}
+\newcommand{\loadcond}{\totcap > \arrate}
+
+% Queue state
+\newcommand{\Qstate}{Q}
+\newcommand{\Qlen}[1]{Q_{#1}}
+\newcommand{\Qmin}{Q_{\min}}
+
+% Routing probabilities
+\newcommand{\rprob}[1]{p_{#1}}
+\newcommand{\softmax}{\mathrm{softmax}}
+
+% Entropy regularization
+\newcommand{\temp}{\alpha}
+\newcommand{\entropy}{\mathcal{H}}
+\newcommand{\KL}[2]{\mathrm{KL}(#1\|#2)}
+\newcommand{\logsumexp}{\mathrm{log\text{-}sum\text{-}exp}}
+
+% Lyapunov
+\newcommand{\lyap}{V}
+\newcommand{\gen}{\mathcal{L}}
+\newcommand{\drift}{\gen \lyap}
+
+% UAS-specific
+\newcommand{\uaspot}[1]{\Phi_{#1}}
+\newcommand{\uasprior}[1]{r_{#1}}
+\newcommand{\uasenergy}[1]{x_{#1}}
+
+% Calibrated UAS
+\newcommand{\caluas}{\mathrm{cal}}
+\newcommand{\calbeta}{\beta}
+\newcommand{\calgamma}{\gamma}
+\newcommand{\caloffset}{c}
+
+% Neural policy
+\newcommand{\ngibbsq}{\text{N-GibbsQ}}
+\newcommand{\bc}{\text{BC}}
+\newcommand{\reinforce}{\text{REINFORCE}}
+
+% Probability and expectation
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Ind}{\mathbf{1}}
+
+% Sets and spaces
+\newcommand{\Nats}{\mathbb{Z}_+}
+\newcommand{\Reals}{\mathbb{R}}
+\newcommand{\Simplex}{\Delta_{\Nservers-1}}
+
+% Norms
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand{\onenorm}[1]{\left\lvert #1 \right\rvert_1}
+
+% Operators
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% Colors for emphasis
+\definecolor{resultblue}{RGB}{31, 119, 180}
+\definecolor{resultgreen}{RGB}{44, 160, 44}
+
+% Hyperref setup
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=green!50!black,
+  urlcolor=blue!80!black,
+  bookmarksnumbered=true,
+  pdfstartview={FitH},
+}
+
+% Title block
+\makeatletter
+\renewcommand{\maketitle}{%
+  \begin{center}
+    {\LARGE\bfseries \@title\par}
+    \vspace{0.9em}
+    {\large \@author\par}
+    \ifx\@date\@empty\else
+      \vspace{0.5em}
+      {\small \@date\par}
+    \fi
+  \end{center}
+  \vspace{1.2em}
+}
+\makeatother

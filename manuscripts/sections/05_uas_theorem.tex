@@ -1,0 +1,234 @@
+
+\section{Unified Archimedean Softmax: Stability Theorem and Proof}
+\label{sec:uas_theorem}
+
+This section presents the second main analytical result: positive Harris recurrence of the CTMC under the Unified Archimedean Softmax (UAS) routing law. UAS is a heterogeneous extension of raw softmax that incorporates service rates through a prior-weighted variational objective and is analyzed with a weighted Lyapunov function. It is \emph{not} a corollary of \cref{thm:softmax}; it is a separate variational policy with a separate proof.
+
+\subsection{UAS Routing Law}
+\label{sec:uas:routing}
+
+\begin{definition}[UAS potential]
+\label{def:uas_potential}
+For temperature $\temp > 0$, define the UAS potential
+\begin{equation}
+\label{eq:uas_potential}
+\uaspot{i}(\Qstate, \srvrate) = \frac{\Qlen{i}+1}{\srvrate_i} - \frac{1}{\temp}\log \srvrate_i.
+\end{equation}
+\end{definition}
+
+The corresponding routing law is
+\begin{equation}
+\label{eq:uas_law}
+\rprob{i}(\Qstate, \srvrate) = \frac{\srvrate_i \exp\!\bigl(-\temp (\Qlen{i}+1)/\srvrate_i\bigr)}{\sum_{j=1}^{\Nservers} \srvrate_j \exp\!\bigl(-\temp (\Qlen{j}+1)/\srvrate_j\bigr)},
+\end{equation}
+which is equivalently written as $\rprob{i} = e^{-\temp \uaspot{i}} / \sum_j e^{-\temp \uaspot{j}}$. This is a smooth, capacity-aware, entropy-regularized routing policy for heterogeneous servers.
+
+\subsection{Variational Form}
+\label{sec:uas:variational}
+
+The UAS routing law admits a variational characterization based on the Kullback--Leibler divergence~\cite{cover2006elements}.
+
+\begin{proposition}[UAS weighted variational form]
+\label{prop:uas_variational}
+Let $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i$, $\uasprior{i} = \srvrate_i / \totcap$, and $\uasenergy{i}(\Qstate, \srvrate) = (\Qlen{i}+1)/\srvrate_i$. Define the prior-weighted entropy-regularized objective
+\begin{equation}
+\label{eq:uas_variational_obj}
+\mathcal{G}_{\mathrm{UAS}}(p) = \sum_{i=1}^{\Nservers} p_i\, \uasenergy{i}(\Qstate, \srvrate) + \frac{1}{\temp}\KL{p}{r} - \frac{1}{\temp}\log \totcap
+\end{equation}
+over $\Simplex$. Its unique minimizer is the UAS routing law~\eqref{eq:uas_law}, and the minimum value is
+\begin{equation}
+\label{eq:uas_min_value}
+-\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}(\Qstate, \srvrate)}.
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Expand the KL divergence:
+\begin{equation}
+\label{eq:kl_expansion}
+\KL{p}{r} = \sum_i p_i \log p_i - \sum_i p_i \log \uasprior{i}
+= \sum_i p_i \log p_i - \sum_i p_i \log \srvrate_i + \log \totcap.
+\end{equation}
+Substituting into~\eqref{eq:uas_variational_obj} shows that $\mathcal{G}_{\mathrm{UAS}}(p)$ is algebraically identical to the UAS entropy-regularized objective. Strict convexity of $\mathcal{G}_{\mathrm{UAS}}$ in $p$ follows from the strict convexity of $\KL{p}{r}$ over the open simplex, guaranteeing a unique minimizer. The first-order optimality conditions on the simplex yield
+\begin{equation}
+\label{eq:uas_foc}
+\log p_i = \mathrm{const} - \temp\, \uasenergy{i}(\Qstate, \srvrate) + \log \uasprior{i}
+= \mathrm{const} - \temp\, \frac{\Qlen{i}+1}{\srvrate_i} + \log \srvrate_i,
+\end{equation}
+which after normalization gives the UAS routing law~\eqref{eq:uas_law}. Substituting the minimizer back into the objective yields the weighted $\logsumexp$ value~\eqref{eq:uas_min_value}.
+\end{proof}
+
+\subsection{Structural Interpretation}
+\label{sec:uas:interpretation}
+
+The UAS law combines three effects in a single score:
+\begin{itemize}
+\item \textbf{Queue pressure} through $\Qlen{i}$: longer queues receive less routing mass.
+\item \textbf{Service heterogeneity} through $\srvrate_i$: the energy variable $\uasenergy{i} = (\Qlen{i}+1)/\srvrate_i$ normalizes queue length by service speed, and the prior $\uasprior{i} = \srvrate_i/\totcap$ favors faster servers.
+\item \textbf{Entropy regularization} through the softmax form: routing remains smooth and interior rather than threshold-based.
+\end{itemize}
+
+At low load, the prior term dominates and UAS favors faster servers. Under congestion, the queue-dependent energy term shifts routing mass away from heavily loaded servers. The transition is smooth because routing probabilities remain exponential rather than discontinuous.
+
+\subsubsection{Empty-State Behavior}
+If all queues are empty ($\Qlen{i} = 0$ for all $i$), the routing law reduces to
+\begin{equation}
+\label{eq:uas_empty_state}
+p_i(\mathbf{0}, \srvrate) \propto \srvrate_i\, e^{-\temp/\srvrate_i}.
+\end{equation}
+At large $\temp$ (low temperature, exploitative regime), $e^{-\temp/\srvrate_i} \to 0$ for slow servers while remaining close to $1$ for fast servers, so UAS concentrates routing mass on the fastest server.
+At small $\temp$ (high temperature, exploratory regime), $e^{-\temp/\srvrate_i} \to 1$ for all $i$, so UAS approaches proportional routing ($p_i \propto \srvrate_i$).
+This smooth interpolation between exploitative and proportional routing at the idle state is a distinctive feature of UAS.
+
+\subsubsection{Pairwise Crossover Law}
+For any two servers $f$ and $s$, the routing probabilities are equal ($p_f = p_s$) when
+\begin{equation}
+\label{eq:uas_crossover_1}
+\log \srvrate_f - \temp\frac{\Qlen{f}+1}{\srvrate_f} = \log \srvrate_s - \temp\frac{\Qlen{s}+1}{\srvrate_s}.
+\end{equation}
+Rearranging gives the exact crossover boundary at which routing mass transfers between the two servers:
+\begin{equation}
+\label{eq:uas_crossover_2}
+\frac{\Qlen{f}}{\srvrate_f} - \frac{\Qlen{s}}{\srvrate_s} = \frac{\log \srvrate_f - \log \srvrate_s}{\temp} + \left(\frac{1}{\srvrate_s} - \frac{1}{\srvrate_f}\right).
+\end{equation}
+The right-hand side is a constant (for fixed $\temp$ and service rates), so the crossover condition defines a hyperplane in the normalized queue-length space $\Qlen{i}/\srvrate_i$.
+For JSQ, the analogous crossover is $\Qlen{f} = \Qlen{s}$ (ignoring service rates entirely); for JSSQ, it is $\Qlen{f}/\srvrate_f = \Qlen{s}/\srvrate_s$.
+UAS interpolates between these extremes through the $\log$-ratio term, which vanishes as $\temp \to \infty$ (recovering JSSQ-like behavior) and dominates as $\temp \to 0$ (favoring the faster server regardless of queue imbalance).
+This provides structural intuition for why Calibrated UAS with $\calbeta < 1$ may improve performance: tempering the normalization $\srvrate_i^{\calbeta}$ shifts the crossover boundary, effectively allowing more routing mass to remain with the faster server under moderate queue imbalance.
+
+\subsection{Lyapunov Argument}
+\label{sec:uas:lyapunov}
+
+For the heterogeneous stability proof, we use the weighted Lyapunov function
+\begin{equation}
+\label{eq:uas_lyapunov}
+\lyap_{\mathrm{UAS}}(\Qstate) = \frac{1}{2}\sum_{i=1}^{\Nservers} \frac{\Qlen{i}^2}{\srvrate_i}.
+\end{equation}
+
+\begin{lemma}[UAS drift identity]
+\label{lem:uas_drift}
+Under the UAS routing law~\eqref{eq:uas_law}, the generator action on $\lyap_{\mathrm{UAS}}$ is
+\begin{equation}
+\label{eq:uas_drift_identity}
+\gen \lyap_{\mathrm{UAS}}(\Qstate)
+= \arrate \sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{\Qlen{i} + 1/2}{\srvrate_i}
+- \sum_{i=1}^{\Nservers} \Qlen{i}
++ \frac{1}{2}\sum_{i=1}^{\Nservers} \Ind_{\Qlen{i}>0}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+The generator applied to $\lyap_{\mathrm{UAS}}$ yields, for each arrival to server~$i$, the increment $\frac{1}{2\srvrate_i}\bigl[(\Qlen{i}+1)^2 - \Qlen{i}^2\bigr] = \frac{\Qlen{i}+1/2}{\srvrate_i}$ (after simplification), weighted by rate $\arrate \rprob{i}$. For each departure from server~$i$ (rate $\srvrate_i$ when $\Qlen{i}>0$), the increment is $\frac{1}{2\srvrate_i}\bigl[(\Qlen{i}-1)^2 - \Qlen{i}^2\bigr] = \frac{-\Qlen{i}+1/2}{\srvrate_i}$. Summing over all servers gives~\eqref{eq:uas_drift_identity}.
+\end{proof}
+
+\begin{lemma}[UAS arrival-term bound]
+\label{lem:uas_arrival}
+Let $\uasenergy{i}(\Qstate, \srvrate) = (\Qlen{i}+1)/\srvrate_i$ and $\uasprior{i} = \srvrate_i/\totcap$. Under the UAS routing law,
+\begin{equation}
+\label{eq:uas_arrival_bound}
+\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{\Qlen{i}+1/2}{\srvrate_i}
+\leq \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By the weighted variational identity (\cref{prop:uas_variational}),
+\begin{equation}
+\label{eq:uas_var_id}
+\sum_{i=1}^{\Nservers} \rprob{i}\, \uasenergy{i} + \frac{1}{\temp}\KL{p}{r}
+= -\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}.
+\end{equation}
+Since $\KL{p}{r} \geq 0$,
+\begin{equation}
+\label{eq:uas_kl_drop}
+\sum_{i=1}^{\Nservers} \rprob{i}\, \uasenergy{i}
+\leq -\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}.
+\end{equation}
+Apply Jensen's inequality to the convex map $u \mapsto e^{-\temp u}$:
+\begin{equation}
+\label{eq:uas_jensen}
+\sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}
+\geq \exp\!\left(-\temp \sum_{i=1}^{\Nservers} \uasprior{i}\, \uasenergy{i}\right).
+\end{equation}
+Therefore
+\begin{equation}
+\label{eq:uas_jensen_result}
+-\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}
+\leq \sum_{i=1}^{\Nservers} \uasprior{i}\, \uasenergy{i}
+= \frac{1}{\totcap}\sum_{i=1}^{\Nservers} \srvrate_i \frac{\Qlen{i}+1}{\srvrate_i}
+= \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+\end{equation}
+Hence
+\begin{equation}
+\label{eq:uas_x_bound}
+\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{\Qlen{i}+1}{\srvrate_i} \leq \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+\end{equation}
+Finally,
+\begin{equation}
+\label{eq:uas_half_bound}
+\sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1/2}{\srvrate_i}
+= \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1}{\srvrate_i}
+- \frac{1}{2}\sum_{i=1}^{\Nservers} \frac{\rprob{i}}{\srvrate_i}
+\leq \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1}{\srvrate_i},
+\end{equation}
+which gives~\eqref{eq:uas_arrival_bound}.
+\end{proof}
+
+\subsection{Main Theorem and Proof}
+\label{sec:uas:theorem}
+
+\begin{theorem}[UAS positive Harris recurrence]
+\label{thm:uas}
+Assume $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Under the UAS routing law~\eqref{eq:uas_law}, the CTMC is non-explosive, irreducible, and positive Harris recurrent.
+\end{theorem}
+
+\begin{proof}
+Non-explosion and irreducibility follow by the same argument as in \cref{thm:softmax}: the total jump rate is bounded by $\arrate + \totcap$, and all rates are strictly positive. The weighted Lyapunov function $\lyap_{\mathrm{UAS}}$ defined in~\eqref{eq:uas_lyapunov} is norm-like on $\Nats^\Nservers$.
+
+Define
+\begin{equation}
+\label{eq:uas_epsilon}
+\varepsilon_{\mathrm{UAS}} = \frac{\totcap - \arrate}{\totcap}
+\end{equation}
+and
+\begin{equation}
+\label{eq:uas_R}
+R_{\mathrm{UAS}} = \frac{\arrate \Nservers}{\totcap} + \frac{\Nservers}{2}.
+\end{equation}
+
+Combining the drift identity (\cref{lem:uas_drift}) with the arrival-term bound (\cref{lem:uas_arrival}),
+\begin{align}
+\gen \lyap_{\mathrm{UAS}}(\Qstate)
+&\leq \arrate \frac{\abs{\Qstate}_1 + \Nservers}{\totcap} - \abs{\Qstate}_1 + \frac{\Nservers}{2} \nonumber \\
+&= -\frac{\totcap - \arrate}{\totcap}\abs{\Qstate}_1 + \frac{\arrate \Nservers}{\totcap} + \frac{\Nservers}{2} \nonumber \\
+&= -\varepsilon_{\mathrm{UAS}}\, \abs{\Qstate}_1 + R_{\mathrm{UAS}}.
+\label{eq:uas_final_drift}
+\end{align}
+
+For the compact set
+\begin{equation}
+\label{eq:uas_compact}
+C_{\mathrm{UAS}} = \left\{\Qstate \in \Nats^\Nservers : \abs{\Qstate}_1 \leq \frac{R_{\mathrm{UAS}} + 1}{\varepsilon_{\mathrm{UAS}}}\right\},
+\end{equation}
+we have $\gen \lyap_{\mathrm{UAS}}(\Qstate) \leq -1$ for all $\Qstate \notin C_{\mathrm{UAS}}$. By the continuous-time Foster--Lyapunov criterion, the CTMC is positive Harris recurrent.
+\end{proof}
+
+\subsection{Discussion}
+\label{sec:uas:discussion}
+
+\subsubsection{Independence from Raw Softmax}
+UAS is \emph{not} a corollary of \cref{thm:softmax}. It uses a different variational objective (prior-weighted KL divergence $\KL{p}{r}$ instead of uniform entropy), a different Lyapunov function ($\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ instead of $\frac{1}{2}\sum_i \Qlen{i}^2$), and a different arrival-term bound (Jensen's inequality on the prior-weighted $\logsumexp$ instead of the entropy ceiling $\entropy \leq \log \Nservers$). These are structurally distinct proof paths.
+
+\subsubsection{Role of the Prior}
+The service-rate prior $\uasprior{i} = \srvrate_i / \totcap$ is the key structural difference from raw softmax. It enables the KL-based variational identity~\eqref{eq:uas_var_id} and the Jensen bound~\eqref{eq:uas_jensen}, which together eliminate the $(\log \Nservers)/\temp$ additive penalty that appears in the raw softmax bound~\eqref{eq:softmax_arrival_bound}.
+
+\subsubsection{Temperature-Independent Stability Guarantee}
+The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ are explicit functions of the system parameters $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$ and are \emph{independent of the temperature $\temp$}.
+This is a genuinely important structural advantage over the raw softmax bound, whose constant $R = (\arrate \log \Nservers)/\temp + C_1$ degrades as $\temp \to 0$ (high temperature).
+Concretely, for UAS the compact set $C_{\mathrm{UAS}}$ and the drift rate $\varepsilon_{\mathrm{UAS}}$ do not change regardless of how much entropy regularization is applied.
+The stability guarantee is therefore \emph{temperature-agnostic}: UAS is provably stable at the same rate for all $\temp > 0$, without requiring $\temp$ to be sufficiently large.
+
+\subsubsection{Motivation for Empirical Extensions}
+While UAS is provably stable, its specific parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance. This observation motivates the Calibrated UAS extension in \cref{sec:calibrated_uas}, which explores a richer parameterization while sacrificing the theorem guarantee.
+
+

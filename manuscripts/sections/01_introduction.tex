@@ -1,0 +1,41 @@
+
+\section{Introduction}
+\label{sec:introduction}
+
+Routing jobs to heterogeneous parallel servers is a central problem in operations research, arising in server farms, cloud platforms, manufacturing lines, and communication networks~\cite{weber1978optimal,winston1977optimality}.
+The classical Join the Shortest Queue (JSQ) policy is optimal under server symmetry but ignores service-rate heterogeneity; conversely, proportional-to-capacity routing exploits heterogeneity but discards queue-state information entirely.
+We address this gap by designing routing laws that are simultaneously \emph{state-dependent}, \emph{capacity-aware}, and analytically tractable for stability analysis.
+
+\subsection{Entropy-Regularized Routing}
+We adopt a Gibbs-measure perspective: rather than routing deterministically to the ``best'' server, we distribute arrivals via a softmax over server scores, regularized by an entropy or KL-divergence penalty.
+The temperature parameter $\temp > 0$ interpolates smoothly between exploratory (uniform) and exploitative (greedy) routing.
+This formulation connects queue routing to convex duality --- the log-sum-exp function is the convex conjugate of the negative entropy --- and yields smooth, differentiable routing probabilities amenable to gradient-based optimization.
+
+\subsection{Contributions}
+The GibbsQ framework organizes its contributions into three layers:
+
+\subsubsection{Stability Theorems}
+We prove positive Harris recurrence for two entropy-regularized routing laws under the strict load condition $\totcap > \arrate$:
+(i)~\emph{raw softmax}, via a five-step Foster--Lyapunov argument with a quadratic Lyapunov function (Theorem~\ref{thm:softmax}), and
+(ii)~the \emph{Unified Archimedean Softmax} (UAS), via a weighted Lyapunov proof that exploits a prior-weighted KL variational identity (Theorem~\ref{thm:uas}).
+Both proofs yield explicit drift constants.
+
+\subsubsection{Calibrated Closed-Form Policy}
+We introduce Calibrated UAS, a three-parameter empirical generalization of UAS.
+In the common evaluation protocol ($\Nservers{=}10$, $\rho{=}0.80$, 32 replications), it achieves $\E[\sum_i \Qlen{i}] = 10.04$, outperforming JSSQ ($11.02$), UAS ($11.50$), and JSQ ($11.81$).
+
+\subsubsection{Learned Policy via Structured Ablation}
+We establish that \emph{teacher-policy choice} is the dominant factor in learned-policy quality.
+A neural policy initialized via behavior cloning from Calibrated UAS and fine-tuned with \reinforce{} achieves $9.82$, whereas the same architecture trained from UAS achieves $11.14$, and training from scratch diverges catastrophically ($5{,}451$).
+
+The learned-policy advantage generalizes across all 16 tested operating-regime configurations and persists under near-critical load up to $\rho = 0.98$.
+
+\subsection{Paper Organization}
+Section~\ref{sec:related_work} reviews related work.
+Section~\ref{sec:model} defines the queueing model and stability framework.
+Sections~\ref{sec:softmax_theorem} and~\ref{sec:uas_theorem} present the two stability theorems with full proofs.
+Section~\ref{sec:calibrated_uas} introduces Calibrated UAS.
+Section~\ref{sec:neural_policy} describes the neural policy architecture and training pipeline.
+Section~\ref{sec:experiments} presents the experimental evaluation.
+Section~\ref{sec:discussion} discusses the results and limitations.
+Section~\ref{sec:conclusion} concludes.

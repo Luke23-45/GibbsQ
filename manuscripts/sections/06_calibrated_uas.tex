@@ -1,0 +1,60 @@
+
+\section{Calibrated UAS: Empirical Closed-Form Extension}
+\label{sec:calibrated_uas}
+
+The UAS routing law (Theorem~\ref{thm:uas}) is provably stable, but its parameterization --- the energy $\uasenergy{i} = (\Qlen{i}+1)/\srvrate_i$ and prior $\uasprior{i} = \srvrate_i/\totcap$ --- was designed for analytical tractability rather than empirical optimality.
+This section introduces Calibrated UAS, a three-parameter generalization that relaxes UAS's structural constraints to improve steady-state performance.
+
+\begin{remark}[Theorem status]
+\label{rem:caluas_status}
+Calibrated UAS does \textbf{not} carry a formal stability guarantee.
+The stability guarantees of Theorem~\ref{thm:uas} apply only to the UAS special case $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$.
+The weighted variational identity (Proposition~\ref{prop:uas_variational}) and Jensen-based arrival bound (Lemma~\ref{lem:uas_arrival}) do not extend to the generalized parameterization.
+Establishing stability for general $(\calbeta, \calgamma, \caloffset)$ is an open problem (see Section~\ref{sec:discussion}).
+\end{remark}
+
+\begin{definition}[Calibrated UAS]
+\label{def:caluas_family}
+The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,1]$:
+\begin{equation}
+\label{eq:caluas_law}
+\rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i} + \caloffset}{\srvrate_i^{\calbeta}}\right).
+\end{equation}
+Setting $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$ recovers UAS~\eqref{eq:uas_law} exactly.
+\end{definition}
+
+\subsection{Parameter Semantics}
+Each parameter modifies a distinct structural aspect of UAS:
+\begin{itemize}
+\item $\calbeta < 1$ \emph{tempers} the service-rate normalization: $\srvrate_i^{\calbeta}$ grows more slowly than $\srvrate_i$, reducing the penalty gap between fast and slow servers.
+\item $\calgamma < 1$ \emph{softens} the service-rate prior: $\srvrate_i^{\calgamma}$ flattens the routing bias toward fast servers.
+\item $\caloffset < 1$ \emph{reduces} the look-ahead offset from $\Qlen{i}+1$ to $\Qlen{i}+\caloffset$, attenuating the anticipatory correction.
+\end{itemize}
+
+\subsection{Benchmark Parameters}
+The benchmark values used throughout this paper are
+\begin{equation}
+\label{eq:caluas_params}
+(\calbeta, \calgamma, \caloffset) = (0.85,\; 0.5,\; 0.5),
+\end{equation}
+selected via a grid search over $\calbeta \in \{0.5, 0.7, 0.85, 1.0\}$, $\calgamma \in \{0.25, 0.5, 0.75, 1.0\}$, and $\caloffset \in \{0.25, 0.5, 0.75, 1.0\}$ (64 configurations).
+Each configuration was evaluated over 16 independent replications on a validation set separate from the 32-replication anchor benchmark.
+The selected parameters minimize mean total queue length on the validation set.
+We acknowledge that this grid is coarse and that the parameter surface may not be convex; a more systematic optimization procedure (e.g., Bayesian optimization over a continuous domain) is left for future work.
+
+\subsection{Anchor Benchmark Result}
+Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (Section~\ref{sec:exp:policy}):
+\begin{center}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Policy} & \textbf{Mean $\E[\sum_i\Qlen{i}]$} \\
+\midrule
+Calibrated UAS & 10.042 \\
+JSSQ & 11.016 \\
+UAS ($\temp{=}10$) & 11.495 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+

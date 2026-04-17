@@ -1,0 +1,159 @@
+
+\section{Queueing Model and Problem Formulation}
+\label{sec:model}
+
+This section defines the parallel-server queueing system, the routing problem, the four policy classes of the GibbsQ framework, and the stability criterion used in the theorem sections.
+
+\subsection{System Model}
+\label{sec:model:system}
+
+We adopt the standard parallel-server queueing model~\cite{kleinrock1975queueing,kelly2011reversibility,robert2003stochastic}.
+
+\begin{definition}[Parallel heterogeneous queueing system]
+\label{def:system}
+Consider $\Nservers \geq 1$ parallel servers indexed by $i \in \{1, \dots, \Nservers\}$. Jobs arrive according to a Poisson process with rate $\arrate > 0$. Server~$i$ processes jobs independently at exponential rate $\srvrate_i > 0$. The queue-length process is denoted
+\begin{equation}
+\label{eq:queue_state}
+\Qstate(t) = \bigl(\Qlen{1}(t), \dots, \Qlen{\Nservers}(t)\bigr) \in \Nats^\Nservers,
+\end{equation}
+where $\Nats = \{0, 1, 2, \dots\}$ is the set of non-negative integers. The state space is $\mathcal{X} = \Nats^\Nservers$.
+\end{definition}
+
+\begin{definition}[Total service capacity and load condition]
+\label{def:load}
+The total service capacity is
+\begin{equation}
+\label{eq:total_capacity}
+\totcap \coloneqq \sum_{i=1}^{\Nservers} \srvrate_i.
+\end{equation}
+The \emph{load factor} is $\rho := \arrate/\totcap \in (0,1)$.
+The system operates under the \emph{strict load condition}
+\begin{equation}
+\label{eq:load_condition}
+\loadcond \quad (\text{equivalently, } \rho < 1).
+\end{equation}
+\end{definition}
+
+\subsection{Routing Problem}
+\label{sec:model:routing}
+
+Upon each job arrival, a routing policy selects the destination server. Formally, a \emph{routing policy} is a measurable map
+\begin{equation}
+\label{eq:routing_map}
+p \colon \Nats^\Nservers \to \Simplex,
+\end{equation}
+where $\Simplex = \bigl\{q \in [0,1]^\Nservers : \sum_{i=1}^\Nservers q_i = 1\bigr\}$ is the $(\Nservers-1)$-dimensional probability simplex. Under policy~$p$, an arriving job is routed to server~$i$ with probability $\rprob{i}(\Qstate)$.
+
+The primary performance objective is to minimize the steady-state expected total queue length:
+\begin{equation}
+\label{eq:objective}
+\text{minimize} \quad \E\Bigl[\sum_{i=1}^{\Nservers} \Qlen{i}\Bigr].
+\end{equation}
+
+\subsection{Policy Classes}
+\label{sec:model:policies}
+
+The GibbsQ framework organizes routing policies into four layered classes: two analytical (provably stable) and two empirical.
+
+\begin{definition}[Raw softmax routing]
+\label{def:raw_softmax}
+For temperature parameter $\temp > 0$, the raw softmax routing law assigns
+\begin{equation}
+\label{eq:raw_softmax}
+\rprob{i}(\Qstate) = \frac{\exp(-\temp \Qlen{i})}{\sum_{j=1}^{\Nservers} \exp(-\temp \Qlen{j})}.
+\end{equation}
+This is a homogeneous entropy-regularized policy that ignores service-rate heterogeneity. Its stability is established in \cref{sec:softmax_theorem} via a Foster--Lyapunov argument.
+\end{definition}
+
+\begin{definition}[Unified Archimedean Softmax (UAS)]
+\label{def:uas}
+For temperature $\temp > 0$ and service rates $\srvrate_1, \dots, \srvrate_\Nservers > 0$, the UAS routing law assigns
+\begin{equation}
+\label{eq:uas_routing}
+\rprob{i}(\Qstate, \srvrate) = \frac{\srvrate_i \exp\!\bigl(-\temp (\Qlen{i}+1)/\srvrate_i\bigr)}{\sum_{j=1}^{\Nservers} \srvrate_j \exp\!\bigl(-\temp (\Qlen{j}+1)/\srvrate_j\bigr)}.
+\end{equation}
+This is the heterogeneous extension of raw softmax that incorporates service rates into both the energy function and the prior. Its stability is established in \cref{sec:uas_theorem} via a weighted Lyapunov argument.
+\end{definition}
+
+\begin{definition}[Calibrated UAS]
+\label{def:calibrated_uas}
+The Calibrated UAS family generalizes UAS through three free parameters $(\calbeta, \calgamma, \caloffset)$:
+\begin{equation}
+\label{eq:calibrated_uas}
+\rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i} + \caloffset}{\srvrate_i^{\calbeta}}\right),
+\end{equation}
+with benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$. This family contains UAS as the special case $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$. Calibrated UAS is an \emph{empirical} closed-form extension and does not carry a formal stability guarantee; see \cref{sec:calibrated_uas}.
+\end{definition}
+
+\begin{definition}[N-GibbsQ]
+\label{def:ngibbsq}
+The $\ngibbsq$ policy is a learned neural routing policy parameterized by weights $\theta$:
+\begin{equation}
+\label{eq:ngibbsq}
+\rprob{i}(\Qstate, \srvrate; \theta) = \bigl[\softmax\!\bigl(f_\theta(\Qstate, \srvrate)\bigr)\bigr]_i,
+\end{equation}
+where $f_\theta$ is a feedforward neural network. Training proceeds in two phases: behavior cloning ($\bc$) from an analytical teacher policy, followed by $\reinforce$ fine-tuning. The $\ngibbsq$ policy is an \emph{empirical} approximation layer and is \textbf{not} part of the theorem statements; see \cref{sec:neural_policy}.
+\end{definition}
+
+\subsection{Stability Framework}
+\label{sec:model:stability}
+
+The stability results in this paper use the continuous-time Foster--Lyapunov criterion from the Meyn--Tweedie framework~\cite{meyn2012markov,asmussen2003applied}.
+
+A CTMC is \emph{positive Harris recurrent} if it possesses a unique stationary distribution $\pi$ and returns to every measurable set of positive $\pi$-measure in finite expected time~\cite{meyn2012markov}.
+Positive Harris recurrence ensures that steady-state performance metrics such as $\E[\sum_i \Qlen{i}]$ are well-defined and can be consistently estimated from simulation.
+The Foster--Lyapunov criterion provides a constructive sufficient condition:
+
+\begin{definition}[Foster--Lyapunov drift condition]
+\label{def:foster_lyapunov}
+Let $\Qstate(t)$ be a continuous-time Markov chain (CTMC) on $\Nats^\Nservers$ with generator $\gen$. The chain satisfies the \emph{Foster--Lyapunov drift condition} if there exist a norm-like function $\lyap \colon \Nats^\Nservers \to [0,\infty)$, constants $\varepsilon > 0$ and $R < \infty$, and a finite set $C \subset \Nats^\Nservers$ such that
+\begin{equation}
+\label{eq:foster_lyapunov}
+\gen \lyap(x) \leq -\varepsilon \abs{x}_1 + R \quad \text{for all } x \in \Nats^\Nservers.
+\end{equation}
+If this condition holds, then the CTMC is positive Harris recurrent.
+\end{definition}
+
+Both the raw softmax theorem (\cref{sec:softmax_theorem}) and the UAS theorem (\cref{sec:uas_theorem}) construct explicit Lyapunov functions and verify \cref{eq:foster_lyapunov} with explicit constants~$\varepsilon$ and~$R$.
+
+\subsection{Notation Summary}
+\label{sec:model:notation}
+
+\cref{tab:notation} collects the principal notation used throughout the paper.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Summary of principal notation. Symbols in the final block are introduced in Sections~\ref{sec:uas_theorem} and~\ref{sec:calibrated_uas} and appear here for reference.}
+\label{tab:notation}
+\renewcommand{\arraystretch}{1.30}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{14pt}} l@{\hspace{6pt}}}
+\toprule
+\textbf{Symbol} & \textbf{Description} \\
+\midrule
+$\Nservers$ & Number of parallel servers \\
+$\arrate$ & Job arrival rate (Poisson) \\
+$\srvrate_i$ & Service rate of server $i$ (exponential) \\
+$\totcap = \sum_i \srvrate_i$ & Total service capacity \\
+\addlinespace[3pt]
+$\Qlen{i}(t)$ & Queue length at server $i$ at time $t$ \\
+$\Qstate(t)$ & Queue-length vector $(\Qlen{1}(t), \dots, \Qlen{\Nservers}(t))$ \\
+$\Simplex$ & Probability simplex in $\Reals^\Nservers$ \\
+$\rprob{i}(\Qstate)$ & Routing probability for server $i$ \\
+\addlinespace[3pt]
+$\temp$ & Temperature (entropy-regularization strength) \\
+$\entropy(p)$ & Shannon entropy $-\sum_i p_i \log p_i$ \\
+$\KL{p}{r}$ & Kullback--Leibler divergence \\
+\addlinespace[3pt]
+$\gen$ & CTMC generator \\
+$\lyap(\Qstate)$ & Lyapunov function \\
+$\gen \lyap(\Qstate)$ & Generator drift \\
+\addlinespace[3pt]
+$\uasprior{i} = \srvrate_i / \totcap$ & UAS service-rate prior \\
+$\uasenergy{i} = (\Qlen{i}+1)/\srvrate_i$ & UAS energy variable \\
+$(\calbeta, \calgamma, \caloffset)$ & Calibrated UAS parameters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+

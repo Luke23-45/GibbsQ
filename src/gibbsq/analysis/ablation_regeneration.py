@@ -13,7 +13,7 @@ import equinox as eqx
 import jax
 import numpy as np
 
-from gibbsq.analysis.plotting import plot_ablation_bars
+from gibbsq.analysis.plotting import plot_ablation_dual_panel
 from gibbsq.core.config import ExperimentConfig
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.utils.chart_exporter import save_data
@@ -284,7 +284,7 @@ def regenerate_ablation_figure(
     data_target = metrics_path(target_dir, "ablation_ssa_regenerated_data")
     metadata_target = metrics_path(target_dir, "ablation_ssa_regenerated_metadata")
 
-    plot_ablation_bars(
+    plot_ablation_dual_panel(
         variant_names=payload["variants"],
         mean_values=payload["mean_q_total"],
         se_values=payload["ci95_half_width"],

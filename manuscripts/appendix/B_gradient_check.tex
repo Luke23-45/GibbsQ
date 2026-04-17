@@ -1,0 +1,46 @@
+
+\section{REINFORCE Gradient Check}
+\label{sec:appendix_gradient}
+
+The directional correctness of the \reinforce{} gradient estimator was validated against a symmetric finite-difference approximation~\cite{williams1992simple}.
+
+\subsection{Method}
+For a fixed policy parameterization $\theta$ and random seed, we computed:
+(i)~the \reinforce{} gradient estimate $\hat{g}_{\mathrm{RF}}$, and
+(ii)~the finite-difference gradient $\hat{g}_{\mathrm{FD}}$ using symmetric perturbations.
+Three metrics were evaluated: cosine similarity, relative $\ell_2$ error, and bias estimate.
+
+\subsection{Results}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Gradient check results.}
+\label{tab:appendix_gradient}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{14pt}} l @{\hspace{14pt}} p{5.5cm}@{\hspace{6pt}}}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Interpretation} \\
+\midrule
+Cosine similarity & 1.0000 & Perfect directional agreement \\
+Relative error    & 32.61\% & Magnitude mismatch \\
+Bias estimate     & $1.19 \times 10^{-3}$ & Negligible systematic bias \\
+Variance estimate & $4.18 \times 10^{-9}$ & Near-zero \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cosine similarity of $1.0000$ confirms exact directional agreement.
+The 32.6\% relative magnitude error is attributable to sample-size differences between the two estimators.
+For policy gradient training, directional correctness is the critical requirement; magnitude affects learning-rate tuning but not the optimization direction.
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.70\textwidth, height=0.35\textheight, keepaspectratio]{gradient_scatter.png}
+\caption{Parameter-wise scatter: \reinforce{} gradient components vs.\ finite-difference gradients.  Near-perfect alignment along the diagonal confirms directional correctness.}
+\label{fig:appendix_gradient}
+\end{figure}
+
+% Paths removed for double-blind review.
+
+

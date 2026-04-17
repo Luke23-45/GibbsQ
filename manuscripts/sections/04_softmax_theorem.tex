@@ -1,0 +1,145 @@
+
+\section{Raw Softmax: Stability Theorem and Proof}
+\label{sec:softmax_theorem}
+
+This section presents the first main analytical result of the paper: positive Harris recurrence of the CTMC under raw softmax routing. The proof follows a five-step Foster--Lyapunov argument.
+
+\subsection{Routing Law}
+\label{sec:softmax:routing}
+
+Recall from \cref{def:raw_softmax} that the raw softmax routing law assigns arrival probability
+\begin{equation}
+\label{eq:softmax_law}
+\rprob{i}(\Qstate) = \frac{\exp(-\temp \Qlen{i})}{\sum_{j=1}^{\Nservers} \exp(-\temp \Qlen{j})}
+\end{equation}
+for temperature $\temp > 0$. This is the entropy-regularized minimizer of the linear cost $\sum_i q_i \Qlen{i}$ over the simplex $\Simplex$, penalized by the negative Shannon entropy.
+
+\subsection{Theorem Statement}
+
+\begin{theorem}[Raw softmax positive Harris recurrence]
+\label{thm:softmax}
+Assume the strict load condition $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Then for every $\temp > 0$, the CTMC $\Qstate(t)$ under the raw softmax routing law~\eqref{eq:softmax_law} is non-explosive, irreducible, and positive Harris recurrent.
+\end{theorem}
+
+\subsection{Proof}
+
+\begin{proof}
+The proof proceeds in five steps.
+
+\medskip
+\noindent\textbf{Step~1: CTMC regularity and generator.}
+
+The state space $\mathcal{X} = \Nats^\Nservers$ is countable. The total jump rate from any state is bounded by $\arrate + \totcap$, so the chain is non-explosive. Because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$, the chain is irreducible.
+
+Define the Lyapunov function
+\begin{equation}
+\label{eq:softmax_lyapunov}
+\lyap(\Qstate) = \frac{1}{2} \sum_{i=1}^{\Nservers} \Qlen{i}^2.
+\end{equation}
+
+The generator drift is
+\begin{align}
+\gen \lyap(\Qstate)
+&= \arrate \sum_{i=1}^{\Nservers} \rprob{i}(\Qstate) \left[\frac{1}{2}(\Qlen{i}+1)^2 - \frac{1}{2}\Qlen{i}^2\right] \nonumber \\
+&\quad + \sum_{i=1}^{\Nservers} \srvrate_i \Ind_{\Qlen{i}>0} \left[\frac{1}{2}(\Qlen{i}-1)^2 - \frac{1}{2}\Qlen{i}^2\right] \nonumber \\
+&= \arrate \sum_{i=1}^{\Nservers} \rprob{i}(\Qstate)\, \Qlen{i}
+  - \sum_{i=1}^{\Nservers} \srvrate_i \Qlen{i}
+  + C(\Qstate),
+\label{eq:softmax_generator}
+\end{align}
+where
+\begin{equation}
+\label{eq:softmax_C}
+C(\Qstate) = \frac{\arrate}{2} + \frac{1}{2}\sum_{i=1}^{\Nservers} \srvrate_i \Ind_{\Qlen{i}>0}
+\leq \frac{\arrate + \totcap}{2} \eqqcolon C_1.
+\end{equation}
+
+\medskip
+\noindent\textbf{Step~2: Entropy-regularized variational bound.}
+
+The softmax law~\eqref{eq:softmax_law} is the unique minimizer of the entropy-regularized objective
+\begin{equation}
+\label{eq:softmax_variational}
+q \mapsto \sum_{i=1}^{\Nservers} q_i \Qlen{i} + \frac{1}{\temp} \sum_{i=1}^{\Nservers} q_i \log q_i
+\end{equation}
+over $\Simplex$. The minimum value satisfies the identity
+\begin{equation}
+\label{eq:softmax_identity}
+\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate)\, \Qlen{i} - \frac{1}{\temp}\entropy\bigl(p(\Qstate)\bigr) = -\frac{1}{\temp}\log \sum_{j=1}^{\Nservers} e^{-\temp \Qlen{j}},
+\end{equation}
+where $\entropy(p) = -\sum_i p_i \log p_i$ is the Shannon entropy. Since $\entropy\bigl(p(\Qstate)\bigr) \leq \log \Nservers$, we obtain
+\begin{equation}
+\label{eq:softmax_arrival_bound}
+\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate)\, \Qlen{i}
+\leq \Qmin + \frac{\log \Nservers}{\temp},
+\end{equation}
+where $\Qmin = \min_i \Qlen{i}$.
+
+\medskip
+\noindent\textbf{Step~3: Service decomposition.}
+
+Let $\Qmin = \min_i \Qlen{i}$ and define the deviations $\Delta_i = \Qlen{i} - \Qmin \geq 0$. Then
+\begin{equation}
+\label{eq:service_decomp}
+\sum_{i=1}^{\Nservers} \srvrate_i \Qlen{i}
+= \totcap \Qmin + \sum_{i=1}^{\Nservers} \srvrate_i \Delta_i.
+\end{equation}
+
+\medskip
+\noindent\textbf{Step~4: Foster--Lyapunov inequality.}
+
+Substituting (\ref{eq:softmax_arrival_bound}) and~(\ref{eq:service_decomp}) into \cref{eq:softmax_generator},
+\begin{align}
+\gen \lyap(\Qstate)
+&\leq \arrate\left(\Qmin + \frac{\log \Nservers}{\temp}\right)
+  - \left(\totcap \Qmin + \sum_{i=1}^{\Nservers} \srvrate_i \Delta_i\right) + C_1 \nonumber \\
+&= -(\totcap - \arrate)\Qmin - \sum_{i=1}^{\Nservers} \srvrate_i \Delta_i + R,
+\label{eq:softmax_foster}
+\end{align}
+where
+\begin{equation}
+\label{eq:softmax_R}
+R = \frac{\arrate \log \Nservers}{\temp} + C_1.
+\end{equation}
+
+\medskip
+\noindent\textbf{Step~5: Positive recurrence.}
+
+Since
+\begin{equation}
+\label{eq:l1_decomp}
+\abs{\Qstate}_1 = \Nservers\, \Qmin + \sum_{i=1}^{\Nservers} \Delta_i,
+\end{equation}
+we may choose
+\begin{equation}
+\label{eq:softmax_epsilon}
+\varepsilon = \min\!\left(\frac{\totcap - \arrate}{\Nservers},\; \min_i \srvrate_i\right) > 0
+\end{equation}
+so that
+\begin{equation}
+\label{eq:softmax_eps_bound}
+\varepsilon \abs{\Qstate}_1 \leq (\totcap - \arrate)\Qmin + \sum_{i=1}^{\Nservers} \srvrate_i \Delta_i.
+\end{equation}
+Therefore
+\begin{equation}
+\label{eq:softmax_final_drift}
+\gen \lyap(\Qstate) \leq -\varepsilon \abs{\Qstate}_1 + R.
+\end{equation}
+Outside the finite set $\bigl\{\Qstate : \varepsilon \abs{\Qstate}_1 \leq R + 1\bigr\}$, the drift is strictly negative. By the continuous-time Foster--Lyapunov criterion, the CTMC is positive Harris recurrent.
+\end{proof}
+
+\subsection{Discussion}
+\label{sec:softmax:discussion}
+
+The proof reveals several structural features of entropy-regularized routing.
+
+\subsubsection{Role of Entropy Regularization}
+The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law sends arrivals to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive term $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature, the policy explores suboptimal servers, but the exploration penalty is bounded and controllable through~$\temp$.
+
+\subsubsection{Homogeneous Limitation}
+Raw softmax ignores service-rate heterogeneity entirely. The routing probabilities in~\eqref{eq:softmax_law} depend only on queue lengths, not on service rates. This means that a slow server with a short queue receives the same routing weight as a fast server with the same queue length. This limitation motivates the UAS extension in \cref{sec:uas_theorem}, which incorporates service rates into the routing law.
+
+\subsubsection{Closed-Form Drift Constants}
+The drift rate $\varepsilon$ and the compact-set radius $R/\varepsilon$ (a finite petite set in the sense of~\cite{meyn2012markov}) depend only on the system parameters $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers, \temp)$ and are given in closed form. This makes the stability guarantee quantitative rather than merely existential.
+
+

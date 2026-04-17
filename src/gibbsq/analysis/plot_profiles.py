@@ -191,7 +191,7 @@ _PROFILE_REGISTRY: dict[tuple[str, str], ExperimentPlotProfile] = {
     ("policy", "plot_tier_comparison_bars"): ExperimentPlotProfile(
         experiment_id="policy",
         chart_name="plot_tier_comparison_bars",
-        figure_title="Corrected Policy Comparison",
+        figure_title="Policy Comparison",
         axis_labels={"y": "Expected Total Queue Length E[Q_total]"},
         legend_mode="axes",
         annotations_mode="tier_comparison",

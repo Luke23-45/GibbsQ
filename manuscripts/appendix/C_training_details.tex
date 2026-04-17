@@ -1,0 +1,108 @@
+
+\section{Training Details}
+\label{sec:appendix_training}
+
+\subsection{Phase~1: Behavior Cloning}
+
+The BC phase initializes the neural policy by supervised imitation of an analytical teacher~\cite{ross2011reduction}.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Behavior cloning configuration.}
+\label{tab:bc_config}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{20pt}} r@{\hspace{6pt}}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Expert policy         & UAS ($\temp = 10.0$) \\
+Preprocessing         & $\log(1 + \Qlen{i})$ \\
+Training steps        & 1{,}000 \\
+Final accuracy        & 97--99\% \\
+Loss                  & Cross-entropy \\
+Optimizer             & Adam \\
+Learning rate         & $3 \times 10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The BC teacher generates routing decisions for randomly sampled queue states.
+The network is trained to minimize the cross-entropy between its softmax output and the teacher's action distribution.
+At convergence, the network reproduces the teacher's routing decisions with 97--99\% top-1 accuracy, providing a stable initialization for Phase~2.
+
+\subsection{Phase~2: REINFORCE Fine-Tuning}
+
+Starting from the BC-pretrained weights, we apply the \reinforce{} policy gradient algorithm~\cite{williams1992simple} to directly optimize the steady-state mean total queue length.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{REINFORCE fine-tuning configuration.}
+\label{tab:reinforce_config}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{20pt}} r@{\hspace{6pt}}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Initialization             & BC pretrained weights \\
+Optimizer                  & Adam \\
+Learning rate              & $1 \times 10^{-4}$ \\
+Batch size                 & 16 episodes \\
+Epochs                     & 15 \\
+Sim.\ time / episode       & 1{,}000 time units \\
+Baseline                   & Running average of episode returns \\
+Gradient clipping          & None \\
+Entropy bonus              & None \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each training epoch collects 16 episodes of queue simulation, each running for 1{,}000 time units under the current policy.
+The policy gradient is estimated using the \reinforce{} score-function estimator with a running-average baseline to reduce variance.
+No gradient clipping or entropy regularization bonus is applied during training; the BC initialization provides sufficient stability to avoid catastrophic divergence.
+Convergence is typically observed by epoch 10--12, with the deterministic policy score plateauing thereafter.
+The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{reinforce_training_curve.png}
+\caption{\reinforce{} training curve: deterministic policy score vs.\ epoch.
+  Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12.}
+\label{fig:reinforce_training}
+\end{figure}
+
+\subsection{Ablation Variant Descriptions}
+
+The ablation study (Section~\ref{sec:exp:ablation}) evaluates five training variants to isolate the dominant design factors.
+Each variant modifies exactly one aspect of the default pipeline.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Training variants evaluated in the ablation study.}
+\label{tab:ablation_variants}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{14pt}} p{8.5cm}@{\hspace{6pt}}}
+\toprule
+\textbf{Variant} & \textbf{Description and Rationale} \\
+\midrule
+BC: UAS $\to$ \reinforce{}
+  & Default pipeline. Tests the standard two-phase training with UAS as the BC teacher. \\
+\addlinespace[3pt]
+BC: Cal.\ UAS $\to$ \reinforce{}
+  & Replaces the BC teacher with Calibrated UAS. Tests whether a stronger teacher improves the final learned policy, isolating the teacher-quality effect. \\
+\addlinespace[3pt]
+No Log-Norm
+  & Removes the $\log(1 + \Qlen{i})$ preprocessing, feeding raw queue lengths directly. Tests whether input normalization is necessary for stable learning. \\
+\addlinespace[3pt]
+Zero-Init Final
+  & Initializes the final (output) layer weights to zero before BC training. Tests whether the initialization of the policy head affects downstream performance. \\
+\addlinespace[3pt]
+\reinforce{} from Scratch
+  & Skips BC entirely and trains from random initialization. Tests whether BC pretraining is necessary, or whether \reinforce{} alone can discover good routing policies. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key finding is that teacher choice ($1.32$-unit improvement) dominates all architectural modifications ($< 0.2$-unit effects), while training from scratch without BC diverges catastrophically (mean queue $> 5{,}000$).

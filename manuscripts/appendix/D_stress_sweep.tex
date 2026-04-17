@@ -1,0 +1,61 @@
+
+\section{Stress Test and Stability Sweep}
+\label{sec:appendix_stress}
+
+This appendix provides extended tables for the stress test and alpha stability sweep.
+
+\subsection{Stress Test: Scalability}
+
+The stress test evaluates UAS under extreme operating conditions to characterize its behavioral envelope~\cite{meyn2012markov}.
+
+\subsubsection{Massive-$\Nservers$ Scaling}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Massive-$\Nservers$ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim}0.031$.}
+\label{tab:stress_massive}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}r @{\hspace{18pt}} r @{\hspace{18pt}} r @{\hspace{18pt}} r@{\hspace{6pt}}}
+\toprule
+$\Nservers$ & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{Gini} & \textbf{Per-server} \\
+\midrule
+8     & 14.30    & 0.026 & 1.79 \\
+32    & 52.04    & 0.031 & 1.63 \\
+128   & 205.00   & 0.032 & 1.60 \\
+512   & 817.51   & 0.031 & 1.60 \\
+1{,}024  & 1{,}634.28 & 0.031 & 1.60 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Per-server queue length saturates at approximately $1.60$ for $\Nservers \geq 128$, confirming linear scaling.
+The Gini coefficient remains below $0.032$ at all tested scales, indicating highly uniform load distribution.
+
+\subsubsection{Critical-Load Stress}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Critical-load stress: UAS stationarity rate at high $\rho$. Stationarity is measured as the fraction of replications whose queue-length time series passes an augmented Dickey--Fuller test at the 5\% level after a 200-time-unit burn-in.}
+\label{tab:stress_critical}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}c @{\hspace{18pt}} r @{\hspace{18pt}} r@{\hspace{6pt}}}
+\toprule
+$\rho$ & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{Stationarity} \\
+\midrule
+0.90 & 21.97  & 95.3\% \\
+0.95 & 33.40  & 98.4\% \\
+0.97 & 47.17  & 98.4\% \\
+0.98 & 63.74  & 98.4\% \\
+0.99 & 111.88 & 96.9\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Stationarity remains ${\geq}95\%$ even at $\rho = 0.99$, supporting the practical robustness of UAS near the stability boundary.
+
+\subsection{Alpha Stability Sweep}
+
+The sweep evaluates UAS across a grid of temperatures $\temp \in \{0.01, \ldots, 100\}$ and load factors $\rho \in \{0.5, 0.7\}$, confirming stable empirical behavior for all $\temp > 0$ consistent with Theorem~\ref{thm:uas}.
+The main-text visualization (Figure~\ref{fig:alpha_main}) shows performance saturation around $\temp = 20$--$50$.

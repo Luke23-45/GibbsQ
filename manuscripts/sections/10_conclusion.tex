@@ -1,0 +1,16 @@
+
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+We presented GibbsQ, a framework for entropy-regularized routing in heterogeneous parallel queues.
+
+At the \emph{analytical} level, we proved positive Harris recurrence for two routing laws --- raw softmax and UAS --- via self-contained Foster--Lyapunov arguments with explicit drift constants.
+Notably, the UAS drift constants $\varepsilon_{\mathrm{UAS}}$ and $R_{\mathrm{UAS}}$ are independent of the temperature $\temp$, providing a stability guarantee that does not degrade with increased entropy regularization.
+
+At the \emph{empirical} level, Calibrated UAS achieves $\E[\sum_i\Qlen{i}] = 10.04$ in the common evaluation protocol, reducing queue length by 8.9\% relative to JSSQ and by 12.6\% relative to UAS.
+
+At the \emph{learned-policy} level, structured ablation establishes that teacher-policy choice is the dominant training design factor.
+A calibrated-teacher variant achieves $9.82$, the strongest result in our experiments.
+The learned-policy advantage generalizes across all 16 tested operating-regime configurations and persists under near-critical load up to $\rho = 0.98$.
+
+The GibbsQ framework demonstrates that entropy regularization provides a unifying lens for queue routing: connecting classical stability theory, empirical calibration, and modern learned policies through a shared variational structure rooted in Gibbs measures and convex duality.

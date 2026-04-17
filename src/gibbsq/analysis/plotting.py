@@ -2010,7 +2010,7 @@ def plot_policy_dual_panel(
     ax_bottom.set_xticklabels(labels, rotation=45, ha="right")
     ax_top.tick_params(axis="x", length=0)
     
-    ax_top.set_title(plot_profile.figure_title or "Corrected Policy Comparison", pad=14, fontsize=16)
+    ax_top.set_title(plot_profile.figure_title or "Policy Comparison", pad=14, fontsize=16)
     
     ax_top.text(
         0.015, 0.92, "Full scale", transform=ax_top.transAxes, fontsize=10, fontweight="bold",
@@ -2027,12 +2027,27 @@ def plot_policy_dual_panel(
     )
     
     top_value_pad = top_max * 0.03
+    proposed_idx = len(q_values) - 1
+    proposed_val = float(q_values[proposed_idx])
+
     for idx, bar in enumerate(bars_top):
         h = float(bar.get_height())
-        if h > bottom_ylim[1]:
-            ax_top.text(
-                bar.get_x() + bar.get_width() / 2, h + q_errors[idx] + top_value_pad,
-                f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5,
+        # Show numbers for ALL bars in top panel (consistency with ablation)
+        ax_top.text(
+            bar.get_x() + bar.get_width() / 2, h + q_errors[idx] + top_value_pad,
+            f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5, clip_on=False,
+        )
+
+        # Quality/Delta Annotation for outliers vs Proposed (consistent with ablation)
+        if h > bottom_ylim[1] and idx != proposed_idx and proposed_val > 0:
+            delta = ((h - proposed_val) / proposed_val) * 100.0
+            ax_top.annotate(
+                f"Baseline: +{delta:.1f}% vs Proposed",
+                xy=(x[idx], h + q_errors[idx] + top_value_pad + top_max * 0.04),
+                xytext=(x[idx], h + q_errors[idx] + top_value_pad + top_max * 0.12),
+                ha="center", va="bottom", fontsize=10.5, fontweight="bold", color="#D55E00",
+                bbox=dict(boxstyle="round,pad=0.35", facecolor="#fff7f0", edgecolor="#D55E00", alpha=0.96),
+                arrowprops=dict(arrowstyle="-", color="#D55E00", shrinkA=4, shrinkB=6),
             )
         
     for idx, (bar, h) in enumerate(zip(bars_bottom, q_values)):
@@ -2053,6 +2068,23 @@ def plot_policy_dual_panel(
                 bar.get_x() + bar.get_width() / 2, value_y,
                 f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5,
             )
+            # Consistency: Add quality delta to bottom panel zoom entries
+            if idx != proposed_idx and proposed_val > 0:
+                delta = ((h - proposed_val) / proposed_val) * 100.0
+                delta_color = "#D55E00" if delta > 0 else "#009E73"
+                sign = "+" if delta > 0 else ""
+                ax_bottom.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    value_y + zoom_max * 0.12,
+                    f"{sign}{delta:.1f}%",
+                    ha="center",
+                    va="bottom",
+                    fontsize=10,
+                    fontweight="bold",
+                    color=delta_color,
+                    clip_on=False,
+                    zorder=5,
+                )
             
     kwargs = dict(transform=ax_top.transAxes, color=contour, clip_on=False, linewidth=1.1)
     ax_top.plot((-0.015, +0.015), (-0.015, +0.015), **kwargs)
@@ -2076,6 +2108,7 @@ def plot_policy_dual_panel(
         save_chart(fig, Path(save_path), formats or list(plot_profile.preferred_formats))
         
     return fig
+
 
 def plot_platinum_grid(
     rho_values: np.ndarray,

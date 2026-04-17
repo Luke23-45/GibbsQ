@@ -1,0 +1,12 @@
+
+\begin{abstract}
+We introduce GibbsQ, a framework for entropy-regularized routing in systems of $\Nservers$ heterogeneous parallel queues with Poisson arrivals and exponential service.
+We prove positive Harris recurrence for two routing laws under the load condition $\totcap > \arrate$:
+(i)~raw softmax, analyzed via a quadratic Lyapunov function, and
+(ii)~the Unified Archimedean Softmax (UAS), analyzed via a capacity-weighted Lyapunov function and a prior-weighted KL variational identity.
+Both proofs yield explicit drift constants; the UAS proof is structurally independent of the raw softmax proof.
+We then introduce Calibrated UAS, a three-parameter closed-form generalization that achieves a mean total queue length of $10.04$ under standard heterogeneous load conditions, outperforming JSSQ ($11.02$) and UAS ($11.50$).
+Through structured ablation, we show that teacher-policy choice is the dominant factor in learned-policy quality:
+a neural policy initialized from Calibrated UAS and fine-tuned with \reinforce{} achieves $9.82$, while training from scratch diverges catastrophically.
+The learned-policy advantage generalizes across all 16 tested operating-regime configurations and persists under near-critical load up to $\rho = 0.98$.
+\end{abstract}

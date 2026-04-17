@@ -1,0 +1,5 @@
+PWD C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts
+INPUT c:/tools/TinyTeX/texmf.cnf
+INPUT c:/tools/TinyTeX/texmf-dist/web2c/texmf.cnf
+INPUT c:/tools/TinyTeX/texmf-var/web2c/pdftex/pdflatex.fmt
+INPUT main.tex

@@ -1,0 +1,70 @@
+
+\section{Engine-Consistency Reruns}
+\label{sec:appendix_engine}
+
+During the experimental campaign, some early evidence was produced using a mixed NumPy/JAX evaluation path.
+To ensure all publication artifacts derive from a single consistent engine, the \texttt{stats}, \texttt{generalize}, and \texttt{critical} experiments were rerun using the canonical NumPy SSA~\cite{asmussen2003applied}.
+
+\subsection{Stats Rerun}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Stats rerun: impact of engine correction.}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{20pt}} r@{\hspace{6pt}}}
+\toprule
+\textbf{Metric} & \textbf{Change} \\
+\midrule
+Baseline mean shift        & $+0.0007$ \\
+Neural mean shift          & $0.0$ \\
+Improvement \%             & Unchanged \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Verdict:} The strong statistical win ($p < 10^{-66}$, $|d| = 26.3$) survives with no material change.
+
+\subsection{Generalize Rerun}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Generalize rerun: impact on the $4{\times}4$ improvement grid.}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{20pt}} r@{\hspace{6pt}}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Max absolute cell delta    & 0.104 \\
+Mean absolute cell delta   & 0.022 \\
+Sign flips across 1.0      & 0 \\
+Positive cells             & 16/16 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Verdict:} All 16 cells remain strictly above $1.0$; zero qualitative changes.
+
+\subsection{Critical Rerun}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Critical rerun: impact at four high-load operating points.}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{14pt}} p{8cm}@{\hspace{6pt}}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Neural $\E[\Qstate]$  & Unchanged at all four $\rho$ \\
+Baseline values        & Minor shifts; win/loss preserved \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Verdict:} The learned policy outperforms at all four high-load operating points under the corrected engine.
+
+\subsection{Data Availability}
+The raw metric logs and figure plotting scripts for all evaluation runs have been preserved; the directory location will be made available in the non-anonymized artifact package upon de-anonymization.
+

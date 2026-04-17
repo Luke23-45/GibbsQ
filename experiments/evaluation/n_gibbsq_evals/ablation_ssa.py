@@ -30,7 +30,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from gibbsq.analysis.metrics import time_averaged_queue_lengths
 from gibbsq.analysis.plot_profiles import ExperimentPlotContext
-from gibbsq.analysis.plotting import plot_ablation_bars
+from gibbsq.analysis.plotting import plot_ablation_dual_panel
 from gibbsq.core.config import ExperimentConfig, load_experiment_config_chain, validate
 from gibbsq.core.neural_policies import NeuralRouter
 from gibbsq.core.policies import CalibratedUASRouting, JSSQRouting, UASRouting
@@ -562,7 +562,7 @@ def run_ablation(
     values = [row["mean_q_total"] for row in summary_rows]
     ci_values = [row["ci95_half_width"] for row in summary_rows]
     plot_path = figure_path(run_dir, "ablation_ssa")
-    fig = plot_ablation_bars(
+    fig = plot_ablation_dual_panel(
         variant_names=names,
         mean_values=values,
         se_values=ci_values,
@@ -571,7 +571,7 @@ def run_ablation(
         formats=["png", "pdf"],
         context=ExperimentPlotContext(
             experiment_id="ablation",
-            chart_name="plot_ablation_bars",
+            chart_name="plot_ablation_dual_panel",
         ),
     )
     plt.close(fig)

@@ -1,0 +1,28 @@
+
+\section{Drift Verification}
+\label{sec:appendix_drift}
+
+The Foster--Lyapunov drift inequality for UAS (Theorem~\ref{thm:uas}),
+\[
+\gen \lyap_{\mathrm{UAS}}(\Qstate) \leq -\varepsilon_{\mathrm{UAS}} |\Qstate|_1 + R_{\mathrm{UAS}},
+\]
+was numerically verified by exactly computing the generator action at each sampled state and comparing against the theoretical upper bound.
+
+\subsection{Configuration}
+$\Nservers = 10$, $\rho = 0.80$, $\temp = 10.0$, 20{,}001 states sampled.
+Computed constants: $\varepsilon_{\mathrm{UAS}} = 0.28$, $R_{\mathrm{UAS}} = 38.39$.
+
+\subsection{Result}
+\textbf{Zero bound violations} across all 20{,}001 sampled states.
+The drift becomes strictly negative for $|\Qstate|_1 > R/\varepsilon \approx 137$, consistent with Theorem~\ref{thm:uas}.
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{drift_vs_norm.png}
+\caption{Drift verification: generator drift $\gen\lyap(\Qstate)$ (blue) vs.\ theoretical bound $-\varepsilon|\Qstate|_1 + R$ (orange).  All 20{,}001 points lie below the bound.}
+\label{fig:appendix_drift}
+\end{figure}
+
+% Paths removed for double-blind review.
+
+
