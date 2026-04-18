@@ -38,14 +38,14 @@ We partially narrow this gap numerically through the benchmark-specific piecewis
 Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified subclass nevertheless remains an open theoretical question, because those numerical checks are not yet a symbolic all-states proof.
 
 \item \textbf{Default pipeline uses a suboptimal teacher:}
-The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, below both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
+The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, yielding higher mean total queue length and underperforming both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
 The variant with the calibrated teacher ($9.82$) was identified through ablation and not as part of the original design.
 The ablation findings suggest that switching the pipeline to use Calibrated UAS as the BC teacher would improve $\ngibbsq$ from $11.68$ to $9.82$ without any architectural change.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
 The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$.
 Performing competitive assessments at larger $\Nservers$ would further substantiate the practical claims.
-We scope the comparative evaluation of the neural routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline demonstrates superior optimality at small to medium bounds, the analytical UAS policy is separately verified to scale natively to massive capacities such as $\Nservers = 1{,}024$ without the overhead of neural retraining.
+We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline demonstrates superior optimality at small bounds, no scaling guarantee is claimed for $\ngibbsq$ or Calibrated UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately verified to scale natively to massive capacities such as $\Nservers = 1{,}024$ without the overhead of neural retraining.
 
 \item \textbf{Coarse parameter grid for Calibrated UAS:}
 The benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ were selected from a grid of 64 configurations evaluated on a held-out validation set.
@@ -54,7 +54,7 @@ Therefore, a more systematic search method (e.g., Bayesian optimization) could e
 
 \item \textbf{REINFORCE gradient magnitude error:}
 The \reinforce{} estimator demonstrates 32.6\% relative magnitude error versus finite differences (Appendix~\ref{sec:appendix_gradient}).
-While directionally correct (cosine similarity $1.0000$), the magnitude mismatch effectively reduces the learning rate, potentially slowing convergence.
+While directionally validated (cosine similarity $1.0000$), the gradient signal remains somewhat noisy. The magnitude mismatch effectively reduces the learning rate, demonstrating that the full \reinforce{} training story is not fully solved and variance reduction techniques remain necessary.
 Variance reduction techniques such as generalized advantage estimation (GAE) or actor-critic baselines could reduce this error; trust-region methods such as PPO would additionally stabilize step sizes.
 \end{enumerate}
 
