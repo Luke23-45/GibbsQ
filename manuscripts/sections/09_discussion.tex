@@ -31,16 +31,15 @@ The $1.45$-unit improvement over UAS ($10.04$ vs.\ $11.495$) confirms substantia
 
 \begin{enumerate}[label=\textbf{L\arabic*.}, leftmargin=2.2em]
 \item \textbf{Full Calibrated UAS family remains open:}
-Section~\ref{sec:calibrated_uas} now proves positive Harris recurrence for the named subclass SCUAS under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
-However, this theorem does not cover the unrestricted three-parameter family uniformly.
-Moreover, the post-validation audit in Table~\ref{tab:scuas_audit} shows that the benchmark default and the three audited candidate grid points all have negative $\varepsilon_{\calbeta,\calgamma,\caloffset}$ under the anchor benchmark.
-We partially narrow this gap numerically through the benchmark-specific piecewise candidate reported in Table~\ref{tab:piecewise_candidate}, whose exact generator is negative on the verified boundary shells and sampled higher-load shells.
-Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified subclass nevertheless remains an open theoretical question, because those numerical checks are not yet a symbolic all-states proof.
+Section~\ref{sec:calibrated_uas} identifies the stability-certified subclass SCUAS under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
+However, our audit in Table~\ref{tab:scuas_audit} finds that the benchmark default point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ yields $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor configuration.
+While we provide \textbf{numerical evidence} for negative drift through a JAX-based verification loop (reported in Table~\ref{tab:piecewise_candidate}), a formal symbolic proof for the unrestricted family remains an open theoretical question. This establishes a definitive split in our results: the benchmark-default policy is a competitive empirical baseline, but it is not yet theorem-certified.
 
-\item \textbf{Default pipeline uses a suboptimal teacher:}
-The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, yielding higher mean total queue length and underperforming both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
-The variant with the calibrated teacher ($9.82$) was identified through ablation and not as part of the original design.
-The ablation findings (Protocol B) show that switching the pipeline to use Calibrated UAS as the BC teacher instead improves the model substantially. This highlights that the strongest neural result is not the default learned policy. Note that the absolute values from the main benchmark (Protocol A) and the ablation study differ in simulation horizons and are not directly comparable.
+\item \textbf{Default learned configuration is not the strongest:}
+The standard $\ngibbsq$ model (trained with a UAS teacher) achieves $11.68$ in the anchor benchmark, underperforming JSSQ ($11.02$) and Calibrated UAS ($10.04$).
+The configuration with the calibrated teacher ($9.82$) was identified through ablation.
+These findings confirm that the choice of teacher policy is the dominant factor in policy-gradient performance, but they also clarify that our reported neural "best" refers specifically to this calibrated-teacher variant, which requires separate behavior-cloning initialization.
+Crucially, absolute values from Protocol A and the ablation study (Protocol B) reflect different simulation horizons ($15{,}000$ vs.\ $20{,}000$ units) and are not directly comparable.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
 The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$.

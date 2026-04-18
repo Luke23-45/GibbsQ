@@ -375,8 +375,9 @@ Second, all calibrated results reported in the empirical sections of this paper 
 \subsection{Numerically Verified Piecewise Drift Candidate}
 \label{sec:caluas_piecewise_candidate}
 
-The negative values in Table~\ref{tab:scuas_audit} only show that the simple SCUAS sufficient condition is too conservative for the benchmark-default calibrated point; they do not rule out alternative Lyapunov constructions.
-To probe that gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
+The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions.
+The checks reported in this subsection provide \textbf{numerical evidence for a candidate Lyapunov construction and negative drift on verified shells} at $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$, though they do not constitute a formal symbolic proof.
+To probe the gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
 
 For the benchmark-default calibrated policy $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$ at $\temp=20$, the best refined candidate is
 \begin{equation}
@@ -433,6 +434,9 @@ However, this does not mathematically prove a full positive Harris recurrence th
 Accordingly, the manuscript treats \cref{eq:piecewise_candidate} and Table~\ref{tab:piecewise_candidate} purely as numerical evidence for a promising piecewise Foster--Lyapunov route, not as a formal replacement for the certified guarantees of \cref{thm:scuas}.
 
 \subsection{Anchor Benchmark Result}
+\label{sec:scuas_results}
+
+We conclude this section with the steady-state performance results of the benchmark-default calibrated policy (which, as established in \cref{sec:scuas_audit}, is \textbf{unrestricted and empirical} in this study).
 Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (\cref{sec:exp:policy}):
 \begin{table}[htbp]
 \centering

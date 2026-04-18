@@ -10,7 +10,7 @@ was numerically verified by exactly computing the generator action $\gen \lyap(\
 
 \subsection{Configuration}
 $\Nservers = 10$, $\rho = 0.80$, $\temp = 1.0$, $\lyap(\Qstate) = \frac{1}{2}\sum_i \Qlen{i}^2$, 20{,}001 states sampled.
-Computed constants: $\varepsilon = \min\bigl((\totcap - \arrate)/\Nservers,\; \min_i \srvrate_i\bigr) = 0.28$, $R = (\arrate \log \Nservers)/\temp + (\arrate + \totcap)/2 = 38.39$.
+Computed constants: $\varepsilon = \min\!\left(\frac{\totcap - \arrate}{\Nservers},\; \min_i \srvrate_i\right) = 0.28$, $R = (\arrate \log \Nservers)/\temp + (\arrate + \totcap)/2 = 38.39$.
 
 \subsection{Result}
 \textbf{Zero bound violations} across all 20{,}001 sampled states.

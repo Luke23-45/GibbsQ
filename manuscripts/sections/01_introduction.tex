@@ -44,6 +44,27 @@ A neural policy initialized through behavior cloning from Calibrated UAS and fin
 This learned-policy advantage is consistent across the 16 operating configurations tested and persists into near-critical load regimes up to $\rho = 0.98$.
 \end{enumerate}
 
+To clarify the hierarchical relationship between these routing policies, Table~\ref{tab:claims_map} provides a rigorous map of the terminology used throughout the manuscript.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Claims map: strict separation of provable stability, certified subclasses, and empirical evaluation.}
+\label{tab:claims_map}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{} l l p{80mm} @{}}
+\toprule
+\textbf{Term} & \textbf{Status} & \textbf{Definition and Scope} \\
+\midrule
+\textbf{UAS} & Universally certified & Analytical policy with temperature-independent drift constants (Thm.~\ref{thm:uas}). \\
+\textbf{SCUAS} & Conditionally certified & Subclass covered by the calibrated Lyapunov drift condition (Thm.~\ref{thm:scuas}). \\
+\textbf{Calibrated UAS} & Empirical family & Broad parameter space evaluated for minimum steady-state queue length. \\
+\textbf{Benchmark default} & Empirical point & The actively evaluated $(0.85, 0.5, 0.5)$ configuration, lacking theorem certification. \\
+\textbf{$\ngibbsq$} & Learned sequence & Neural policy optimized via RL; strictly empirical, directional improvement. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Paper Organization}
 Sections~\ref{sec:related_work}--\ref{sec:model} survey related work and define the model; Sections~\ref{sec:softmax_theorem} and~\ref{sec:uas_theorem} prove the raw softmax and UAS stability theorems.
 Section~\ref{sec:calibrated_uas} introduces SCUAS and the broader Calibrated UAS family; Section~\ref{sec:neural_policy} presents $\ngibbsq$; Section~\ref{sec:experiments} reports experiments; Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss and conclude.

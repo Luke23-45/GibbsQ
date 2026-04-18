@@ -13,7 +13,7 @@ All experiments use a NumPy-based event-driven CTMC simulation as the canonical 
 \label{sec:exp:setup}
 
 \paragraph{Standard evaluation protocol}
-Unless stated otherwise, every experiment involves $\Nservers = 10$ heterogeneous servers with service rates selected from a predetermined configuration, load factor $\rho = \arrate/\totcap = 0.80$, and 32 independent replications for each policy.
+Unless stated otherwise, every experiment involves $\Nservers = 10$ heterogeneous servers with a fixed service-rate vector $\srvrate_{1:10} = [0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]$ (total capacity $\totcap = 14.0$), load factor $\rho = \arrate/\totcap = 0.80$, and 32 independent replications for each policy.
 Configuration is managed via Hydra YAML profiles for reproducibility.
 
 \paragraph{Reproducibility and simulation details}
@@ -99,7 +99,7 @@ Uniform                     & 11{,}572.7 & 42.16 & 1{,}033.3 & 0.753 \\
 Calibrated UAS ranks first among all the closed-form methods, reducing mean queue length by 8.8\% relative to JSSQ ($10.04$ vs.\ $11.02$) and by 12.6\% relative to UAS.
 Sojourn-time rankings mirror queue-length rankings, as expected from Little's law.
 Notably, JSQ achieves the lowest Gini coefficient ($0.074$) but has the highest queue length among competitive policies, highlighting the cost of ignoring service-rate heterogeneity.
-Post-validation theorem auditing, however, shows that the benchmark-default calibrated point $(0.85, 0.5, 0.5)$ has $\varepsilon_{\calbeta,\calgamma,\caloffset} = -1.199$ under this protocol, and the three audited candidate points are likewise uncertified; see Table~\ref{tab:scuas_audit}.
+Post-validation theorem auditing, however, shows that the benchmark-default calibrated point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ has $\varepsilon_{\calbeta,\calgamma,\caloffset} = -1.199$ under this protocol, and the three audited candidate points are likewise uncertified; see Table~\ref{tab:scuas_audit}.
 Accordingly, the calibrated results in Table~\ref{tab:policy} should be read as empirical performance results rather than theorem-certified benchmark instances.
 
 The default $\ngibbsq$ model, trained with UAS as the behavior-cloning teacher, achieves $11.68$, underperforming both JSSQ ($11.02$) and UAS ($11.50$), though still outperforming JSQ ($11.81$).
@@ -110,7 +110,8 @@ This leads the ablation study in Section~\ref{sec:exp:ablation}, which identifie
 \label{sec:exp:ablation}
 
 The ablation study (\textbf{Protocol~B}: $t_{\mathrm{sim}}{=}20{,}000$, seeds 42--73, 32 replications) evaluates five training variants under a controlled protocol to isolate the factors influencing learned-policy quality.
-Because Protocol~B uses a longer simulation horizon than Protocol~A, absolute values are not directly comparable across Tables~\ref{tab:policy} and~\ref{tab:ablation}; reference policies are re-evaluated under Protocol~B for internal comparability.
+Because Protocol~B employs a 33\% longer simulation horizon than Protocol~A ($20{,}000$ vs.\ $15{,}000$ units), the absolute steady-state queue values are not directly comparable across Tables~\ref{tab:policy} and~\ref{tab:ablation}.
+Reference policies are re-evaluated under Protocol~B for internal comparability.
 Table~\ref{tab:ablation} reports the results.
 
 \begin{table}[htbp]
@@ -150,18 +151,18 @@ BC: UAS $\to$ \reinforce{}        & 11.137 & 0.078 & 0.153 & $+1.239$ \\
 Three findings emerge:
 \begin{enumerate}
 \item \textbf{Teacher choice dominates:}
-  Switching the behavior-cloning teacher from UAS to Calibrated UAS reduces the final learned policy's mean queue from $11.14$ to $9.82$---a $1.32$-unit improvement that exceeds the effect of any architectural modification.
+  Switching the behavior-cloning teacher from UAS to Calibrated UAS reduces the learned policy's mean queue from $11.14$ to $9.82$---a $1.32$-unit improvement that exceeds the effect of any architectural modification.
 \item \textbf{Warm start is essential:}
-  \reinforce{} from scratch yields a mean queue of $5{,}451$, confirming that behavior-cloning pretraining is a prerequisite for stable policy-gradient training in this domain.
-\item \textbf{Calibrated-teacher variant achieves the lowest queue length:}
-  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Notably, the strongest neural result is not the default learned policy configuration.
+  \reinforce{} from scratch yields a mean queue of $5{,}451$, confirming that behavior-cloning pretraining is a prerequisite for stable policy-gradient training.
+\item \textbf{Calibrated-teacher variant is the strongest configuration evaluated:}
+  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol.
 \end{enumerate}
 
 %% ═══════════════════════════════════════════════════════════════════════════════
 \subsection{Statistical Comparison}
 \label{sec:exp:stats}
 
-To quantify the performance disparity with statistical precision, we apply Welch's $t$-test between the best performing learned policy (calibrated-teacher variant) and the Calibrated UAS baseline. Table~\ref{tab:stats} reports the results.
+To quantify the performance disparity with statistical precision, we apply Welch's $t$-test between the best performing learned variant (calibrated-teacher configuration) and the Calibrated UAS baseline. Both results are strictly compared under the identical Protocol B environment to ensure internal validity. Table~\ref{tab:stats} reports the results.
 
 \begin{table}[htbp]
 \centering
@@ -173,18 +174,18 @@ To quantify the performance disparity with statistical precision, we apply Welch
 \toprule
 \textbf{Quantity} & \textbf{Value} \\
 \midrule
-Calibrated UAS mean $\E[\sum_i\Qlen{i}]$   & 10.042 \\
+Calibrated UAS mean $\E[\sum_i\Qlen{i}]$   & 9.898 \\
 Neural policy mean $\E[\sum_i\Qlen{i}]$     & 9.821 \\
 \addlinespace[3pt]
-Relative improvement                        & 2.20\% \\
-$p$-value (two-sided Welch's $t$)           & $2.31 \times 10^{-3}$ \\
-Cohen's $d$                                 & $-1.18$ \\
-95\% CI for mean difference                 & $[-0.35,\; -0.09]$ \\
+Relative improvement                        & 0.78\% \\
+$p$-value (two-sided Welch's $t$)           & $0.39$ \\
+Cohen's $d$                                 & $-0.22$ \\
+95\% CI for mean difference                 & $[-0.25,\; 0.10]$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The resulting $p$-value ($0.0023$) confirms that the learned policy's advantage over the best-performing closed-form baseline is statistically significant at the $\alpha = 0.01$ level. While the absolute improvement is smaller than the gap to the uncalibrated UAS baseline, the result confirms that the policy-gradient fine-tuning can indeed extract marginal performance gains that exceed manually tuned closed-form architectures.
+The resulting $p$-value ($0.39$) indicates that the $0.78\%$ average reduction in mean queue length is not statistically significant at standard confidence levels ($p > 0.05$). While the neural policy gradient fine-tuning consistently yields a lower absolute queue length point estimate than the calibrated baseline, the variance across the extended simulation horizon renders this aggregated difference statistically uncertain. 
 
 \begin{figure}[htbp!]
 \centering
@@ -194,8 +195,7 @@ The resulting $p$-value ($0.0023$) confirms that the learned policy's advantage 
 \label{fig:stats}
 \end{figure}
 
-The effect size $|d| = 1.18$ is classified as ``large'' by conventional benchmarks ($|d| > 0.8$).
-Because each replication averages over thousands of arrival and service events, per-replication variance is low, which allows even the modest absolute mean difference ($\approx 0.22$ queue-length units) to achieve statistical significance.
+The modest effect size ($|d| = 0.22$) suggests that while behavior-cloning initialization puts the neural policy in an excellent operational region, the subsequent \reinforce{} parameter updates only extract marginal, noisy gains over the closed-form heuristic. As highlighted in the discussion, this empirical finding substantiates the need for advanced variance reduction techniques (such as GAE or PPO) to reliably isolate gradient signals in heavy-traffic environments.
 
 %% ═══════════════════════════════════════════════════════════════════════════════
 \subsection{Generalization Across Operating Regimes}
@@ -295,7 +295,7 @@ The benchmark-default calibrated point and the three audited candidate points al
 This confirms that the theorem is mathematically consistent but does not certify the calibrated benchmark instances used elsewhere in the paper; Table~\ref{tab:scuas_audit} reports the exact values.
 
 \paragraph{Piecewise-drift evidence for the benchmark default}
-Because the SCUAS sufficient condition fails at the benchmark default, we ran a separate search-refine verification loop for alternative Lyapunov candidates tailored to the default calibrated point.
+Because the SCUAS sufficient condition fails at the benchmark default, we ran a separate search-refine verification loop for alternative Lyapunov candidates tailored to the default calibrated point. This search is performed by a dedicated JAX-based verification capsule that evaluates the exact system generator against candidate Lyapunov functions.
 The final benchmark-specific candidate from \cref{eq:piecewise_candidate} has strictly negative exact generator drift on every state in the exhaustive boundary shells $|\Qstate|_1 \in \{16,17,18\}$, comprising $9{,}854{,}350$ states in total, and also on all $8{,}192$ sampled higher-load shell states used in the post-validation capsule; see Table~\ref{tab:piecewise_candidate}.
 This does not establish a full positive Harris recurrence theorem for the unrestricted calibrated family, but it materially narrows the gap between the failed SCUAS sufficient condition and a complete piecewise Foster--Lyapunov proof for the benchmark-default calibrated policy.
 

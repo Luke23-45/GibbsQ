@@ -1,27 +1,10 @@
 
 \begin{abstract}
-Routing policies for heterogeneous parallel queues face a fundamental
-tension. Classical policies are either state-aware but oblivious to capacity,
-or capacity-aware but blind to state, while reinforcement learning (RL)
-approaches lack formal stability guarantees. We propose GibbsQ, a framework
-that addresses this gap via entropy-regularized routing. We prove
-positive Harris recurrence for raw softmax and UAS under the strict load
-condition ($\totcap > \arrate$), and for a stability-certified calibrated
-subclass (SCUAS) under an explicit parameter-conditional Foster--Lyapunov
-drift bound. The raw softmax proof uses a quadratic Lyapunov function and an
-entropy ceiling bound; the UAS proof uses a capacity-weighted Lyapunov
-function and a prior-weighted KL variational identity; the SCUAS proof uses a
-matched weighted Lyapunov function and a calibrated prior decomposition. These
-proofs yield explicit, computable drift constants; the UAS constants are
-temperature independent. Building on these foundations, we introduce
-Calibrated UAS, a closed-form empirical extension of UAS with three tunable
-parameters. Despite lacking a blanket formal stability proof over its full
-parameter range, it reduces steady-state queue lengths by 8.9\% and 12.6\%
-relative to JSSQ and baseline UAS, respectively, under the standard evaluation
-protocol. A post-validation audit of the anchor benchmark finds that the default calibrated setting and the three audited candidate points all yield negative values of the sufficient drift constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$, so the calibrated benchmark results remain empirical rather than theorem-certified in this study. We
-also identify a benchmark-specific piecewise Lyapunov candidate whose exact
-generator is strictly negative on all $9.85$ million states in the boundary
-shells $|\Qstate|_1 \in \{16,17,18\}$ and on additional sampled higher-load
-states, which strengthens the case for a future full calibrated proof without
-itself constituting one. We further observe a teacher-choice effect: an RL agent initialized through behavior cloning from Calibrated UAS and fine-tuned via \reinforce{} attains the lowest queue length among the policies evaluated in this study, surpassing even its closed-form teacher. Notably, this strongest neural result is not the default learned policy; an identical architecture trained from the uncalibrated UAS teacher underperforms both JSSQ and UAS, and training from random initialization diverges catastrophically. This learned-policy advantage for the calibrated-teacher variant persists across the 16 operating configurations tested and into near-critical regimes up to $\rho = 0.98$.
+Routing policies for heterogeneous parallel queues face a fundamental tension between state-awareness and capacity-awareness. While classical policies typically prioritize only one, and reinforcement learning (RL) approaches lack formal stability, we propose GibbsQ---a framework that bridges this gap via entropy-regularized routing.
+
+At the \textbf{analytical level}, we formally prove positive Harris recurrence for three routing laws: raw softmax, UAS (under the strict load condition $\totcap > \arrate$), and a stability-certified calibrated subclass (SCUAS) under an explicit parameter-conditional drift bound. These proofs yield computable drift constants; notably, the UAS constants are temperature-independent.
+
+At the \textbf{empirical level}, we introduce Calibrated UAS, a closed-form extension of UAS with three tunable parameters. We find that while Calibrated UAS delivers superior performance---reducing steady-state queue lengths by 8.9\% and 12.6\% relative to JSSQ and baseline UAS respectively---the benchmark-default setting is not theorem-certified. A post-validation audit confirms that the audited benchmark configuration yields negative sufficient drift constants, thus these results remain empirical rather than certified in this study. However, we identify a benchmark-specific piecewise Lyapunov candidate that materially narrows the case for future certification.
+
+Finally, we observe a \textbf{teacher-choice effect} in the learned-policy layer. An RL agent initialized from Calibrated UAS and fine-tuned via \reinforce{} attains the minimum queue length among all evaluated policies, outperforming even its closed-form teacher. This performance gain is strictly directional under controlled evaluation and does not achieve statistical significance, functioning primarily to identify behavioral potential and motivate advanced variance reduction techniques. However, the directional advantage persists across 16 operating configurations and into near-critical regimes up to $\rho = 0.98$.
 \end{abstract}
