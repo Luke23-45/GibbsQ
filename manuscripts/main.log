@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.1.9)  17 APR 2026 15:32
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.1.9)  18 APR 2026 19:06
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -597,8 +597,8 @@ Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 28
 \Hy@SectionHShift=\skip67
 )
 \c@theorem=\count322
-Package hyperref Info: Option `colorlinks' set `true' on input line 235.
-Package hyperref Info: Option `bookmarksnumbered' set `true' on input line 235.
+Package hyperref Info: Option `colorlinks' set `true' on input line 239.
+Package hyperref Info: Option `bookmarksnumbered' set `true' on input line 239.
 )
 LaTeX Font Info:    Trying to load font information for T1+ntxtlf on input line 10.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/t1ntxtlf.fd
@@ -746,105 +746,105 @@ LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
 (Font)              scaled to size 10.0pt on input line 2.
 LaTeX Font Info:    Font shape `T1/ntxtlf/b/n' will be
 (Font)              scaled to size 10.0pt on input line 2.
-LaTeX Font Info:    Trying to load font information for OT1+minntx on input line 3.
+LaTeX Font Info:    Trying to load font information for OT1+minntx on input line 9.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/ot1minntx.fd
 File: ot1minntx.fd 2023/09/09 v1.1 font definition file for OT1/minntx
 )
 LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             `minntx' (encoding: OT1).
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
 LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
-LaTeX Font Info:    Trying to load font information for U+ntxmia on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
+LaTeX Font Info:    Trying to load font information for U+ntxmia on input line 9.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/untxmia.fd
 File: untxmia.fd 2024/04/09 Fontinst v1.933 font definitions for U/ntxmia.
 )
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 5.5pt on input line 3.
-LaTeX Font Info:    Trying to load font information for U+ntxsym on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
+LaTeX Font Info:    Trying to load font information for U+ntxsym on input line 9.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/untxsym.fd
 File: untxsym.fd 2023/08/16 Fontinst v1.933 font definitions for U/ntxsym.
 )
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
-LaTeX Font Info:    Trying to load font information for U+ntxsyc on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
+LaTeX Font Info:    Trying to load font information for U+ntxsyc on input line 9.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/untxsyc.fd
 File: untxsyc.fd 2012/04/12 Fontinst v1.933 font definitions for U/ntxsyc.
 )
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 10.0pt on input line 3.
+(Font)              scaled to size 10.0pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 7.3pt on input line 3.
+(Font)              scaled to size 7.3pt on input line 9.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 5.5pt on input line 3.
-LaTeX Font Info:    Trying to load font information for U+rsfs on input line 3.
+(Font)              scaled to size 5.5pt on input line 9.
+LaTeX Font Info:    Trying to load font information for U+rsfs on input line 9.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/jknapltx/ursfs.fd
 File: ursfs.fd 1998/03/24 rsfs font definition file (jk)
 )
 
 LaTeX Font Warning: Font shape `U/rsfs/m/n' in size <5.5> not available
-(Font)              size <5> substituted on input line 3.
+(Font)              size <5> substituted on input line 9.
 
 ) (./sections/01_introduction.tex
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/sc' will be
@@ -852,103 +852,104 @@ LaTeX Font Info:    Font shape `T1/ntxtlf/m/sc' will be
 Package microtype Info: Character `029' is missing
 (microtype)             in font `T1/ntxtlf/m/sc/12'.
 (microtype)             Ignoring protrusion settings for this character.
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
-(Font)              scaled to size 10.95pt on input line 7.
 LaTeX Font Info:    Font shape `T1/ntxtlf/b/n' will be
-(Font)              scaled to size 10.95pt on input line 9.
-LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
 (Font)              scaled to size 10.95pt on input line 11.
 LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
+LaTeX Font Info:    Font shape `OT1/minntx/m/n' will be
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/m/it' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxmia/m/it' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsym/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxsyc/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `U/ntxexa/m/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 10.95pt on input line 11.
+(Font)              scaled to size 10.95pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 8.0pt on input line 11.
+(Font)              scaled to size 8.0pt on input line 12.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 6.1pt on input line 11.
+(Font)              scaled to size 6.1pt on input line 12.
 
 
 [1
 
-{c:/tools/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ot1-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf-pc.enc}]) (./sections/02_related_work.tex
+{c:/tools/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ot1-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf-pc.enc}]
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
+(Font)              scaled to size 8.0pt on input line 37.
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
+(Font)              scaled to size 6.1pt on input line 37.
+) (./sections/02_related_work.tex
 
 [2]) (./sections/03_model.tex
 Package hyperref Info: bookmark level for unknown definition defaults to 0 on input line 12.
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 8.0pt on input line 33.
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 6.1pt on input line 33.
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
+(Font)              scaled to size 10.95pt on input line 29.
 
 
-[3]) (./sections/04_softmax_theorem.tex
+[3]
 
-[4]
-Package hyperref Info: bookmark level for unknown theorem defaults to 0 on input line 19.
-
+[4]) (./sections/04_softmax_theorem.tex
 
 [5]
+Package hyperref Info: bookmark level for unknown theorem defaults to 0 on input line 19.
+
 
 [6]) (./sections/05_uas_theorem.tex
 
@@ -972,122 +973,102 @@ Package hyperref Info: bookmark level for unknown lemma defaults to 0 on input l
 Package hyperref Info: bookmark level for unknown remark defaults to 0 on input line 8.
 
 
-[11]) (./sections/07_neural_policy.tex) (./sections/08_experiments.tex
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 7.3pt on input line 37.
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 5.5pt on input line 37.
-
+[11]
 
 [12]
-<data/policy/final_20260414_113920/figures/policy_comparison_regenerated.png, id=568, 911.68605pt x 694.87605pt>
-File: data/policy/final_20260414_113920/figures/policy_comparison_regenerated.png Graphic file (type png)
-<use data/policy/final_20260414_113920/figures/policy_comparison_regenerated.png>
-Package pdftex.def Info: data/policy/final_20260414_113920/figures/policy_comparison_regenerated.png  used on input line 85.
+
+[13]) (./sections/07_neural_policy.tex
+
+[14]) (./sections/08_experiments.tex
+
+[15]
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
+(Font)              scaled to size 7.3pt on input line 44.
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
+(Font)              scaled to size 5.5pt on input line 44.
+<data/policy/figures/policy_comparison_regenerated.png, id=606, 911.68605pt x 694.87605pt>
+File: data/policy/figures/policy_comparison_regenerated.png Graphic file (type png)
+<use data/policy/figures/policy_comparison_regenerated.png>
+Package pdftex.def Info: data/policy/figures/policy_comparison_regenerated.png  used on input line 92.
 (pdftex.def)             Requested size: 368.82741pt x 281.11577pt.
-
-
-[13]
-
-[14 <./data/policy/final_20260414_113920/figures/policy_comparison_regenerated.png>]
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
-(Font)              scaled to size 10.0pt on input line 122.
-<data/ablation/final_20260414_113804/figures/ablation_ssa_regenerated.png, id=589, 947.82104pt x 803.28105pt>
-File: data/ablation/final_20260414_113804/figures/ablation_ssa_regenerated.png Graphic file (type png)
-<use data/ablation/final_20260414_113804/figures/ablation_ssa_regenerated.png>
-Package pdftex.def Info: data/ablation/final_20260414_113804/figures/ablation_ssa_regenerated.png  used on input line 136.
+(Font)              scaled to size 10.0pt on input line 127.
+
+
+[16]
+<data/ablation/figures/ablation_ssa_regenerated.png, id=623, 947.82104pt x 803.28105pt>
+File: data/ablation/figures/ablation_ssa_regenerated.png Graphic file (type png)
+<use data/ablation/figures/ablation_ssa_regenerated.png>
+Package pdftex.def Info: data/ablation/figures/ablation_ssa_regenerated.png  used on input line 141.
 (pdftex.def)             Requested size: 331.69894pt x 281.11581pt.
 
 
-[15
-
- <./data/ablation/final_20260414_113804/figures/ablation_ssa_regenerated.png>]
-
-[16]
-<data/stats/final_20260415_024532/figures/stats_boxplot.png, id=606, 569.4876pt x 428.68155pt>
-File: data/stats/final_20260415_024532/figures/stats_boxplot.png Graphic file (type png)
-<use data/stats/final_20260415_024532/figures/stats_boxplot.png>
-Package pdftex.def Info: data/stats/final_20260415_024532/figures/stats_boxplot.png  used on input line 184.
+[17 <./data/policy/figures/policy_comparison_regenerated.png>]
+<data/stats/figures/stats_boxplot.png, id=635, 569.4876pt x 428.68155pt>
+File: data/stats/figures/stats_boxplot.png Graphic file (type png)
+<use data/stats/figures/stats_boxplot.png>
+Package pdftex.def Info: data/stats/figures/stats_boxplot.png  used on input line 189.
 (pdftex.def)             Requested size: 326.77502pt x 245.97977pt.
-<data/generalize/final_20260415_024645/figures/generalization_heatmap.png, id=610, 445.4241pt x 409.2891pt>
-File: data/generalize/final_20260415_024645/figures/generalization_heatmap.png Graphic file (type png)
-<use data/generalize/final_20260415_024645/figures/generalization_heatmap.png>
-Package pdftex.def Info: data/generalize/final_20260415_024645/figures/generalization_heatmap.png  used on input line 228.
+
+
+[18 <./data/ablation/figures/ablation_ssa_regenerated.png>]
+<data/generalize/figures/generalization_heatmap.png, id=644, 445.4241pt x 409.2891pt>
+File: data/generalize/figures/generalization_heatmap.png Graphic file (type png)
+<use data/generalize/figures/generalization_heatmap.png>
+Package pdftex.def Info: data/generalize/figures/generalization_heatmap.png  used on input line 231.
 (pdftex.def)             Requested size: 267.6983pt x 245.98128pt.
 
 
-[17
-
- <./data/stats/final_20260415_024532/figures/stats_boxplot.png>]
-
-[18 <./data/generalize/final_20260415_024645/figures/generalization_heatmap.png>]
-<data/critical/final_20260415_032426/figures/critical_load_curve.png, id=627, 658.74104pt x 441.93105pt>
-File: data/critical/final_20260415_032426/figures/critical_load_curve.png Graphic file (type png)
-<use data/critical/final_20260415_032426/figures/critical_load_curve.png>
-Package pdftex.def Info: data/critical/final_20260415_032426/figures/critical_load_curve.png  used on input line 268.
+[19 <./data/stats/figures/stats_boxplot.png>]
+<data/critical/figures/critical_load_curve.png, id=655, 658.74104pt x 441.93105pt>
+File: data/critical/figures/critical_load_curve.png Graphic file (type png)
+<use data/critical/figures/critical_load_curve.png>
+Package pdftex.def Info: data/critical/figures/critical_load_curve.png  used on input line 270.
 (pdftex.def)             Requested size: 362.78111pt x 243.37975pt.
-<data/drift/final_20260411_202133/figures/drift_vs_norm.png, id=632, 505.4082pt x 340.03035pt>
-File: data/drift/final_20260411_202133/figures/drift_vs_norm.png Graphic file (type png)
-<use data/drift/final_20260411_202133/figures/drift_vs_norm.png>
-Package pdftex.def Info: data/drift/final_20260411_202133/figures/drift_vs_norm.png  used on input line 296.
+
+
+[20 <./data/generalize/figures/generalization_heatmap.png>]
+<data/drift/figures/drift_vs_norm.png, id=668, 505.4082pt x 340.03035pt>
+File: data/drift/figures/drift_vs_norm.png Graphic file (type png)
+<use data/drift/figures/drift_vs_norm.png>
+Package pdftex.def Info: data/drift/figures/drift_vs_norm.png  used on input line 297.
 (pdftex.def)             Requested size: 362.76768pt x 244.06415pt.
-
-
-[19
-
- <./data/critical/final_20260415_032426/figures/critical_load_curve.png>]
-<data/sweep/final_20260411_202209/figures/alpha_sweep_regenerated.png, id=643, 556.2381pt x 393.26926pt>
-File: data/sweep/final_20260411_202209/figures/alpha_sweep_regenerated.png Graphic file (type png)
-<use data/sweep/final_20260411_202209/figures/alpha_sweep_regenerated.png>
-Package pdftex.def Info: data/sweep/final_20260411_202209/figures/alpha_sweep_regenerated.png  used on input line 305.
+<data/sweep/figures/alpha_sweep_regenerated.png, id=669, 556.2381pt x 393.26926pt>
+File: data/sweep/figures/alpha_sweep_regenerated.png Graphic file (type png)
+<use data/sweep/figures/alpha_sweep_regenerated.png>
+Package pdftex.def Info: data/sweep/figures/alpha_sweep_regenerated.png  used on input line 306.
 (pdftex.def)             Requested size: 347.91107pt x 245.9787pt.
 ) (./sections/09_discussion.tex
 
-[20 <./data/drift/final_20260411_202133/figures/drift_vs_norm.png> <./data/sweep/final_20260411_202209/figures/alpha_sweep_regenerated.png>]
+[21 <./data/critical/figures/critical_load_curve.png> <./data/drift/figures/drift_vs_norm.png>]
 
-[21]) (./sections/10_conclusion.tex) (./appendix/A_drift_verification.tex
-File: data/drift/final_20260411_202133/figures/drift_vs_norm.png Graphic file (type png)
-<use data/drift/final_20260411_202133/figures/drift_vs_norm.png>
-Package pdftex.def Info: data/drift/final_20260411_202133/figures/drift_vs_norm.png  used on input line 21.
-(pdftex.def)             Requested size: 362.76768pt x 244.06415pt.
-) (./appendix/B_gradient_check.tex
+[22 <./data/sweep/figures/alpha_sweep_regenerated.png>]) (./sections/10_conclusion.tex
 
-[22]
-<data/reinforce_check/final_20260411_202109/figures/gradient_scatter.png, id=678, 473.8503pt x 374.71996pt>
-File: data/reinforce_check/final_20260411_202109/figures/gradient_scatter.png Graphic file (type png)
-<use data/reinforce_check/final_20260411_202109/figures/gradient_scatter.png>
-Package pdftex.def Info: data/reinforce_check/final_20260411_202109/figures/gradient_scatter.png  used on input line 39.
+[23]) (./main.bbl
+
+[24]) (./appendix/A_drift_verification.tex) (./appendix/B_gradient_check.tex
+
+[25]
+<data/reinforce_check/figures/gradient_scatter.png, id=718, 473.8503pt x 374.71996pt>
+File: data/reinforce_check/figures/gradient_scatter.png Graphic file (type png)
+<use data/reinforce_check/figures/gradient_scatter.png>
+Package pdftex.def Info: data/reinforce_check/figures/gradient_scatter.png  used on input line 39.
 (pdftex.def)             Requested size: 311.05025pt x 245.97797pt.
 ) (./appendix/C_training_details.tex
 
-[23]
-<data/reinforce_train/final_20260411_202209/figures/reinforce_training_curve.png, id=689, 1004.3121pt x 711.8595pt>
-File: data/reinforce_train/final_20260411_202209/figures/reinforce_training_curve.png Graphic file (type png)
-<use data/reinforce_train/final_20260411_202209/figures/reinforce_training_curve.png>
-Package pdftex.def Info: data/reinforce_train/final_20260411_202209/figures/reinforce_training_curve.png  used on input line 69.
+[26 <./data/reinforce_check/figures/gradient_scatter.png>]
+<data/reinforce_train/figures/reinforce_training_curve.png, id=729, 1004.3121pt x 711.8595pt>
+File: data/reinforce_train/figures/reinforce_training_curve.png Graphic file (type png)
+<use data/reinforce_train/figures/reinforce_training_curve.png>
+Package pdftex.def Info: data/reinforce_train/figures/reinforce_training_curve.png  used on input line 69.
 (pdftex.def)             Requested size: 347.03973pt x 245.98282pt.
-
-
-[24 <./data/reinforce_check/final_20260411_202109/figures/gradient_scatter.png>]) (./appendix/D_stress_sweep.tex
-
-[25 <./data/reinforce_train/final_20260411_202209/figures/reinforce_training_curve.png>]) (./appendix/E_engine_consistency.tex
-LaTeX Font Info:    Trying to load font information for T1+ntxtt on input line 6.
- (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/t1ntxtt.fd
-File: t1ntxtt.fd 2012/04/20 v3.1
-)
-LaTeX Font Info:    Font shape `T1/ntxtt/m/n' will be
-(Font)              scaled to size 10.95pt on input line 6.
-Package microtype Info: Loading generic protrusion settings for font family
-(microtype)             `ntxtt' (encoding: T1).
-(microtype)             For optimal results, create family-specific settings.
-(microtype)             See the microtype manual for details.
-
-
-[26]) (./main.bbl
+) (./appendix/D_stress_sweep.tex
 
 [27])
 
-[28] (./main.aux)
+[28 <./data/reinforce_train/figures/reinforce_training_curve.png>]
+
+[29] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 1
 L3 programming layer <2020/03/25>
@@ -1098,21 +1079,21 @@ LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 0.5pt have occurred.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 4AEF1FE47484F7F5AEA7198F62AE1C64;13666.
+(rerunfilecheck)             Checksum: 8079638BA86593EE6AA00BF96B4626F4;11265.
  ) 
 Here is how much of TeX's memory you used:
- 20795 strings out of 475170
- 332990 string characters out of 5766445
- 753924 words of memory out of 5000000
- 42884 multiletter control sequences out of 15000+600000
- 668106 words of font info for 279 fonts, out of 8000000 for 9000
+ 20824 strings out of 475170
+ 331957 string characters out of 5766445
+ 756135 words of memory out of 5000000
+ 42875 multiletter control sequences out of 15000+600000
+ 669561 words of font info for 288 fonts, out of 8000000 for 9000
  36 hyphenation exceptions out of 8191
- 85i,12n,120p,1001b,640s stack positions out of 10000i,1000n,20000p,200000b,200000s
-<c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI5.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qtmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/txfonts/t1xtt.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsym.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
-Output written on main.pdf (28 pages, 5840192 bytes).
+ 85i,16n,120p,1001b,671s stack positions out of 10000i,1000n,20000p,200000b,200000s
+<c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI5.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qtmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexas.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsym.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
+Output written on main.pdf (29 pages, 5859575 bytes).
 PDF statistics:
- 850 PDF objects out of 1000 (max. 8388607)
- 765 compressed objects within 8 object streams
- 260 named destinations out of 1000 (max. 500000)
- 40030 words of extra memory for PDF output out of 42996 (max. 10000000)
+ 879 PDF objects out of 1000 (max. 8388607)
+ 793 compressed objects within 8 object streams
+ 288 named destinations out of 1000 (max. 500000)
+ 39422 words of extra memory for PDF output out of 42996 (max. 10000000)
 

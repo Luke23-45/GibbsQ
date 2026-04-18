@@ -1,16 +1,13 @@
 
-\section{Conclusion and Future Work}
+\section{Conclusion}
 \label{sec:conclusion}
 
-We presented GibbsQ, a framework for entropy-regularized routing in heterogeneous parallel queues.
+We presented GibbsQ, a framework for entropy-regularized routing in heterogeneous parallel queues that aims to address the tension between state-awareness, capacity-awareness, and formal stability guarantees.
 
-At the \emph{analytical} level, we proved positive Harris recurrence for two routing laws --- raw softmax and UAS --- via self-contained Foster--Lyapunov arguments with explicit drift constants.
-Notably, the UAS drift constants $\varepsilon_{\mathrm{UAS}}$ and $R_{\mathrm{UAS}}$ are independent of the temperature $\temp$, providing a stability guarantee that does not degrade with increased entropy regularization.
+At the \emph{analytical} level, we formally demonstrated positive Harris recurrence for three routing laws via self-contained Foster--Lyapunov arguments with explicit, computable drift constants: raw softmax and UAS under the strict load condition $\totcap > \arrate$, and SCUAS under an explicit parameter-conditional sufficient condition. The raw softmax proof employs a quadratic Lyapunov function and an entropy ceiling bound; the UAS proof employs a capacity-weighted Lyapunov function and a prior-weighted KL variational identity; the SCUAS proof employs a matched weighted Lyapunov function and a calibrated prior decomposition. Notably, the UAS drift constants $\varepsilon_{\mathrm{UAS}}$ and $R_{\mathrm{UAS}}$ are independent of the temperature $\temp$, ensuring the stability guarantee does not degrade with increased entropy regularization.
 
-At the \emph{empirical} level, Calibrated UAS achieves $\E[\sum_i\Qlen{i}] = 10.04$ in the common evaluation protocol, reducing queue length by 8.9\% relative to JSSQ and by 12.6\% relative to UAS.
+At the \emph{empirical} level, Calibrated UAS, the full three-parameter closed-form extension, achieves $\E[\sum_i\Qlen{i}] = 10.04$ under the standard evaluation protocol, yielding a reduction of steady-state queue lengths that outperforms JSSQ by 8.9\% and baseline UAS by 12.6\%. The manuscript now distinguishes this unrestricted empirical family from the theorem-backed subclass SCUAS rather than attributing a blanket stability claim to all calibrated parameter settings.
 
-At the \emph{learned-policy} level, structured ablation establishes that teacher-policy choice is the dominant training design factor.
-A calibrated-teacher variant achieves $9.82$, the strongest result in our experiments.
-The learned-policy advantage generalizes across all 16 tested operating-regime configurations and persists under near-critical load up to $\rho = 0.98$.
+At the \emph{learned-policy} level, we observed a teacher-choice effect: a neural policy initialized through behavior cloning from Calibrated UAS and fine-tuned using \reinforce{} attains the minimum queue length ($9.82$) among the policies evaluated in this study, surpassing even its teacher. The choice of teacher policy emerged as a primary factor influencing the quality of the learned policy in our experiments, exceeding the impact of the architectural modifications we tested. This performance gain remained consistent across the 16 operating regime configurations tested and persisted into near-critical regimes up to $\rho = 0.98$.
 
-The GibbsQ framework demonstrates that entropy regularization provides a unifying lens for queue routing: connecting classical stability theory, empirical calibration, and modern learned policies through a shared variational structure rooted in Gibbs measures and convex duality.
+The results indicate that entropy regularization offers a flexible lens for queue routing, providing a path from formal, scalable analytical stability theory (verified to $\Nservers = 1{,}024$) to performance-focused empirical calibration and learned neural policies (currently scoped to $\Nservers = 10$).

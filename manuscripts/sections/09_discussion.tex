@@ -1,62 +1,75 @@
 
-\section{Discussion and Limitations}
+\section{Discussion, Limitations, and Future Directions}
 \label{sec:discussion}
 
-\subsection{The Teacher-Choice Principle}
+\subsection{The Teacher-Choice Effect}
 
-The ablation study reveals a clear rank ordering: Calibrated UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$).
-The $1.32$-unit gap between calibrated and uncalibrated teachers exceeds the effect of every architectural modification (log-normalization, zero-init), establishing teacher quality as the dominant design choice among the tested training variants.
+The ablation study showcases a clear rank ordering (where $\succ$ denotes strictly lower mean total queue length): Calibrated UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$; diverged).
+The $1.32$-unit gap between the Calibrated UAS teacher and the UAS teacher exceeds the impact of all architectural modifications evaluated (log-normalization, zero-init), which identifies teacher quality as a primary design factor in this empirical setting.
 
-This finding has a natural interpretation.
-Behavior cloning initializes the policy in a basin of attraction determined by the teacher's action distribution.
-\reinforce{} fine-tuning then makes local improvements within this basin.
-A stronger teacher produces a better starting basin, and the resulting improvements from fine-tuning compound rather than compensate.
-The learned policy is best understood as a \emph{local refinement within the basin defined by the teacher}, rather than an optimizer capable of global exploration.
+This observation has a natural interpretation.
+Essentially, behavior cloning positions the neural policy's parameters in a region from which \reinforce{} fine-tuning makes local improvements.
+A competent teacher provides a better initialization, from which \reinforce{} then attempts to drive further improvement, whereas a weaker initialization forces fine-tuning to expend its efforts on overcoming the deficit.
+The developed policy in this study can be characterized as local fine-tuning within the initialization region, rather than global policy search.
+The offline BC phase does not address the distributional shift~\cite{ross2011reduction}.
+On-policy data collection during pretraining could further improve initialization quality.
 
 \subsection{Why Calibrated UAS Outperforms UAS}
 
-Calibrated UAS modifies three structural ingredients of UAS, each with a distinct effect:
+Calibrated UAS alters three key components of UAS, each influencing performance in a specific way:
 \begin{itemize}
-\item \textbf{Tempered normalization} ($\calbeta = 0.85$): the denominator $\srvrate_i^{\calbeta}$ grows more slowly than $\srvrate_i$, reducing the penalty differential between fast and slow servers.
-\item \textbf{Softened prior} ($\calgamma = 0.5$): the pre-exponential factor $\srvrate_i^{\calgamma}$ flattens the routing bias toward fast servers relative to UAS's proportional-to-$\srvrate_i$ prior.
-\item \textbf{Reduced look-ahead} ($\caloffset = 0.5$): the offset $\Qlen{i} + 0.5$ attenuates the anticipatory correction relative to UAS's $\Qlen{i} + 1$.
+\item \textbf{Tempered normalization} ($\calbeta = 0.85$): the denominator $\srvrate_i^{\calbeta}$ increases more slowly than $\srvrate_i$, reducing the routing-mass differential between fast and slow servers.
+\item \textbf{Softened prior} ($\calgamma = 0.5$): the pre-exponential factor $\srvrate_i^{\calgamma}$ reduces the routing bias toward fast servers relative to UAS's proportional-to-$\srvrate_i$ prior.
+\item \textbf{Reduced look-ahead} ($\caloffset = 0.5$): the energy function's additive constant is decreased from $1$ (UAS: $\Qlen{i}+1$) to $0.5$, shifting routing slightly toward current-state responsiveness.
 \end{itemize}
-We conjecture that these modifications improve steady-state performance by rebalancing load distribution: the tempered normalization and softened prior jointly reduce over-routing to fast servers, while the reduced offset makes routing more responsive to current state.
-The $1.45$-unit improvement over UAS ($10.04$ vs.\ $11.49$) confirms that meaningful empirical margin remains beyond the analytically tractable parameterization.
+
+We conjecture that these adjustments improve steady-state performance by rebalancing load distribution, the tempered normalization and softened prior jointly reduce over-routing to fast servers, while the diminished offset increases responsiveness to current state.
+This conjecture is consistent with the Gini coefficients in Table~\ref{tab:policy}: Calibrated UAS achieves $G = 0.174$ versus UAS's $G = 0.328$, a 47\% reduction in load imbalance, suggesting that the tempered parameters substantially balance routing mass across servers.
+The $1.45$-unit improvement over UAS ($10.04$ vs.\ $11.495$) confirms substantial empirical gain beyond the provably stable parameterization.
 
 \subsection{Limitations}
 
-\subsubsection{No Stability Proof for Calibrated UAS}
-The weighted variational identity (Proposition~\ref{prop:uas_variational}) and the Jensen-based arrival bound (Lemma~\ref{lem:uas_arrival}) do not extend to the generalized parameterization.
-Stability for general $(\calbeta, \calgamma, \caloffset)$ remains an open theoretical question.
+\begin{enumerate}[label=\textbf{L\arabic*.}, leftmargin=2.2em]
+\item \textbf{Full Calibrated UAS family remains open:}
+Section~\ref{sec:calibrated_uas} now proves positive Harris recurrence for the named subclass SCUAS under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
+However, this theorem does not cover the unrestricted three-parameter family uniformly.
+Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified subclass remains an open theoretical question.
 
-\subsubsection{Default Pipeline Limitation}
-The default $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, below both JSSQ and Calibrated UAS.
-The calibrated-teacher variant ($9.82$) is a separate model discovered through ablation.
-Our results suggest that Calibrated UAS should be adopted as the default teacher in production deployments.
+\item \textbf{Default pipeline uses a suboptimal teacher:}
+The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, below both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
+The variant with the calibrated teacher ($9.82$) was identified through ablation and not as part of the original design.
+The ablation findings suggest that switching the pipeline to use Calibrated UAS as the BC teacher would improve $\ngibbsq$ from $11.68$ to $9.82$ without any architectural change.
 
-\subsubsection{Scale}
-All primary comparisons use $\Nservers = 10$. The stress test validates stable behavior up to $\Nservers = 1{,}024$ (Appendix~\ref{sec:appendix_stress}), but competitive comparisons at larger $\Nservers$ are not reported and would strengthen the practical claims.
+\item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
+The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$.
+Performing competitive assessments at larger $\Nservers$ would further substantiate the practical claims.
+We scope the comparative evaluation of the neural routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline demonstrates superior optimality at small to medium bounds, the analytical UAS policy is separately verified to scale natively to massive capacities such as $\Nservers = 1{,}024$ without the overhead of neural retraining.
 
-\subsubsection{Parameter Selection}
-The Calibrated UAS parameters were selected via grid search on a separate validation set (Section~\ref{sec:calibrated_uas}), but the grid is coarse and the parameter surface may not be convex.
-A more principled optimization procedure would strengthen the reported improvements.
+\item \textbf{Coarse parameter grid for Calibrated UAS:}
+The benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ were selected from a grid of 64 configurations evaluated on a held-out validation set.
+The grid is coarse and the parameter surface may not be convex.
+Therefore, a more systematic search method (e.g., Bayesian optimization) could enhance the confidence in the improvements observed.
 
-\subsubsection{Gradient Magnitude}
-The \reinforce{} estimator shows 32.6\% relative magnitude error versus finite differences (Appendix~\ref{sec:appendix_gradient}).
-While directionally correct, the magnitude mismatch effectively reduces the learning rate at each step, potentially slowing convergence.
-Improved variance reduction techniques (PPO, natural policy gradient) could address this limitation.
+\item \textbf{REINFORCE gradient magnitude error:}
+The \reinforce{} estimator demonstrates 32.6\% relative magnitude error versus finite differences (Appendix~\ref{sec:appendix_gradient}).
+While directionally correct (cosine similarity $1.0000$), the magnitude mismatch effectively reduces the learning rate, potentially slowing convergence.
+Variance reduction techniques such as generalized advantage estimation (GAE) or actor-critic baselines could reduce this error; trust-region methods such as PPO would additionally stabilize step sizes.
+\end{enumerate}
 
 \subsection{Future Directions}
 
-\subsubsection{Calibrated UAS Stability Analysis}
-Extending the Lyapunov argument to cover the three-parameter family would close the gap between the analytical and empirical layers.
+\begin{enumerate}[label=\textbf{F\arabic*.}, leftmargin=2.2em]
+\item \textbf{Beyond the certified subclass:}
+Extending the SCUAS Lyapunov argument to cover the full three-parameter family $(\calbeta, \calgamma, \caloffset)$ would close the remaining gap between the analytical and empirical layers.
+The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity.
 
-\subsubsection{Scale Experiments}
-Evaluating competitive policy comparisons at $\Nservers \in \{50, 100\}$ would test whether the learned-policy advantage persists at scale.
+\item \textbf{Competitive comparisons at intermediate scale:}
+Competitive policy comparisons at $\Nservers \in \{32, 64, 128\}$---which connects the primary benchmark ($\Nservers = 10$) to the stress test ($\Nservers = 128{+}$)---would establish whether the learned-policy advantage persists as server count grows.
 
-\subsubsection{Advanced RL Algorithms}
-PPO, SAC, or natural policy gradient methods could improve both training stability and gradient estimation fidelity.
+\item \textbf{Advanced RL training:}
+Variance reduction via GAE or actor-critic baselines would address the \reinforce{} magnitude error identified in L5.
+However, trust-region methods (PPO, natural policy gradient) could additionally improve step-size stability and accelerate convergence.
 
-\subsubsection{Non-Stationarity}
-Time-varying arrival rates and dynamic server availability would test the framework's practical applicability.
+\item \textbf{Non-stationarity:}
+Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings.
+\end{enumerate}

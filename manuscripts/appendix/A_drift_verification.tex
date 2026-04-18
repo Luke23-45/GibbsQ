@@ -2,26 +2,24 @@
 \section{Drift Verification}
 \label{sec:appendix_drift}
 
-The Foster--Lyapunov drift inequality for UAS (Theorem~\ref{thm:uas}),
+The Foster--Lyapunov drift inequality for raw softmax (Theorem~\ref{thm:softmax}),
 \[
-\gen \lyap_{\mathrm{UAS}}(\Qstate) \leq -\varepsilon_{\mathrm{UAS}} |\Qstate|_1 + R_{\mathrm{UAS}},
+\gen \lyap(\Qstate) \leq -\varepsilon \abs{\Qstate}_1 + R,
 \]
-was numerically verified by exactly computing the generator action at each sampled state and comparing against the theoretical upper bound.
+was numerically verified by exactly computing the generator action $\gen \lyap(\Qstate) = \sum_i [\arrate\, \rprob{i} (Q_i + \tfrac{1}{2}) - \srvrate_i Q_i + \tfrac{1}{2}\srvrate_i \Ind_{Q_i>0}]$ at each sampled state and comparing against the theoretical upper bound.
 
 \subsection{Configuration}
-$\Nservers = 10$, $\rho = 0.80$, $\temp = 10.0$, 20{,}001 states sampled.
-Computed constants: $\varepsilon_{\mathrm{UAS}} = 0.28$, $R_{\mathrm{UAS}} = 38.39$.
+$\Nservers = 10$, $\rho = 0.80$, $\temp = 1.0$, $\lyap(\Qstate) = \frac{1}{2}\sum_i \Qlen{i}^2$, 20{,}001 states sampled.
+Computed constants: $\varepsilon = \min\bigl((\totcap - \arrate)/\Nservers,\; \min_i \srvrate_i\bigr) = 0.28$, $R = (\arrate \log \Nservers)/\temp + (\arrate + \totcap)/2 = 38.39$.
 
 \subsection{Result}
 \textbf{Zero bound violations} across all 20{,}001 sampled states.
-The drift becomes strictly negative for $|\Qstate|_1 > R/\varepsilon \approx 137$, consistent with Theorem~\ref{thm:uas}.
+The drift becomes strictly negative for $\abs{\Qstate}_1 > R/\varepsilon \approx 137$, consistent with Theorem~\ref{thm:softmax}.
 
-\begin{figure}[htbp!]
-\centering
-\includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{drift_vs_norm.png}
-\caption{Drift verification: generator drift $\gen\lyap(\Qstate)$ (blue) vs.\ theoretical bound $-\varepsilon|\Qstate|_1 + R$ (orange).  All 20{,}001 points lie below the bound.}
-\label{fig:appendix_drift}
-\end{figure}
+\begin{remark}
+For the UAS theorem (Theorem~\ref{thm:uas}) at the same load ($\rho = 0.80$), the drift constants are $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap = 0.20$ and $R_{\mathrm{UAS}} = \arrate \Nservers/\totcap + \Nservers/2 = 13.0$, using the weighted Lyapunov function $\lyap_{\mathrm{UAS}}(\Qstate) = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$.
+These constants are independent of temperature~$\temp$.
+\end{remark}
 
 % Paths removed for double-blind review.
 

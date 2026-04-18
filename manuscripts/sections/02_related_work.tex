@@ -2,41 +2,44 @@
 \section{Related Work}
 \label{sec:related_work}
 
-\subsection{Classical Parallel-Queue Routing}
-JSQ is optimal under server symmetry~\cite{weber1978optimal,winston1977optimality}; service-aware extensions (JSSQ) incorporate heterogeneity~\cite{ephremides1980simple}.
-The power-of-$d$-choices paradigm~\cite{mitzenmacher2001power} achieves exponential improvements in tail latency by sampling $d \geq 2$ servers, but does not exploit full queue-state information.
-GibbsQ uses complete state information and entropy regularization, yielding smooth routing probabilities with formal stability guarantees.
+\paragraph{Classical parallel-queue routing}
+JSQ is optimal under identical servers~\cite{weber1978optimal,winston1977optimality}.
+JSSQ extends JSQ by directing traffic to the server with the lowest $\Qlen{i}/\srvrate_i$~\cite{ephremides1980simple}.
+The power-of-$d$-choices method~\cite{mitzenmacher2001power} significantly decreases the tail of the queue-length distribution by sampling $d \geq 2$ servers, although it does not utilize complete queue-state information.
+While power-of-$d$ policies excel in massive-scale load balancing where full state observation is typically unavailable, the GibbsQ framework explicitly targets settings---such as specialized compute clusters---where continuous, centralized full-state telemetry is accessible.
+GibbsQ uses complete state information with entropy regularization, providing formal stability guarantees.
 
-\subsection{MaxWeight and Lyapunov-Based Scheduling}
-MaxWeight policies provide throughput optimality in generalized networks~\cite{tassiulas1992stability}.
+\paragraph{MaxWeight and Lyapunov-based scheduling}
+MaxWeight policies attain optimal throughput in constrained queueing networks~\cite{tassiulas1992stability}.
 Neely's drift-plus-penalty framework~\cite{neely2010stochastic} extends Lyapunov methods to stochastic network optimization with utility maximization.
-Our work differs in two respects: we target \emph{routing} in parallel queues (not scheduling in multi-hop networks), and our entropy-regularized policies produce smooth, differentiable routing probabilities rather than deterministic assignments.
+Our proposed framework centers on routing in parallel queues rather than scheduling in multi-hop networks, and produces continuous-valued routing probabilities rather than deterministic threshold assignments.
 
-\subsection{Softmax and Entropy Regularization}
-Boltzmann policies are standard exploration mechanisms in RL~\cite{sutton2018reinforcement}.
-The connection to Gibbs measures and log-sum-exp duality is classical~\cite{boyd2004convex}.
-Entropy-regularized optimization is central to mirror descent~\cite{nemirovskij1983problem,beck2003mirror}, soft actor-critic~\cite{haarnoja2018soft}, and maximum-entropy RL~\cite{ziebart2010modeling}.
-Despite these connections, explicit Foster--Lyapunov analyses for softmax routing in heterogeneous queues appear to be new.
+\paragraph{Softmax and entropy regularization}
+In reinforcement learning, Boltzmann policies serve as standard methods for exploration~\cite{sutton2018reinforcement}.
+The log-sum-exp function acts as the convex conjugate of the negative entropy~\cite{boyd2004convex}.
+Such duality connects entropy-regularized routing to the Gibbs-measure perspective adopted here.
+Entropy-regularized optimization underpins mirror descent~\cite{nemirovskij1983problem,beck2003mirror}, soft actor-critic~\cite{haarnoja2018soft}, and maximum-entropy RL~\cite{ziebart2010modeling}.
+Despite these relationship to the RL and optimization literatures, explicit Foster--Lyapunov analyses for softmax routing in heterogeneous queues appear to be new to the queueing literature.
 
-\subsection{Foster--Lyapunov Methods for Queueing Stability}
-The Foster--Lyapunov framework for positive Harris recurrence is the standard tool for queueing stability~\cite{meyn2012markov}.
-Quadratic Lyapunov functions are widely used in homogeneous settings~\cite{neely2010stochastic}; weighted variants appear in heterogeneous analyses~\cite{asmussen2003applied}.
-Our UAS proof uses a capacity-weighted Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ together with a prior-weighted KL variational identity --- a combination that, to our knowledge, has not appeared in the queueing literature.
+\paragraph{Foster--Lyapunov methods for queueing stability}
+The Foster--Lyapunov framework for positive Harris recurrence is the standard stability tool for CTMCs~\cite{meyn2012markov}.
+Quadratic Lyapunov functions are commonly used in homogeneous settings~\cite{neely2010stochastic}, however, weighted versions are used in analyses involving heterogeneous cases~\cite{asmussen2003applied}.
+Our UAS proof uses a capacity-weighted Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ together with a prior-weighted KL variational identity, while the SCUAS extension uses a matched weighted Lyapunov function $\lyap_{\mathrm{SCUAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i^{\calbeta}$ and a calibrated prior decomposition. To our knowledge, this combination of proof templates has not appeared in the queueing literature.
 
-\subsection{Imitation Learning and Behavior Cloning}
-Behavior cloning learns a policy by supervised imitation of an expert~\cite{osa2018algorithmic}.
-DAgger~\cite{ross2011reduction} addresses the distribution-shift problem of offline BC by iteratively querying the expert under the learner's state distribution.
-Our pipeline uses offline BC (not DAgger) for initialization, followed by \reinforce{} fine-tuning to escape the teacher's action distribution.
-The ablation study quantifies the sensitivity of this pipeline to teacher quality: switching from UAS to Calibrated UAS as the BC teacher improves the final policy by $1.32$ queue-length units.
+\paragraph{Imitation learning and behavior cloning}
+Behavior cloning trains a policy through supervised imitation of an expert~\cite{osa2018algorithmic}.
+DAgger~\cite{ross2011reduction} corrects the distribution-shift problem of offline BC by iteratively querying the expert under the learner's induced distribution.
+Our pipeline uses offline BC for initialization, followed by \reinforce{} fine-tuning to improve upon the cloned policy.
+The ablation study quantifies the impact of teacher quality, showing that replacing UAS with Calibrated UAS improves the final empirical policy by $1.32$ queue-length units.
 
-\subsection{RL for Queueing and Resource Allocation}
-RL has been applied to queueing control, scheduling, and routing~\cite{dai2022queueing}.
-These approaches typically learn policies end-to-end without analytical stability guarantees.
-GibbsQ bridges this gap by providing theorem-backed analytical policies as both baselines and BC teachers for the learned policy, ensuring that the training pipeline is grounded in provable stability.
+\paragraph{RL for queueing and resource allocation}
+RL has been applied, e.g., to queueing control, scheduling, and routing~\cite{dai2022queueing}.
+These approaches generally learn policies end-to-end without analytical stability guarantees.
+GibbsQ addresses this gap by offering proven stable analytical policies, including a certified calibrated subclass, as both baselines and BC teachers.
 
-\subsection{Mean-Field Approximations}
-For large server pools ($\Nservers \to \infty$), mean-field models provide tractable approximations of queueing dynamics~\cite{kleinrock1975queueing,kelly2011reversibility}.
-Our stress tests validate UAS behavior up to $\Nservers = 1{,}024$ (Appendix~\ref{sec:appendix_stress}), but our theoretical results are finite-$\Nservers$ and do not rely on mean-field limits.
+\paragraph{Mean-field approximations}
+For large server pools ($\Nservers \to \infty$), mean-field models approximate queueing dynamics~\cite{kleinrock1975queueing,kelly2011reversibility}.
+Our theoretical results are finite-$\Nservers$; stress tests validate UAS behavior up to $\Nservers = 1{,}024$ (Appendix~\ref{sec:appendix_stress}).
 
-\subsection{Positioning}
-GibbsQ provides: (i)~explicit stability proofs for two entropy-regularized routing laws with closed-form drift constants, (ii)~an empirically calibrated closed-form policy that outperforms classical baselines, and (iii)~an ablation study establishing that teacher-policy choice is the dominant factor in learned-policy quality.
+\paragraph{Positioning}
+GibbsQ offers explicit stability proofs with closed-form drift constants, including a theorem-backed calibrated subclass, alongside an empirically calibrated closed-form policy and ablation evidence that teacher-policy choice is the dominant training design factor.

@@ -2,14 +2,12 @@
 \providecommand\hyper@newdestlabel[2]{}
 \providecommand\HyField@AuxAddToFields[1]{}
 \providecommand\HyField@AuxAddToCoFields[2]{}
-\citation{weber1978optimal}
-\citation{winston1977optimality}
+\citation{boyd2004convex}
+\citation{meyn2012markov}
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
 \newlabel{sec:introduction}{{1}{1}{Introduction}{section.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {1.1}Entropy-Regularized Routing}{1}{subsection.1.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {1.2}Contributions}{1}{subsection.1.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {1.2.1}Stability Theorems}{1}{subsubsection.1.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {1.2.2}Calibrated Closed-Form Policy}{1}{subsubsection.1.2.2}\protected@file@percent }
 \citation{weber1978optimal}
 \citation{winston1977optimality}
 \citation{ephremides1980simple}
@@ -22,29 +20,28 @@
 \citation{beck2003mirror}
 \citation{haarnoja2018soft}
 \citation{ziebart2010modeling}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Paper Organization}{2}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\newlabel{sec:related_work}{{2}{2}{Related Work}{section.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Classical parallel-queue routing}{2}{paragraph*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{MaxWeight and Lyapunov-based scheduling}{2}{paragraph*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Softmax and entropy regularization}{2}{paragraph*.3}\protected@file@percent }
 \citation{meyn2012markov}
 \citation{neely2010stochastic}
 \citation{asmussen2003applied}
 \citation{osa2018algorithmic}
 \citation{ross2011reduction}
 \citation{dai2022queueing}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {1.2.3}Learned Policy via Structured Ablation}{2}{subsubsection.1.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}Paper Organization}{2}{subsection.1.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
-\newlabel{sec:related_work}{{2}{2}{Related Work}{section.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Classical Parallel-Queue Routing}{2}{subsection.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}MaxWeight and Lyapunov-Based Scheduling}{2}{subsection.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Softmax and Entropy Regularization}{2}{subsection.2.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Foster--Lyapunov Methods for Queueing Stability}{2}{subsection.2.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Imitation Learning and Behavior Cloning}{2}{subsection.2.5}\protected@file@percent }
 \citation{kleinrock1975queueing}
 \citation{kelly2011reversibility}
 \citation{kleinrock1975queueing}
 \citation{kelly2011reversibility}
 \citation{robert2003stochastic}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}RL for Queueing and Resource Allocation}{3}{subsection.2.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.7}Mean-Field Approximations}{3}{subsection.2.7}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.8}Positioning}{3}{subsection.2.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Foster--Lyapunov methods for queueing stability}{3}{paragraph*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Imitation learning and behavior cloning}{3}{paragraph*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{RL for queueing and resource allocation}{3}{paragraph*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Mean-field approximations}{3}{paragraph*.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Positioning}{3}{paragraph*.8}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3}Queueing Model and Problem Formulation}{3}{section.3}\protected@file@percent }
 \newlabel{sec:model}{{3}{3}{Queueing Model and Problem Formulation}{section.3}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}System Model}{3}{subsection.3.1}\protected@file@percent }
@@ -56,13 +53,13 @@
 \newlabel{def:load}{{3.2}{3}{Total service capacity and load condition}{definition.3.2}{}}
 \newlabel{eq:total_capacity}{{2}{3}{Total service capacity and load condition}{equation.2}{}}
 \newlabel{eq:load_condition}{{3}{3}{Total service capacity and load condition}{equation.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Routing Problem}{3}{subsection.3.2}\protected@file@percent }
-\newlabel{sec:model:routing}{{3.2}{3}{Routing Problem}{subsection.3.2}{}}
-\newlabel{eq:routing_map}{{4}{3}{Routing Problem}{equation.4}{}}
-\newlabel{eq:objective}{{5}{3}{Routing Problem}{equation.5}{}}
 \citation{meyn2012markov}
 \citation{asmussen2003applied}
 \citation{meyn2012markov}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Routing Problem}{4}{subsection.3.2}\protected@file@percent }
+\newlabel{sec:model:routing}{{3.2}{4}{Routing Problem}{subsection.3.2}{}}
+\newlabel{eq:routing_map}{{4}{4}{Routing Problem}{equation.4}{}}
+\newlabel{eq:objective}{{5}{4}{Routing Problem}{equation.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Policy Classes}{4}{subsection.3.3}\protected@file@percent }
 \newlabel{sec:model:policies}{{3.3}{4}{Policy Classes}{subsection.3.3}{}}
 \@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.3\else \numberline {3.3}Definition\fi \thmtformatoptarg {Raw softmax routing}}{4}{definition.3.3}\protected@file@percent }
@@ -74,230 +71,210 @@
 \@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.5\else \numberline {3.5}Definition\fi \thmtformatoptarg {Calibrated UAS}}{4}{definition.3.5}\protected@file@percent }
 \newlabel{def:calibrated_uas}{{3.5}{4}{Calibrated UAS}{definition.3.5}{}}
 \newlabel{eq:calibrated_uas}{{8}{4}{Calibrated UAS}{equation.8}{}}
-\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.6\else \numberline {3.6}Definition\fi \thmtformatoptarg {N-GibbsQ}}{4}{definition.3.6}\protected@file@percent }
-\newlabel{def:ngibbsq}{{3.6}{4}{N-GibbsQ}{definition.3.6}{}}
-\newlabel{eq:ngibbsq}{{9}{4}{N-GibbsQ}{equation.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Stability Framework}{4}{subsection.3.4}\protected@file@percent }
-\newlabel{sec:model:stability}{{3.4}{4}{Stability Framework}{subsection.3.4}{}}
-\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.7\else \numberline {3.7}Definition\fi \thmtformatoptarg {Foster--Lyapunov drift condition}}{4}{definition.3.7}\protected@file@percent }
-\newlabel{def:foster_lyapunov}{{3.7}{4}{Foster--Lyapunov drift condition}{definition.3.7}{}}
-\newlabel{eq:foster_lyapunov}{{10}{4}{Foster--Lyapunov drift condition}{equation.10}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Summary of principal notation. Symbols in the final block are introduced in Sections~\ref {sec:uas_theorem} and~\ref {sec:calibrated_uas} and appear here for reference.}}{5}{table.caption.1}\protected@file@percent }
-\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
-\newlabel{tab:notation}{{1}{5}{Summary of principal notation. Symbols in the final block are introduced in Sections~\ref {sec:uas_theorem} and~\ref {sec:calibrated_uas} and appear here for reference}{table.caption.1}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.6\else \numberline {3.6}Definition\fi \thmtformatoptarg {Stability-Certified Calibrated UAS (SCUAS)}}{4}{definition.3.6}\protected@file@percent }
+\newlabel{def:scuas}{{3.6}{4}{Stability-Certified Calibrated UAS (SCUAS)}{definition.3.6}{}}
+\newlabel{eq:scuas_model}{{9}{4}{Stability-Certified Calibrated UAS (SCUAS)}{equation.9}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.7\else \numberline {3.7}Definition\fi \thmtformatoptarg {N-GibbsQ}}{4}{definition.3.7}\protected@file@percent }
+\newlabel{def:ngibbsq}{{3.7}{4}{N-GibbsQ}{definition.3.7}{}}
+\newlabel{eq:ngibbsq}{{10}{4}{N-GibbsQ}{equation.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Stability Framework}{5}{subsection.3.4}\protected@file@percent }
+\newlabel{sec:model:stability}{{3.4}{5}{Stability Framework}{subsection.3.4}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~3.8\else \numberline {3.8}Definition\fi \thmtformatoptarg {Foster--Lyapunov drift condition}}{5}{definition.3.8}\protected@file@percent }
+\newlabel{def:foster_lyapunov}{{3.8}{5}{Foster--Lyapunov drift condition}{definition.3.8}{}}
+\newlabel{eq:foster_lyapunov}{{11}{5}{Foster--Lyapunov drift condition}{equation.11}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Notation Summary}{5}{subsection.3.5}\protected@file@percent }
 \newlabel{sec:model:notation}{{3.5}{5}{Notation Summary}{subsection.3.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Summary of principal notation. Symbols in the final block are introduced in Sections~\ref {sec:uas_theorem} and~\ref {sec:calibrated_uas} and appear here for reference.}}{5}{table.caption.9}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:notation}{{1}{5}{Summary of principal notation. Symbols in the final block are introduced in Sections~\ref {sec:uas_theorem} and~\ref {sec:calibrated_uas} and appear here for reference}{table.caption.9}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4}Raw Softmax: Stability Theorem and Proof}{5}{section.4}\protected@file@percent }
 \newlabel{sec:softmax_theorem}{{4}{5}{Raw Softmax: Stability Theorem and Proof}{section.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Routing Law}{5}{subsection.4.1}\protected@file@percent }
-\newlabel{sec:softmax:routing}{{4.1}{5}{Routing Law}{subsection.4.1}{}}
-\newlabel{eq:softmax_law}{{11}{5}{Routing Law}{equation.11}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Theorem Statement}{5}{subsection.4.2}\protected@file@percent }
-\@writefile{loe}{\contentsline {theorem}{\ifthmt@listswap Theorem~4.1\else \numberline {4.1}Theorem\fi \thmtformatoptarg {Raw softmax positive Harris recurrence}}{5}{theorem.4.1}\protected@file@percent }
-\newlabel{thm:softmax}{{4.1}{5}{Raw softmax positive Harris recurrence}{theorem.4.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Proof}{5}{subsection.4.3}\protected@file@percent }
-\newlabel{eq:softmax_lyapunov}{{12}{6}{Proof}{equation.12}{}}
-\newlabel{eq:softmax_generator}{{13}{6}{Proof}{equation.13}{}}
-\newlabel{eq:softmax_C}{{14}{6}{Proof}{equation.14}{}}
-\newlabel{eq:softmax_variational}{{15}{6}{Proof}{equation.15}{}}
-\newlabel{eq:softmax_identity}{{16}{6}{Proof}{equation.16}{}}
-\newlabel{eq:softmax_arrival_bound}{{17}{6}{Proof}{equation.17}{}}
-\newlabel{eq:service_decomp}{{18}{6}{Proof}{equation.18}{}}
-\newlabel{eq:softmax_foster}{{19}{6}{Proof}{equation.19}{}}
-\citation{meyn2012markov}
-\newlabel{eq:softmax_R}{{20}{7}{Proof}{equation.20}{}}
-\newlabel{eq:l1_decomp}{{21}{7}{Proof}{equation.21}{}}
-\newlabel{eq:softmax_epsilon}{{22}{7}{Proof}{equation.22}{}}
-\newlabel{eq:softmax_eps_bound}{{23}{7}{Proof}{equation.23}{}}
-\newlabel{eq:softmax_final_drift}{{24}{7}{Proof}{equation.24}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Discussion}{7}{subsection.4.4}\protected@file@percent }
-\newlabel{sec:softmax:discussion}{{4.4}{7}{Discussion}{subsection.4.4}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.1}Role of Entropy Regularization}{7}{subsubsection.4.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.2}Homogeneous Limitation}{7}{subsubsection.4.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {4.4.3}Closed-Form Drift Constants}{7}{subsubsection.4.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Unified Archimedean Softmax: Stability Theorem and Proof}{7}{section.5}\protected@file@percent }
-\newlabel{sec:uas_theorem}{{5}{7}{Unified Archimedean Softmax: Stability Theorem and Proof}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}UAS Routing Law}{7}{subsection.5.1}\protected@file@percent }
-\newlabel{sec:uas:routing}{{5.1}{7}{UAS Routing Law}{subsection.5.1}{}}
-\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~5.1\else \numberline {5.1}Definition\fi \thmtformatoptarg {UAS potential}}{7}{definition.5.1}\protected@file@percent }
-\newlabel{def:uas_potential}{{5.1}{7}{UAS potential}{definition.5.1}{}}
-\newlabel{eq:uas_potential}{{25}{7}{UAS potential}{equation.25}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Routing Law}{6}{subsection.4.1}\protected@file@percent }
+\newlabel{sec:softmax:routing}{{4.1}{6}{Routing Law}{subsection.4.1}{}}
+\newlabel{eq:softmax_law}{{12}{6}{Routing Law}{equation.12}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Theorem Statement}{6}{subsection.4.2}\protected@file@percent }
+\@writefile{loe}{\contentsline {theorem}{\ifthmt@listswap Theorem~4.1\else \numberline {4.1}Theorem\fi \thmtformatoptarg {Raw softmax positive Harris recurrence}}{6}{theorem.4.1}\protected@file@percent }
+\newlabel{thm:softmax}{{4.1}{6}{Raw softmax positive Harris recurrence}{theorem.4.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Proof}{6}{subsection.4.3}\protected@file@percent }
+\newlabel{eq:softmax_lyapunov}{{13}{6}{Proof}{equation.13}{}}
+\newlabel{eq:softmax_generator}{{14}{6}{Proof}{equation.14}{}}
+\newlabel{eq:softmax_C}{{15}{6}{Proof}{equation.15}{}}
+\newlabel{eq:softmax_variational}{{16}{6}{Proof}{equation.16}{}}
+\newlabel{eq:softmax_identity}{{17}{6}{Proof}{equation.17}{}}
+\newlabel{eq:softmax_arrival_bound}{{18}{6}{Proof}{equation.18}{}}
+\newlabel{eq:service_decomp}{{19}{7}{Proof}{equation.19}{}}
+\newlabel{eq:softmax_foster}{{20}{7}{Proof}{equation.20}{}}
+\newlabel{eq:softmax_R}{{21}{7}{Proof}{equation.21}{}}
+\newlabel{eq:l1_decomp}{{22}{7}{Proof}{equation.22}{}}
+\newlabel{eq:softmax_epsilon}{{23}{7}{Proof}{equation.23}{}}
+\newlabel{eq:softmax_eps_bound}{{24}{7}{Proof}{equation.24}{}}
+\newlabel{eq:softmax_final_drift}{{25}{7}{Proof}{equation.25}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Properties of the Softmax Bound}{7}{subsection.4.4}\protected@file@percent }
+\newlabel{sec:softmax:discussion}{{4.4}{7}{Properties of the Softmax Bound}{subsection.4.4}{}}
+\@writefile{toc}{\contentsline {paragraph}{Role of entropy regularization}{7}{paragraph*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Homogeneous limitation}{7}{paragraph*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Closed-form drift constants}{7}{paragraph*.12}\protected@file@percent }
 \citation{cover2006elements}
-\newlabel{eq:uas_law}{{26}{8}{UAS Routing Law}{equation.26}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Unified Archimedean Softmax: Stability Theorem and Proof}{8}{section.5}\protected@file@percent }
+\newlabel{sec:uas_theorem}{{5}{8}{Unified Archimedean Softmax: Stability Theorem and Proof}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}UAS Routing Law}{8}{subsection.5.1}\protected@file@percent }
+\newlabel{sec:uas:routing}{{5.1}{8}{UAS Routing Law}{subsection.5.1}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~5.1\else \numberline {5.1}Definition\fi \thmtformatoptarg {UAS potential}}{8}{definition.5.1}\protected@file@percent }
+\newlabel{def:uas_potential}{{5.1}{8}{UAS potential}{definition.5.1}{}}
+\newlabel{eq:uas_potential}{{26}{8}{UAS potential}{equation.26}{}}
+\newlabel{eq:uas_law}{{27}{8}{UAS Routing Law}{equation.27}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Variational Form}{8}{subsection.5.2}\protected@file@percent }
 \newlabel{sec:uas:variational}{{5.2}{8}{Variational Form}{subsection.5.2}{}}
 \@writefile{loe}{\contentsline {proposition}{\ifthmt@listswap Proposition~5.2\else \numberline {5.2}Proposition\fi \thmtformatoptarg {UAS weighted variational form}}{8}{proposition.5.2}\protected@file@percent }
 \newlabel{prop:uas_variational}{{5.2}{8}{UAS weighted variational form}{proposition.5.2}{}}
-\newlabel{eq:uas_variational_obj}{{27}{8}{UAS weighted variational form}{equation.27}{}}
-\newlabel{eq:uas_min_value}{{28}{8}{UAS weighted variational form}{equation.28}{}}
-\newlabel{eq:kl_expansion}{{29}{8}{Variational Form}{equation.29}{}}
-\newlabel{eq:uas_foc}{{30}{8}{Variational Form}{equation.30}{}}
+\newlabel{eq:uas_variational_obj}{{28}{8}{UAS weighted variational form}{equation.28}{}}
+\newlabel{eq:uas_min_value}{{29}{8}{UAS weighted variational form}{equation.29}{}}
+\newlabel{eq:kl_expansion}{{30}{8}{Variational Form}{equation.30}{}}
+\newlabel{eq:uas_foc}{{31}{8}{Variational Form}{equation.31}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Structural Interpretation}{8}{subsection.5.3}\protected@file@percent }
 \newlabel{sec:uas:interpretation}{{5.3}{8}{Structural Interpretation}{subsection.5.3}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.1}Empty-State Behavior}{8}{subsubsection.5.3.1}\protected@file@percent }
-\newlabel{eq:uas_empty_state}{{31}{8}{Empty-State Behavior}{equation.31}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.1}Empty-State Behavior}{9}{subsubsection.5.3.1}\protected@file@percent }
+\newlabel{eq:uas_empty_state}{{32}{9}{Empty-State Behavior}{equation.32}{}}
 \@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.2}Pairwise Crossover Law}{9}{subsubsection.5.3.2}\protected@file@percent }
-\newlabel{eq:uas_crossover_1}{{32}{9}{Pairwise Crossover Law}{equation.32}{}}
-\newlabel{eq:uas_crossover_2}{{33}{9}{Pairwise Crossover Law}{equation.33}{}}
+\newlabel{eq:uas_crossover_1}{{33}{9}{Pairwise Crossover Law}{equation.33}{}}
+\newlabel{eq:uas_crossover_2}{{34}{9}{Pairwise Crossover Law}{equation.34}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Lyapunov Argument}{9}{subsection.5.4}\protected@file@percent }
 \newlabel{sec:uas:lyapunov}{{5.4}{9}{Lyapunov Argument}{subsection.5.4}{}}
-\newlabel{eq:uas_lyapunov}{{34}{9}{Lyapunov Argument}{equation.34}{}}
+\newlabel{eq:uas_lyapunov}{{35}{9}{Lyapunov Argument}{equation.35}{}}
 \@writefile{loe}{\contentsline {lemma}{\ifthmt@listswap Lemma~5.3\else \numberline {5.3}Lemma\fi \thmtformatoptarg {UAS drift identity}}{9}{lemma.5.3}\protected@file@percent }
 \newlabel{lem:uas_drift}{{5.3}{9}{UAS drift identity}{lemma.5.3}{}}
-\newlabel{eq:uas_drift_identity}{{35}{9}{UAS drift identity}{equation.35}{}}
+\newlabel{eq:uas_drift_identity}{{36}{9}{UAS drift identity}{equation.36}{}}
 \@writefile{loe}{\contentsline {lemma}{\ifthmt@listswap Lemma~5.4\else \numberline {5.4}Lemma\fi \thmtformatoptarg {UAS arrival-term bound}}{9}{lemma.5.4}\protected@file@percent }
 \newlabel{lem:uas_arrival}{{5.4}{9}{UAS arrival-term bound}{lemma.5.4}{}}
-\newlabel{eq:uas_arrival_bound}{{36}{9}{UAS arrival-term bound}{equation.36}{}}
-\newlabel{eq:uas_var_id}{{37}{9}{Lyapunov Argument}{equation.37}{}}
-\newlabel{eq:uas_kl_drop}{{38}{9}{Lyapunov Argument}{equation.38}{}}
-\newlabel{eq:uas_jensen}{{39}{9}{Lyapunov Argument}{equation.39}{}}
-\newlabel{eq:uas_jensen_result}{{40}{10}{Lyapunov Argument}{equation.40}{}}
-\newlabel{eq:uas_x_bound}{{41}{10}{Lyapunov Argument}{equation.41}{}}
-\newlabel{eq:uas_half_bound}{{42}{10}{Lyapunov Argument}{equation.42}{}}
+\newlabel{eq:uas_arrival_bound}{{37}{9}{UAS arrival-term bound}{equation.37}{}}
+\newlabel{eq:uas_var_id}{{38}{9}{Lyapunov Argument}{equation.38}{}}
+\newlabel{eq:uas_kl_drop}{{39}{10}{Lyapunov Argument}{equation.39}{}}
+\newlabel{eq:uas_jensen}{{40}{10}{Lyapunov Argument}{equation.40}{}}
+\newlabel{eq:uas_jensen_result}{{41}{10}{Lyapunov Argument}{equation.41}{}}
+\newlabel{eq:uas_x_bound}{{42}{10}{Lyapunov Argument}{equation.42}{}}
+\newlabel{eq:uas_half_bound}{{43}{10}{Lyapunov Argument}{equation.43}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Main Theorem and Proof}{10}{subsection.5.5}\protected@file@percent }
 \newlabel{sec:uas:theorem}{{5.5}{10}{Main Theorem and Proof}{subsection.5.5}{}}
 \@writefile{loe}{\contentsline {theorem}{\ifthmt@listswap Theorem~5.5\else \numberline {5.5}Theorem\fi \thmtformatoptarg {UAS positive Harris recurrence}}{10}{theorem.5.5}\protected@file@percent }
 \newlabel{thm:uas}{{5.5}{10}{UAS positive Harris recurrence}{theorem.5.5}{}}
-\newlabel{eq:uas_epsilon}{{43}{10}{Main Theorem and Proof}{equation.43}{}}
-\newlabel{eq:uas_R}{{44}{10}{Main Theorem and Proof}{equation.44}{}}
-\newlabel{eq:uas_final_drift}{{45}{10}{Main Theorem and Proof}{equation.45}{}}
-\newlabel{eq:uas_compact}{{46}{10}{Main Theorem and Proof}{equation.46}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Discussion}{10}{subsection.5.6}\protected@file@percent }
-\newlabel{sec:uas:discussion}{{5.6}{10}{Discussion}{subsection.5.6}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.1}Independence from Raw Softmax}{10}{subsubsection.5.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.2}Role of the Prior}{10}{subsubsection.5.6.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.3}Temperature-Independent Stability Guarantee}{11}{subsubsection.5.6.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.6.4}Motivation for Empirical Extensions}{11}{subsubsection.5.6.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6}Calibrated UAS: Empirical Closed-Form Extension}{11}{section.6}\protected@file@percent }
-\newlabel{sec:calibrated_uas}{{6}{11}{Calibrated UAS: Empirical Closed-Form Extension}{section.6}{}}
+\newlabel{eq:uas_epsilon}{{44}{10}{Main Theorem and Proof}{equation.44}{}}
+\newlabel{eq:uas_R}{{45}{10}{Main Theorem and Proof}{equation.45}{}}
+\newlabel{eq:uas_final_drift}{{46}{10}{Main Theorem and Proof}{equation.46}{}}
+\newlabel{eq:uas_compact}{{47}{10}{Main Theorem and Proof}{equation.47}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6}Properties of the UAS Bound}{11}{subsection.5.6}\protected@file@percent }
+\newlabel{sec:uas:discussion}{{5.6}{11}{Properties of the UAS Bound}{subsection.5.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Independence from raw softmax}{11}{paragraph*.13}\protected@file@percent }
+\newlabel{sec:uas:discussion:independence}{{5.6}{11}{Independence from raw softmax}{paragraph*.13}{}}
+\@writefile{toc}{\contentsline {paragraph}{Role of the prior}{11}{paragraph*.14}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Temperature-independent stability guarantee}{11}{paragraph*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Motivation for empirical extensions}{11}{paragraph*.16}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Calibrated UAS: Certified Subclass and Empirical Extension}{11}{section.6}\protected@file@percent }
+\newlabel{sec:calibrated_uas}{{6}{11}{Calibrated UAS: Certified Subclass and Empirical Extension}{section.6}{}}
 \@writefile{loe}{\contentsline {remark}{\ifthmt@listswap Remark~6.1\else \numberline {6.1}Remark\fi \thmtformatoptarg {Theorem status}}{11}{remark.6.1}\protected@file@percent }
 \newlabel{rem:caluas_status}{{6.1}{11}{Theorem status}{remark.6.1}{}}
-\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~6.2\else \numberline {6.2}Definition\fi \thmtformatoptarg {Calibrated UAS}}{11}{definition.6.2}\protected@file@percent }
-\newlabel{def:caluas_family}{{6.2}{11}{Calibrated UAS}{definition.6.2}{}}
-\newlabel{eq:caluas_law}{{47}{11}{Calibrated UAS}{equation.47}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Parameter Semantics}{11}{subsection.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Benchmark Parameters}{11}{subsection.6.2}\protected@file@percent }
-\newlabel{eq:caluas_params}{{48}{11}{Benchmark Parameters}{equation.48}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~6.2\else \numberline {6.2}Definition\fi \thmtformatoptarg {Calibrated UAS family}}{11}{definition.6.2}\protected@file@percent }
+\newlabel{def:caluas_family}{{6.2}{11}{Calibrated UAS family}{definition.6.2}{}}
+\newlabel{eq:caluas_law}{{48}{11}{Calibrated UAS family}{equation.48}{}}
+\@writefile{loe}{\contentsline {definition}{\ifthmt@listswap Definition~6.3\else \numberline {6.3}Definition\fi \thmtformatoptarg {Stability-Certified Calibrated UAS (SCUAS)}}{11}{definition.6.3}\protected@file@percent }
+\newlabel{def:scuas_family}{{6.3}{11}{Stability-Certified Calibrated UAS (SCUAS)}{definition.6.3}{}}
+\newlabel{eq:scuas_law}{{49}{11}{Stability-Certified Calibrated UAS (SCUAS)}{equation.49}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}SCUAS Theorem Path}{11}{subsection.6.1}\protected@file@percent }
+\newlabel{sec:scuas_theorem}{{6.1}{11}{SCUAS Theorem Path}{subsection.6.1}{}}
+\newlabel{eq:scuas_Z}{{50}{11}{SCUAS Theorem Path}{equation.50}{}}
+\newlabel{eq:scuas_prior}{{51}{12}{SCUAS Theorem Path}{equation.51}{}}
+\newlabel{eq:scuas_energy}{{52}{12}{SCUAS Theorem Path}{equation.52}{}}
+\newlabel{eq:scuas_gibbs}{{53}{12}{SCUAS Theorem Path}{equation.53}{}}
+\@writefile{loe}{\contentsline {proposition}{\ifthmt@listswap Proposition~6.4\else \numberline {6.4}Proposition\fi \thmtformatoptarg {SCUAS weighted variational form}}{12}{proposition.6.4}\protected@file@percent }
+\newlabel{prop:scuas_variational}{{6.4}{12}{SCUAS weighted variational form}{proposition.6.4}{}}
+\newlabel{eq:scuas_variational_obj}{{54}{12}{SCUAS weighted variational form}{equation.54}{}}
+\newlabel{eq:scuas_min_value}{{55}{12}{SCUAS weighted variational form}{equation.55}{}}
+\@writefile{loe}{\contentsline {lemma}{\ifthmt@listswap Lemma~6.5\else \numberline {6.5}Lemma\fi \thmtformatoptarg {SCUAS drift identity}}{12}{lemma.6.5}\protected@file@percent }
+\newlabel{lem:scuas_drift}{{6.5}{12}{SCUAS drift identity}{lemma.6.5}{}}
+\newlabel{eq:scuas_lyapunov}{{56}{12}{SCUAS drift identity}{equation.56}{}}
+\newlabel{eq:scuas_drift_identity}{{57}{12}{SCUAS drift identity}{equation.57}{}}
+\@writefile{loe}{\contentsline {lemma}{\ifthmt@listswap Lemma~6.6\else \numberline {6.6}Lemma\fi \thmtformatoptarg {SCUAS arrival-term bound}}{13}{lemma.6.6}\protected@file@percent }
+\newlabel{lem:scuas_arrival}{{6.6}{13}{SCUAS arrival-term bound}{lemma.6.6}{}}
+\newlabel{eq:scuas_ai}{{58}{13}{SCUAS arrival-term bound}{equation.58}{}}
+\newlabel{eq:scuas_arrival_bound}{{59}{13}{SCUAS arrival-term bound}{equation.59}{}}
+\@writefile{loe}{\contentsline {theorem}{\ifthmt@listswap Theorem~6.7\else \numberline {6.7}Theorem\fi \thmtformatoptarg {SCUAS positive Harris recurrence}}{13}{theorem.6.7}\protected@file@percent }
+\newlabel{thm:scuas}{{6.7}{13}{SCUAS positive Harris recurrence}{theorem.6.7}{}}
+\newlabel{eq:scuas_epsilon}{{60}{13}{SCUAS positive Harris recurrence}{equation.60}{}}
+\newlabel{eq:scuas_pre_drift}{{61}{14}{SCUAS Theorem Path}{equation.61}{}}
+\newlabel{eq:scuas_R}{{62}{14}{SCUAS Theorem Path}{equation.62}{}}
+\newlabel{eq:scuas_final_drift}{{63}{14}{SCUAS Theorem Path}{equation.63}{}}
+\newlabel{eq:scuas_compact}{{64}{14}{SCUAS Theorem Path}{equation.64}{}}
+\@writefile{loe}{\contentsline {remark}{\ifthmt@listswap Remark~6.8\else \numberline {6.8}Remark\fi \thmtformatoptarg {Relation to UAS and theorem scope}}{14}{remark.6.8}\protected@file@percent }
+\newlabel{rem:scuas_scope}{{6.8}{14}{Relation to UAS and theorem scope}{remark.6.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Parameter Semantics}{14}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Benchmark Parameters}{14}{subsection.6.3}\protected@file@percent }
+\newlabel{eq:caluas_params}{{65}{14}{Benchmark Parameters}{equation.65}{}}
 \citation{williams1992simple}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Anchor Benchmark Result}{12}{subsection.6.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7}N-GibbsQ: Learned Neural Policy}{12}{section.7}\protected@file@percent }
-\newlabel{sec:neural_policy}{{7}{12}{N-GibbsQ: Learned Neural Policy}{section.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Architecture}{12}{subsection.7.1}\protected@file@percent }
-\newlabel{eq:neural_output}{{49}{12}{Architecture}{equation.49}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Two-Phase Training Pipeline}{12}{subsection.7.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.2.1}Phase~1: Behavior Cloning}{12}{subsubsection.7.2.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {7.2.2}Phase~2: REINFORCE Fine-Tuning}{12}{subsubsection.7.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {8}Experimental Evaluation}{12}{section.8}\protected@file@percent }
-\newlabel{sec:experiments}{{8}{12}{Experimental Evaluation}{section.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Experimental Protocol}{12}{subsection.8.1}\protected@file@percent }
-\newlabel{sec:exp:setup}{{8.1}{12}{Experimental Protocol}{subsection.8.1}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.1}Common Evaluation Protocol}{12}{subsubsection.8.1.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.2}Primary Metric}{12}{subsubsection.8.1.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.3}Evaluated Policies}{13}{subsubsection.8.1.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Routing policies evaluated in this study.}}{13}{table.caption.2}\protected@file@percent }
-\newlabel{tab:baselines}{{2}{13}{Routing policies evaluated in this study}{table.caption.2}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.1.4}Computational Cost}{13}{subsubsection.8.1.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Anchor Benchmark: Policy Comparison}{13}{subsection.8.2}\protected@file@percent }
-\newlabel{sec:exp:policy}{{8.2}{13}{Anchor Benchmark: Policy Comparison}{subsection.8.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Anchor benchmark results. Policies ordered by mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _i Q_{i}]$. SE denotes standard error. The Gini coefficient $G = \frac  {\DOTSI \sumop \slimits@ _{i<j}|\bar  {Q}_i - \bar  {Q}_j|}{N \DOTSI \sumop \slimits@ _i \bar  {Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance.}}{13}{table.caption.3}\protected@file@percent }
-\newlabel{tab:policy}{{3}{13}{Anchor benchmark results. Policies ordered by mean $\E [\sum _i \Qlen {i}]$. SE denotes standard error. The Gini coefficient $G = \frac {\sum _{i<j}|\bar {Q}_i - \bar {Q}_j|}{N \sum _i \bar {Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance}{table.caption.3}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Anchor benchmark.} Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($N{=}10$, $\rho {=}0.80$, 32 replications). Percentage annotations are relative to $\text  {N-GibbsQ}$.}}{14}{figure.caption.4}\protected@file@percent }
-\newlabel{fig:policy}{{1}{14}{\textbf {Anchor benchmark.} Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($\Nservers {=}10$, $\rho {=}0.80$, 32 replications). Percentage annotations are relative to $\ngibbsq $}{figure.caption.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Ablation Study: Training Design Factors}{15}{subsection.8.3}\protected@file@percent }
-\newlabel{sec:exp:ablation}{{8.3}{15}{Ablation Study: Training Design Factors}{subsection.8.3}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Ablation study: mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _i Q_{i}]$ by training variant. Reference policies (italicized) are evaluated under the same protocol for direct comparability. $\Delta $ is the difference from Calibrated UAS.}}{15}{table.caption.5}\protected@file@percent }
-\newlabel{tab:ablation}{{4}{15}{Ablation study: mean $\E [\sum _i \Qlen {i}]$ by training variant. Reference policies (italicized) are evaluated under the same protocol for direct comparability. $\Delta $ is the difference from Calibrated UAS}{table.caption.5}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Ablation comparison} ($N{=}10$, 32 replications). The calibrated-teacher warm start (leftmost bar) achieves the lowest value, outperforming both the Calibrated UAS reference and all UAS-teacher variants. \text  {REINFORCE}{} from scratch diverges catastrophically and is off-scale.}}{15}{figure.caption.6}\protected@file@percent }
-\newlabel{fig:ablation}{{2}{15}{\textbf {Ablation comparison} ($\Nservers {=}10$, 32 replications). The calibrated-teacher warm start (leftmost bar) achieves the lowest value, outperforming both the Calibrated UAS reference and all UAS-teacher variants. \reinforce {} from scratch diverges catastrophically and is off-scale}{figure.caption.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.4}Statistical Comparison}{17}{subsection.8.4}\protected@file@percent }
-\newlabel{sec:exp:stats}{{8.4}{17}{Statistical Comparison}{subsection.8.4}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Two-sample statistical comparison: default $\text  {N-GibbsQ}$ vs.\ Calibrated UAS ($N{=}10$, $\rho {=}0.80$).}}{17}{table.caption.7}\protected@file@percent }
-\newlabel{tab:stats}{{5}{17}{Two-sample statistical comparison: default $\ngibbsq $ vs.\ Calibrated UAS ($\Nservers {=}10$, $\rho {=}0.80$)}{table.caption.7}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Statistical comparison} ($N{=}10$, 32 replications per policy). Violin plots of mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ over independent replications. The two distributions have zero overlap, consistent with the extreme effect size.}}{17}{figure.caption.8}\protected@file@percent }
-\newlabel{fig:stats}{{3}{17}{\textbf {Statistical comparison} ($\Nservers {=}10$, 32 replications per policy). Violin plots of mean $\E [\sum _i\Qlen {i}]$ over independent replications. The two distributions have zero overlap, consistent with the extreme effect size}{figure.caption.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.5}Generalization Across Operating Regimes}{17}{subsection.8.5}\protected@file@percent }
-\newlabel{sec:exp:generalize}{{8.5}{17}{Generalization Across Operating Regimes}{subsection.8.5}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale. Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length. All 16 cells exceed $1.0$.}}{18}{table.caption.9}\protected@file@percent }
-\newlabel{tab:generalize}{{6}{18}{Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale. Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length. All 16 cells exceed $1.0$}{table.caption.9}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Generalization heatmap} ($N{=}10$, 32 replications per cell). Improvement ratio of Calibrated UAS to Neural policy (ratio ${>}1$ $\Rightarrow $ Neural wins). The strongest advantage ($1.60{\times }$) occurs at $\rho = 0.5$, $2{\times }$ scale.}}{18}{figure.caption.10}\protected@file@percent }
-\newlabel{fig:generalize}{{4}{18}{\textbf {Generalization heatmap} ($\Nservers {=}10$, 32 replications per cell). Improvement ratio of Calibrated UAS to Neural policy (ratio ${>}1$ $\Rightarrow $ Neural wins). The strongest advantage ($1.60{\times }$) occurs at $\rho = 0.5$, $2{\times }$ scale}{figure.caption.10}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.6}Near-Critical Load Behavior}{19}{subsection.8.6}\protected@file@percent }
-\newlabel{sec:exp:critical}{{8.6}{19}{Near-Critical Load Behavior}{subsection.8.6}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Near-critical load: mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ and relative improvement ($N{=}10$, 32 replications).}}{19}{table.caption.11}\protected@file@percent }
-\newlabel{tab:critical}{{7}{19}{Near-critical load: mean $\E [\sum _i\Qlen {i}]$ and relative improvement ($\Nservers {=}10$, 32 replications)}{table.caption.11}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Near-critical load} ($N{=}10$, 32 replications). Mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ as a function of $\rho $ for Calibrated UAS and the default learned policy. Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.9\%.}}{19}{figure.caption.12}\protected@file@percent }
-\newlabel{fig:critical}{{5}{19}{\textbf {Near-critical load} ($\Nservers {=}10$, 32 replications). Mean $\E [\sum _i\Qlen {i}]$ as a function of $\rho $ for Calibrated UAS and the default learned policy. Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.9\%}{figure.caption.12}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.7}Theory-Consistency Validations}{19}{subsection.8.7}\protected@file@percent }
-\newlabel{sec:exp:theory}{{8.7}{19}{Theory-Consistency Validations}{subsection.8.7}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.7.1}Drift Verification}{19}{subsubsection.8.7.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {8.7.2}Gradient Estimator Verification}{19}{subsubsection.8.7.2}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces \textbf  {Drift verification.} Generator drift $\mathcal  {L}V(Q)$ (blue) vs.\ theoretical upper bound $-\varepsilon |Q|_1 + R$ (orange) over 20{,}001 sampled states. All points lie below the bound, with zero violations.}}{20}{figure.caption.13}\protected@file@percent }
-\newlabel{fig:drift}{{6}{20}{\textbf {Drift verification.} Generator drift $\gen \lyap (\Qstate )$ (blue) vs.\ theoretical upper bound $-\varepsilon |\Qstate |_1 + R$ (orange) over 20{,}001 sampled states. All points lie below the bound, with zero violations}{figure.caption.13}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces \textbf  {Alpha sweep.} Mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ vs.\ $\alpha $ at two load factors ($N{=}10$, 32 replications). Performance saturates around $\alpha = 20$--$50$, validating the default choice $\alpha = 10$ as a conservative operating point. The $\rho =0.99$ curve shows degraded stationarity as expected near the stability boundary.}}{20}{figure.caption.14}\protected@file@percent }
-\newlabel{fig:alpha_main}{{7}{20}{\textbf {Alpha sweep.} Mean $\E [\sum _i\Qlen {i}]$ vs.\ $\temp $ at two load factors ($\Nservers {=}10$, 32 replications). Performance saturates around $\temp = 20$--$50$, validating the default choice $\temp = 10$ as a conservative operating point. The $\rho =0.99$ curve shows degraded stationarity as expected near the stability boundary}{figure.caption.14}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion and Limitations}{20}{section.9}\protected@file@percent }
-\newlabel{sec:discussion}{{9}{20}{Discussion and Limitations}{section.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}The Teacher-Choice Principle}{20}{subsection.9.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Why Calibrated UAS Outperforms UAS}{21}{subsection.9.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Limitations}{21}{subsection.9.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.3.1}No Stability Proof for Calibrated UAS}{21}{subsubsection.9.3.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.3.2}Default Pipeline Limitation}{21}{subsubsection.9.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.3.3}Scale}{21}{subsubsection.9.3.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.3.4}Parameter Selection}{21}{subsubsection.9.3.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.3.5}Gradient Magnitude}{21}{subsubsection.9.3.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.4}Future Directions}{21}{subsection.9.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.4.1}Calibrated UAS Stability Analysis}{21}{subsubsection.9.4.1}\protected@file@percent }
-\citation{williams1992simple}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.4.2}Scale Experiments}{22}{subsubsection.9.4.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.4.3}Advanced RL Algorithms}{22}{subsubsection.9.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {9.4.4}Non-Stationarity}{22}{subsubsection.9.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion and Future Work}{22}{section.10}\protected@file@percent }
-\newlabel{sec:conclusion}{{10}{22}{Conclusion and Future Work}{section.10}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Drift Verification}{22}{appendix.A}\protected@file@percent }
-\newlabel{sec:appendix_drift}{{A}{22}{Drift Verification}{appendix.A}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Configuration}{22}{subsection.A.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Result}{22}{subsection.A.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {B}REINFORCE Gradient Check}{22}{appendix.B}\protected@file@percent }
-\newlabel{sec:appendix_gradient}{{B}{22}{REINFORCE Gradient Check}{appendix.B}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}Method}{22}{subsection.B.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Anchor benchmark excerpt: top closed-form policies ($N{=}10$, $\rho {=}0.80$, 32 replications).}}{15}{table.caption.17}\protected@file@percent }
+\newlabel{tab:caluas_benchmark}{{2}{15}{Anchor benchmark excerpt: top closed-form policies ($\Nservers {=}10$, $\rho {=}0.80$, 32 replications)}{table.caption.17}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Anchor Benchmark Result}{15}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}N-GibbsQ: Learned Neural Policy}{15}{section.7}\protected@file@percent }
+\newlabel{sec:neural_policy}{{7}{15}{N-GibbsQ: Learned Neural Policy}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Architecture}{15}{subsection.7.1}\protected@file@percent }
+\newlabel{eq:neural_output}{{66}{15}{Architecture}{equation.66}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Two-Phase Training Pipeline}{15}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Phase~1: Behavior Cloning}{15}{paragraph*.18}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Phase~2: REINFORCE Fine-Tuning}{15}{paragraph*.19}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Experimental Evaluation}{15}{section.8}\protected@file@percent }
+\newlabel{sec:experiments}{{8}{15}{Experimental Evaluation}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Experimental Protocol}{16}{subsection.8.1}\protected@file@percent }
+\newlabel{sec:exp:setup}{{8.1}{16}{Experimental Protocol}{subsection.8.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Standard evaluation protocol}{16}{paragraph*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Reproducibility and simulation details}{16}{paragraph*.21}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Primary metric}{16}{paragraph*.22}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Evaluated policies}{16}{paragraph*.23}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Routing policies evaluated in this study.}}{16}{table.caption.24}\protected@file@percent }
+\newlabel{tab:baselines}{{3}{16}{Routing policies evaluated in this study}{table.caption.24}{}}
+\@writefile{toc}{\contentsline {paragraph}{Computational expense}{16}{paragraph*.25}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Anchor Benchmark: Policy Comparison}{16}{subsection.8.2}\protected@file@percent }
+\newlabel{sec:exp:policy}{{8.2}{16}{Anchor Benchmark: Policy Comparison}{subsection.8.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Ablation Study: Training Design Factors}{16}{subsection.8.3}\protected@file@percent }
+\newlabel{sec:exp:ablation}{{8.3}{16}{Ablation Study: Training Design Factors}{subsection.8.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Anchor benchmark results. Policies ordered by mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _i Q_{i}]$. SE denotes standard error. The Gini coefficient $G = \frac  {\DOTSI \sumop \slimits@ _{i<j}|\bar  {Q}_i - \bar  {Q}_j|}{N \DOTSI \sumop \slimits@ _i \bar  {Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance.}}{17}{table.caption.26}\protected@file@percent }
+\newlabel{tab:policy}{{4}{17}{Anchor benchmark results. Policies ordered by mean $\E [\sum _i \Qlen {i}]$. SE denotes standard error. The Gini coefficient $G = \frac {\sum _{i<j}|\bar {Q}_i - \bar {Q}_j|}{N \sum _i \bar {Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance}{table.caption.26}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Anchor benchmark.} Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($N{=}10$, $\rho {=}0.80$, 32 replications). Percentage annotations are relative to $\text  {N-GibbsQ}$.}}{17}{figure.caption.27}\protected@file@percent }
+\newlabel{fig:policy}{{1}{17}{\textbf {Anchor benchmark.} Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($\Nservers {=}10$, $\rho {=}0.80$, 32 replications). Percentage annotations are relative to $\ngibbsq $}{figure.caption.27}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Ablation study: mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _i Q_{i}]$ by training variant. Reference policies (italicized) are evaluated under the same protocol for direct comparability. $\Delta $ is the difference from Calibrated UAS.}}{18}{table.caption.28}\protected@file@percent }
+\newlabel{tab:ablation}{{5}{18}{Ablation study: mean $\E [\sum _i \Qlen {i}]$ by training variant. Reference policies (italicized) are evaluated under the same protocol for direct comparability. $\Delta $ is the difference from Calibrated UAS}{table.caption.28}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Ablation comparison} ($N{=}10$, 32 replications). The calibrated-teacher warm start (leftmost bar) achieves the lowest value, outperforming both the Calibrated UAS reference and all UAS-teacher variants. \text  {REINFORCE}{} from scratch diverges catastrophically and is off-scale.}}{18}{figure.caption.29}\protected@file@percent }
+\newlabel{fig:ablation}{{2}{18}{\textbf {Ablation comparison} ($\Nservers {=}10$, 32 replications). The calibrated-teacher warm start (leftmost bar) achieves the lowest value, outperforming both the Calibrated UAS reference and all UAS-teacher variants. \reinforce {} from scratch diverges catastrophically and is off-scale}{figure.caption.29}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.4}Statistical Comparison}{18}{subsection.8.4}\protected@file@percent }
+\newlabel{sec:exp:stats}{{8.4}{18}{Statistical Comparison}{subsection.8.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Two-sample statistical comparison: best $\text  {N-GibbsQ}$ variant vs.\ Calibrated UAS ($N{=}10$, $\rho {=}0.80$, $n{=}32$).}}{19}{table.caption.30}\protected@file@percent }
+\newlabel{tab:stats}{{6}{19}{Two-sample statistical comparison: best $\ngibbsq $ variant vs.\ Calibrated UAS ($\Nservers {=}10$, $\rho {=}0.80$, $n{=}32$)}{table.caption.30}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Statistical comparison} ($N{=}10$, 32 replications per policy). Violin plots of mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ over independent replications for the calibrated-teacher neural variant and the Calibrated UAS baseline.}}{19}{figure.caption.31}\protected@file@percent }
+\newlabel{fig:stats}{{3}{19}{\textbf {Statistical comparison} ($\Nservers {=}10$, 32 replications per policy). Violin plots of mean $\E [\sum _i\Qlen {i}]$ over independent replications for the calibrated-teacher neural variant and the Calibrated UAS baseline}{figure.caption.31}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.5}Generalization Across Operating Regimes}{19}{subsection.8.5}\protected@file@percent }
+\newlabel{sec:exp:generalize}{{8.5}{19}{Generalization Across Operating Regimes}{subsection.8.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale. Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length. All 16 cells exceed $1.0$.}}{19}{table.caption.32}\protected@file@percent }
+\newlabel{tab:generalize}{{7}{19}{Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale. Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length. All 16 cells exceed $1.0$}{table.caption.32}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Generalization heatmap} ($N{=}10$, 32 replications per cell). Improvement ratio of Calibrated UAS to Neural policy (ratio ${>}1$ $\Rightarrow $ Neural wins). The strongest advantage ($1.60{\times }$) occurs at $\rho = 0.5$, $2{\times }$ scale.}}{20}{figure.caption.33}\protected@file@percent }
+\newlabel{fig:generalize}{{4}{20}{\textbf {Generalization heatmap} ($\Nservers {=}10$, 32 replications per cell). Improvement ratio of Calibrated UAS to Neural policy (ratio ${>}1$ $\Rightarrow $ Neural wins). The strongest advantage ($1.60{\times }$) occurs at $\rho = 0.5$, $2{\times }$ scale}{figure.caption.33}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.6}Near-Critical Load Behavior}{20}{subsection.8.6}\protected@file@percent }
+\newlabel{sec:exp:critical}{{8.6}{20}{Near-Critical Load Behavior}{subsection.8.6}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Near-critical load: mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ and relative improvement ($N{=}10$, 32 replications).}}{20}{table.caption.34}\protected@file@percent }
+\newlabel{tab:critical}{{8}{20}{Near-critical load: mean $\E [\sum _i\Qlen {i}]$ and relative improvement ($\Nservers {=}10$, 32 replications)}{table.caption.34}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.7}Theoretical Consistency Checks}{20}{subsection.8.7}\protected@file@percent }
+\newlabel{sec:exp:theory}{{8.7}{20}{Theoretical Consistency Checks}{subsection.8.7}{}}
+\@writefile{toc}{\contentsline {paragraph}{Drift verification}{20}{paragraph*.36}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Near-critical load} ($N{=}10$, 32 replications). Mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ as a function of $\rho $ for Calibrated UAS and the default learned policy. Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.9\%.}}{21}{figure.caption.35}\protected@file@percent }
+\newlabel{fig:critical}{{5}{21}{\textbf {Near-critical load} ($\Nservers {=}10$, 32 replications). Mean $\E [\sum _i\Qlen {i}]$ as a function of $\rho $ for Calibrated UAS and the default learned policy. Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.9\%}{figure.caption.35}{}}
+\@writefile{toc}{\contentsline {paragraph}{Gradient estimator verification}{21}{paragraph*.37}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces \textbf  {Drift verification.} Generator drift $\mathcal  {L}V(Q)$ (blue) vs.\ theoretical upper bound $-\varepsilon |Q|_1 + R$ (orange) over 20{,}001 sampled states. All points lie below the bound, with zero violations.}}{21}{figure.caption.38}\protected@file@percent }
+\newlabel{fig:drift}{{6}{21}{\textbf {Drift verification.} Generator drift $\gen \lyap (\Qstate )$ (blue) vs.\ theoretical upper bound $-\varepsilon |\Qstate |_1 + R$ (orange) over 20{,}001 sampled states. All points lie below the bound, with zero violations}{figure.caption.38}{}}
 \citation{ross2011reduction}
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Drift verification: generator drift $\mathcal  {L}V(Q)$ (blue) vs.\ theoretical bound $-\varepsilon |Q|_1 + R$ (orange). All 20{,}001 points lie below the bound.}}{23}{figure.caption.15}\protected@file@percent }
-\newlabel{fig:appendix_drift}{{8}{23}{Drift verification: generator drift $\gen \lyap (\Qstate )$ (blue) vs.\ theoretical bound $-\varepsilon |\Qstate |_1 + R$ (orange). All 20{,}001 points lie below the bound}{figure.caption.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Results}{23}{subsection.B.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Gradient check results.}}{23}{table.caption.16}\protected@file@percent }
-\newlabel{tab:appendix_gradient}{{8}{23}{Gradient check results}{table.caption.16}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {C}Training Details}{23}{appendix.C}\protected@file@percent }
-\newlabel{sec:appendix_training}{{C}{23}{Training Details}{appendix.C}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {C.1}Phase~1: Behavior Cloning}{23}{subsection.C.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Behavior cloning configuration.}}{23}{table.caption.18}\protected@file@percent }
-\newlabel{tab:bc_config}{{9}{23}{Behavior cloning configuration}{table.caption.18}{}}
-\citation{williams1992simple}
-\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Parameter-wise scatter: \text  {REINFORCE}{} gradient components vs.\ finite-difference gradients. Near-perfect alignment along the diagonal confirms directional correctness.}}{24}{figure.caption.17}\protected@file@percent }
-\newlabel{fig:appendix_gradient}{{9}{24}{Parameter-wise scatter: \reinforce {} gradient components vs.\ finite-difference gradients. Near-perfect alignment along the diagonal confirms directional correctness}{figure.caption.17}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {C.2}Phase~2: REINFORCE Fine-Tuning}{24}{subsection.C.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces REINFORCE fine-tuning configuration.}}{24}{table.caption.19}\protected@file@percent }
-\newlabel{tab:reinforce_config}{{10}{24}{REINFORCE fine-tuning configuration}{table.caption.19}{}}
-\citation{meyn2012markov}
-\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces \text  {REINFORCE}{} training curve: deterministic policy score vs.\ epoch. Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12.}}{25}{figure.caption.20}\protected@file@percent }
-\newlabel{fig:reinforce_training}{{10}{25}{\reinforce {} training curve: deterministic policy score vs.\ epoch. Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12}{figure.caption.20}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {C.3}Ablation Variant Descriptions}{25}{subsection.C.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Training variants evaluated in the ablation study.}}{25}{table.caption.21}\protected@file@percent }
-\newlabel{tab:ablation_variants}{{11}{25}{Training variants evaluated in the ablation study}{table.caption.21}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {D}Stress Test and Stability Sweep}{25}{appendix.D}\protected@file@percent }
-\newlabel{sec:appendix_stress}{{D}{25}{Stress Test and Stability Sweep}{appendix.D}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}Stress Test: Scalability}{25}{subsection.D.1}\protected@file@percent }
-\citation{asmussen2003applied}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {D.1.1}Massive-$N$ Scaling}{26}{subsubsection.D.1.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Massive-$N$ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim }0.031$.}}{26}{table.caption.22}\protected@file@percent }
-\newlabel{tab:stress_massive}{{12}{26}{Massive-$\Nservers $ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim }0.031$}{table.caption.22}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {D.1.2}Critical-Load Stress}{26}{subsubsection.D.1.2}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces Critical-load stress: UAS stationarity rate at high $\rho $. Stationarity is measured as the fraction of replications whose queue-length time series passes an augmented Dickey--Fuller test at the 5\% level after a 200-time-unit burn-in.}}{26}{table.caption.23}\protected@file@percent }
-\newlabel{tab:stress_critical}{{13}{26}{Critical-load stress: UAS stationarity rate at high $\rho $. Stationarity is measured as the fraction of replications whose queue-length time series passes an augmented Dickey--Fuller test at the 5\% level after a 200-time-unit burn-in}{table.caption.23}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Alpha Stability Sweep}{26}{subsection.D.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {E}Engine-Consistency Reruns}{26}{appendix.E}\protected@file@percent }
-\newlabel{sec:appendix_engine}{{E}{26}{Engine-Consistency Reruns}{appendix.E}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.1}Stats Rerun}{26}{subsection.E.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Stats rerun: impact of engine correction.}}{26}{table.caption.24}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces \textbf  {Alpha sweep.} Mean $\mathbb  {E}[\DOTSI \sumop \slimits@ _iQ_{i}]$ vs.\ $\alpha $ at two load factors ($N{=}10$, 32 replications). Performance saturates around $\alpha = 20$--$50$, validating the default choice $\alpha = 10$ as a conservative operating point. The $\rho =0.99$ curve shows degraded stationarity as expected near the stability boundary.}}{22}{figure.caption.39}\protected@file@percent }
+\newlabel{fig:alpha_main}{{7}{22}{\textbf {Alpha sweep.} Mean $\E [\sum _i\Qlen {i}]$ vs.\ $\temp $ at two load factors ($\Nservers {=}10$, 32 replications). Performance saturates around $\temp = 20$--$50$, validating the default choice $\temp = 10$ as a conservative operating point. The $\rho =0.99$ curve shows degraded stationarity as expected near the stability boundary}{figure.caption.39}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion, Limitations, and Future Directions}{22}{section.9}\protected@file@percent }
+\newlabel{sec:discussion}{{9}{22}{Discussion, Limitations, and Future Directions}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}The Teacher-Choice Effect}{22}{subsection.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Why Calibrated UAS Outperforms UAS}{22}{subsection.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Limitations}{23}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.4}Future Directions}{23}{subsection.9.4}\protected@file@percent }
 \bibstyle{plain}
 \bibdata{references}
 \bibcite{asmussen2003applied}{1}
@@ -311,12 +288,9 @@
 \bibcite{kleinrock1975queueing}{9}
 \bibcite{meyn2012markov}{10}
 \bibcite{mitzenmacher2001power}{11}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion}{24}{section.10}\protected@file@percent }
+\newlabel{sec:conclusion}{{10}{24}{Conclusion}{section.10}{}}
 \bibcite{neely2010stochastic}{12}
-\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces Generalize rerun: impact on the $4{\times }4$ improvement grid.}}{27}{table.caption.25}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.2}Generalize Rerun}{27}{subsection.E.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.3}Critical Rerun}{27}{subsection.E.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces Critical rerun: impact at four high-load operating points.}}{27}{table.caption.26}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {E.4}Data Availability}{27}{subsection.E.4}\protected@file@percent }
 \bibcite{nemirovskij1983problem}{13}
 \bibcite{osa2018algorithmic}{14}
 \bibcite{robert2003stochastic}{15}
@@ -327,4 +301,44 @@
 \bibcite{williams1992simple}{20}
 \bibcite{winston1977optimality}{21}
 \bibcite{ziebart2010modeling}{22}
-\gdef \@abspage@last{28}
+\citation{williams1992simple}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Drift Verification}{25}{appendix.A}\protected@file@percent }
+\newlabel{sec:appendix_drift}{{A}{25}{Drift Verification}{appendix.A}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Configuration}{25}{subsection.A.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Result}{25}{subsection.A.2}\protected@file@percent }
+\@writefile{loe}{\contentsline {remark}{\ifthmt@listswap Remark~A.1\else \numberline {A.1}Remark\fi }{25}{remark.A.1}\protected@file@percent }
+\citation{ross2011reduction}
+\@writefile{toc}{\contentsline {section}{\numberline {B}REINFORCE Gradient Check}{26}{appendix.B}\protected@file@percent }
+\newlabel{sec:appendix_gradient}{{B}{26}{REINFORCE Gradient Check}{appendix.B}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}Method}{26}{subsection.B.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Results}{26}{subsection.B.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Gradient check results.}}{26}{table.caption.40}\protected@file@percent }
+\newlabel{tab:appendix_gradient}{{9}{26}{Gradient check results}{table.caption.40}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Parameter-wise scatter: \text  {REINFORCE}{} gradient components vs.\ finite-difference gradients. Near-perfect alignment along the diagonal confirms directional correctness.}}{26}{figure.caption.41}\protected@file@percent }
+\newlabel{fig:appendix_gradient}{{8}{26}{Parameter-wise scatter: \reinforce {} gradient components vs.\ finite-difference gradients. Near-perfect alignment along the diagonal confirms directional correctness}{figure.caption.41}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Training Details}{26}{appendix.C}\protected@file@percent }
+\newlabel{sec:appendix_training}{{C}{26}{Training Details}{appendix.C}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.1}Phase~1: Behavior Cloning}{26}{subsection.C.1}\protected@file@percent }
+\citation{williams1992simple}
+\citation{meyn2012markov}
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Behavior cloning configuration.}}{27}{table.caption.42}\protected@file@percent }
+\newlabel{tab:bc_config}{{10}{27}{Behavior cloning configuration}{table.caption.42}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.2}Phase~2: REINFORCE Fine-Tuning}{27}{subsection.C.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces REINFORCE fine-tuning configuration.}}{27}{table.caption.43}\protected@file@percent }
+\newlabel{tab:reinforce_config}{{11}{27}{REINFORCE fine-tuning configuration}{table.caption.43}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.3}Ablation Variant Descriptions}{27}{subsection.C.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {D}Stress Test and Stability Sweep}{27}{appendix.D}\protected@file@percent }
+\newlabel{sec:appendix_stress}{{D}{27}{Stress Test and Stability Sweep}{appendix.D}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces \text  {REINFORCE}{} training curve: deterministic policy score vs.\ epoch. Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12.}}{28}{figure.caption.44}\protected@file@percent }
+\newlabel{fig:reinforce_training}{{9}{28}{\reinforce {} training curve: deterministic policy score vs.\ epoch. Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12}{figure.caption.44}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Training variants evaluated in the ablation study.}}{28}{table.caption.45}\protected@file@percent }
+\newlabel{tab:ablation_variants}{{12}{28}{Training variants evaluated in the ablation study}{table.caption.45}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.1}Stress Test: Scalability}{28}{subsection.D.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {D.1.1}Massive-$N$ Scaling}{28}{subsubsection.D.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {D.1.2}Critical-Load Stress}{28}{subsubsection.D.1.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces Massive-$N$ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim }0.031$.}}{29}{table.caption.46}\protected@file@percent }
+\newlabel{tab:stress_massive}{{13}{29}{Massive-$\Nservers $ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim }0.031$}{table.caption.46}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Critical-load stress: UAS stationarity rate at high $\rho $. Stationarity is measured as the fraction of replications whose queue-length time series passes an augmented Dickey--Fuller test at the 5\% level after a 200-time-unit burn-in.}}{29}{table.caption.47}\protected@file@percent }
+\newlabel{tab:stress_critical}{{14}{29}{Critical-load stress: UAS stationarity rate at high $\rho $. Stationarity is measured as the fraction of replications whose queue-length time series passes an augmented Dickey--Fuller test at the 5\% level after a 200-time-unit burn-in}{table.caption.47}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {D.2}Alpha Stability Sweep}{29}{subsection.D.2}\protected@file@percent }
+\gdef \@abspage@last{29}

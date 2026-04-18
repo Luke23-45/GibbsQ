@@ -1,12 +1,29 @@
 
 \begin{abstract}
-We introduce GibbsQ, a framework for entropy-regularized routing in systems of $\Nservers$ heterogeneous parallel queues with Poisson arrivals and exponential service.
-We prove positive Harris recurrence for two routing laws under the load condition $\totcap > \arrate$:
-(i)~raw softmax, analyzed via a quadratic Lyapunov function, and
-(ii)~the Unified Archimedean Softmax (UAS), analyzed via a capacity-weighted Lyapunov function and a prior-weighted KL variational identity.
-Both proofs yield explicit drift constants; the UAS proof is structurally independent of the raw softmax proof.
-We then introduce Calibrated UAS, a three-parameter closed-form generalization that achieves a mean total queue length of $10.04$ under standard heterogeneous load conditions, outperforming JSSQ ($11.02$) and UAS ($11.50$).
-Through structured ablation, we show that teacher-policy choice is the dominant factor in learned-policy quality:
-a neural policy initialized from Calibrated UAS and fine-tuned with \reinforce{} achieves $9.82$, while training from scratch diverges catastrophically.
-The learned-policy advantage generalizes across all 16 tested operating-regime configurations and persists under near-critical load up to $\rho = 0.98$.
+Routing policies for heterogeneous parallel queues face a fundamental
+tension. Classical policies are either state-aware but oblivious to capacity,
+or capacity-aware but blind to state, while reinforcement learning (RL)
+approaches lack formal stability guarantees. We propose GibbsQ, a framework
+that addresses this gap via entropy-regularized routing. We prove
+positive Harris recurrence for raw softmax and UAS under the strict load
+condition ($\totcap > \arrate$), and for a stability-certified calibrated
+subclass (SCUAS) under an explicit parameter-conditional Foster--Lyapunov
+drift bound. The raw softmax proof uses a quadratic Lyapunov function and an
+entropy ceiling bound; the UAS proof uses a capacity-weighted Lyapunov
+function and a prior-weighted KL variational identity; the SCUAS proof uses a
+matched weighted Lyapunov function and a calibrated prior decomposition. These
+proofs yield explicit, computable drift constants; the UAS constants are
+temperature independent. Building on these foundations, we introduce
+Calibrated UAS, a closed-form empirical extension of UAS with three tunable
+parameters. Despite lacking a blanket formal stability proof over its full
+parameter range, it reduces steady-state queue lengths by 8.9\% and 12.6\%
+relative to JSSQ and baseline UAS, respectively, under the standard evaluation
+protocol. We further observe a teacher-choice effect: an
+RL agent initialized through behavior cloning from Calibrated UAS and
+fine-tuned via \reinforce{} attains the lowest queue length among the policies
+evaluated in this study, surpassing even its closed-form teacher, while an
+identical architecture trained from random initialization diverges
+catastrophically. This learned-policy advantage persists across the 16
+operating configurations tested and into near-critical regimes up to
+$\rho = 0.98$.
 \end{abstract}

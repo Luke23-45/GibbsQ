@@ -2,12 +2,12 @@
 \section{Raw Softmax: Stability Theorem and Proof}
 \label{sec:softmax_theorem}
 
-This section presents the first main analytical result of the paper: positive Harris recurrence of the CTMC under raw softmax routing. The proof follows a five-step Foster--Lyapunov argument.
+This section presents the first main analytical result: positive Harris recurrence of the CTMC under raw softmax routing. The proof proceeds via a five-step Foster--Lyapunov argument.
 
 \subsection{Routing Law}
 \label{sec:softmax:routing}
 
-Recall from \cref{def:raw_softmax} that the raw softmax routing law assigns arrival probability
+Recall from \cref{def:raw_softmax} that the raw softmax routing law is given by
 \begin{equation}
 \label{eq:softmax_law}
 \rprob{i}(\Qstate) = \frac{\exp(-\temp \Qlen{i})}{\sum_{j=1}^{\Nservers} \exp(-\temp \Qlen{j})}
@@ -88,7 +88,7 @@ Let $\Qmin = \min_i \Qlen{i}$ and define the deviations $\Delta_i = \Qlen{i} - \
 \medskip
 \noindent\textbf{Step~4: Foster--Lyapunov inequality.}
 
-Substituting (\ref{eq:softmax_arrival_bound}) and~(\ref{eq:service_decomp}) into \cref{eq:softmax_generator},
+Substituting \cref{eq:softmax_arrival_bound} and \cref{eq:service_decomp} into \cref{eq:softmax_generator},
 \begin{align}
 \gen \lyap(\Qstate)
 &\leq \arrate\left(\Qmin + \frac{\log \Nservers}{\temp}\right)
@@ -128,18 +128,18 @@ Therefore
 Outside the finite set $\bigl\{\Qstate : \varepsilon \abs{\Qstate}_1 \leq R + 1\bigr\}$, the drift is strictly negative. By the continuous-time Foster--Lyapunov criterion, the CTMC is positive Harris recurrent.
 \end{proof}
 
-\subsection{Discussion}
+\subsection{Properties of the Softmax Bound}
 \label{sec:softmax:discussion}
 
 The proof reveals several structural features of entropy-regularized routing.
 
-\subsubsection{Role of Entropy Regularization}
-The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law sends arrivals to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive term $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature, the policy explores suboptimal servers, but the exploration penalty is bounded and controllable through~$\temp$.
+\paragraph{Role of entropy regularization}
+The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law routes each arrival to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive penalty $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature the policy explores suboptimal servers, but this cost is controllable through~$\temp$.
 
-\subsubsection{Homogeneous Limitation}
-Raw softmax ignores service-rate heterogeneity entirely. The routing probabilities in~\eqref{eq:softmax_law} depend only on queue lengths, not on service rates. This means that a slow server with a short queue receives the same routing weight as a fast server with the same queue length. This limitation motivates the UAS extension in \cref{sec:uas_theorem}, which incorporates service rates into the routing law.
+\paragraph{Homogeneous limitation}
+Raw softmax ignores service-rate heterogeneity: the routing probabilities in~\eqref{eq:softmax_law} depend only on queue lengths, not on service rates. This limitation motivates the UAS extension (\cref{sec:uas_theorem}), which incorporates service rates into both the energy function and the prior.
 
-\subsubsection{Closed-Form Drift Constants}
-The drift rate $\varepsilon$ and the compact-set radius $R/\varepsilon$ (a finite petite set in the sense of~\cite{meyn2012markov}) depend only on the system parameters $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers, \temp)$ and are given in closed form. This makes the stability guarantee quantitative rather than merely existential.
+\paragraph{Closed-form drift constants}
+The drift rate~$\varepsilon$ and the compact-set bound $R/\varepsilon$ depend only on the system parameters $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers, \temp)$ and are given in closed form, making the stability guarantee quantitative rather than merely existential.
 
 

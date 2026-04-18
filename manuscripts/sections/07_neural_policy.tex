@@ -2,14 +2,14 @@
 \section{N-GibbsQ: Learned Neural Policy}
 \label{sec:neural_policy}
 
-The $\ngibbsq$ policy is a learned routing law that uses a neural network to map queue states to routing distributions.
-It is an \emph{empirical} approximation layer and is not part of the theorem statements.
+The $\ngibbsq$ policy is a neural routing law that maps queue states to routing distributions.
+It serves as an \emph{empirical} approximation and is not part of the formal stability theorems.
 
 \subsection{Architecture}
 
-The actor network takes as input the queue-length vector $\Qstate \in \Nats^\Nservers$ and service rates $\srvrate \in \Reals_+^\Nservers$.
-Queue lengths are preprocessed via $\log(1 + \Qlen{i})$ normalization to stabilize input magnitudes.
-A feedforward network with two hidden layers and ReLU activations produces routing logits, which are passed through a softmax to yield
+The network takes as input the queue-length vector $\Qstate \in \Nats^\Nservers$ and service rates $\srvrate \in \Reals_+^\Nservers$.
+Queue lengths are preprocessed via $\log(1 + \Qlen{i})$ to compress the dynamic range.
+A feedforward network with two hidden layers and ReLU activations produces logits, passed through a softmax to yield
 \begin{equation}
 \label{eq:neural_output}
 \rprob{i}(\Qstate, \srvrate; \theta) = \softmax\!\bigl(f_\theta(\Qstate, \srvrate)\bigr)_i,
@@ -18,14 +18,13 @@ a valid probability distribution on $\Simplex$ by construction.
 
 \subsection{Two-Phase Training Pipeline}
 
-\subsubsection{Phase~1: Behavior Cloning}
-The network is trained via cross-entropy loss against an analytical teacher policy.
-The default teacher is UAS with $\temp = 10$; the ablation study (Section~\ref{sec:exp:ablation}) also evaluates Calibrated UAS as an alternative teacher.
-Training runs for 1{,}000 steps, reaching 97--99\% top-1 accuracy.
-The BC phase provides a stable initialization that prevents catastrophic divergence during Phase~2.
+\paragraph{Phase~1: Behavior Cloning}
+The network is trained via cross-entropy loss against an analytical teacher policy (UAS with $\temp = 10$ by default; the ablation in \cref{sec:exp:ablation} also evaluates Calibrated UAS).
+Training runs for 1{,}000 steps, reaching 97--99\% top-1 accuracy, providing a stable initialization for Phase~2.
 
-\subsubsection{Phase~2: REINFORCE Fine-Tuning}
-Starting from the BC-pretrained weights, we apply policy gradient optimization using \reinforce{} with a running-average baseline~\cite{williams1992simple}.
-Training uses 16-episode batches over 15 epochs, with each episode simulating 1{,}000 time units of queue dynamics.
-The gradient estimator's directional correctness is verified in Appendix~\ref{sec:appendix_gradient} (cosine similarity $= 1.0$).
-Full hyperparameter details are provided in Appendix~\ref{sec:appendix_training}.
+\paragraph{Phase~2: REINFORCE Fine-Tuning}
+Starting from BC-pretrained weights, policy gradient optimization proceeds via \reinforce{} with a running-average baseline~\cite{williams1992simple}, using 16-episode batches over 15 epochs (each episode simulates 1{,}000 time units).
+We intentionally employ vanilla \reinforce{} rather than modern alternatives such as PPO (with its surrogate clipped objective) or SAC (a maximum-entropy off-policy architecture). This deliberate experimental design strictly isolates the impact of the starting distribution, demonstrating that guided initialization via behavior cloning---rather than advanced trust-region mechanics---is what fundamentally resolves routing instability.
+The gradient estimator achieves perfect directional agreement with the true gradient (cosine similarity $1.0$; \cref{sec:appendix_gradient}).
+Full hyperparameters are given in \cref{sec:appendix_training}.
+Empirical results for $\ngibbsq$ are reported in \cref{sec:experiments}.

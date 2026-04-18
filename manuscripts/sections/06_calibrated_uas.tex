@@ -1,27 +1,322 @@
-
-\section{Calibrated UAS: Empirical Closed-Form Extension}
+\section{Calibrated UAS: Certified Subclass and Empirical Extension}
 \label{sec:calibrated_uas}
 
-The UAS routing law (Theorem~\ref{thm:uas}) is provably stable, but its parameterization --- the energy $\uasenergy{i} = (\Qlen{i}+1)/\srvrate_i$ and prior $\uasprior{i} = \srvrate_i/\totcap$ --- was designed for analytical tractability rather than empirical optimality.
-This section introduces Calibrated UAS, a three-parameter generalization that relaxes UAS's structural constraints to improve steady-state performance.
+The UAS routing law (\cref{thm:uas}) is provably stable, but its fixed parameterization was designed for analytical tractability rather than empirical optimality.
+This section separates two layers that were previously conflated:
+the full Calibrated UAS family, which remains an empirical three-parameter extension, and a named theorem-backed subclass, SCUAS, for which a self-contained Foster--Lyapunov argument is available under an explicit sufficient condition.
 
 \begin{remark}[Theorem status]
 \label{rem:caluas_status}
-Calibrated UAS does \textbf{not} carry a formal stability guarantee.
-The stability guarantees of Theorem~\ref{thm:uas} apply only to the UAS special case $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$.
-The weighted variational identity (Proposition~\ref{prop:uas_variational}) and Jensen-based arrival bound (Lemma~\ref{lem:uas_arrival}) do not extend to the generalized parameterization.
-Establishing stability for general $(\calbeta, \calgamma, \caloffset)$ is an open problem (see Section~\ref{sec:discussion}).
+The full Calibrated UAS family does \textbf{not} receive a blanket formal stability guarantee in this manuscript.
+Instead, \cref{thm:scuas} isolates a stability-certified subclass, denoted SCUAS, whose routing law is analyzed with a matched weighted Lyapunov function.
+The unrestricted family \eqref{eq:caluas_law} remains empirical outside the parameter settings that satisfy the theorem's explicit sufficient condition.
 \end{remark}
 
-\begin{definition}[Calibrated UAS]
+\begin{definition}[Calibrated UAS family]
 \label{def:caluas_family}
 The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,1]$:
 \begin{equation}
 \label{eq:caluas_law}
-\rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i} + \caloffset}{\srvrate_i^{\calbeta}}\right).
+\rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}\right).
 \end{equation}
 Setting $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$ recovers UAS~\eqref{eq:uas_law} exactly.
 \end{definition}
+
+\begin{definition}[Stability-Certified Calibrated UAS (SCUAS)]
+\label{def:scuas_family}
+For fixed parameters $(\calbeta, \calgamma, \caloffset)$, define the SCUAS routing law by
+\begin{equation}
+\label{eq:scuas_law}
+\rprob{i}^{\scuas}(\Qstate, \srvrate)
+=
+\frac{\srvrate_i^{\calgamma} \exp\!\left(-\temp (\Qlen{i}+\caloffset)/\srvrate_i^{\calbeta}\right)}
+{\sum_{j=1}^{\Nservers} \srvrate_j^{\calgamma} \exp\!\left(-\temp (\Qlen{j}+\caloffset)/\srvrate_j^{\calbeta}\right)}.
+\end{equation}
+This is the same closed form as \eqref{eq:caluas_law}, but the theorem statements below apply only when the associated drift constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ is strictly positive.
+\end{definition}
+
+\subsection{SCUAS Theorem Path}
+\label{sec:scuas_theorem}
+
+The proof rewrites \eqref{eq:scuas_law} in Gibbs form with a calibrated prior.
+Define
+\begin{equation}
+\label{eq:scuas_Z}
+Z_{\calbeta,\calgamma,\caloffset}
+=
+\sum_{j=1}^{\Nservers} \srvrate_j^{\calgamma}
+\exp\!\left(-\temp \frac{\caloffset}{\srvrate_j^{\calbeta}}\right),
+\end{equation}
+\begin{equation}
+\label{eq:scuas_prior}
+r_i^{\scuas}
+=
+\frac{\srvrate_i^{\calgamma} \exp\!\left(-\temp \caloffset/\srvrate_i^{\calbeta}\right)}
+{Z_{\calbeta,\calgamma,\caloffset}},
+\end{equation}
+and
+\begin{equation}
+\label{eq:scuas_energy}
+x_i^{\scuas}(\Qstate,\srvrate)
+=
+\frac{\Qlen{i}}{\srvrate_i^{\calbeta}}.
+\end{equation}
+Then \eqref{eq:scuas_law} can be written as
+\begin{equation}
+\label{eq:scuas_gibbs}
+\rprob{i}^{\scuas}(\Qstate,\srvrate)
+=
+\frac{r_i^{\scuas} \exp\!\bigl(-\temp x_i^{\scuas}(\Qstate,\srvrate)\bigr)}
+{\sum_{j=1}^{\Nservers} r_j^{\scuas} \exp\!\bigl(-\temp x_j^{\scuas}(\Qstate,\srvrate)\bigr)}.
+\end{equation}
+
+\begin{proposition}[SCUAS weighted variational form]
+\label{prop:scuas_variational}
+For fixed $(\calbeta,\calgamma,\caloffset)$, define
+\begin{equation}
+\label{eq:scuas_variational_obj}
+\mathcal{G}_{\mathrm{SCUAS}}(p)
+=
+\sum_{i=1}^{\Nservers} p_i \, x_i^{\scuas}(\Qstate,\srvrate)
++ \frac{1}{\temp}\KL{p}{r^{\scuas}}
+\end{equation}
+over $\Simplex$.
+Its unique minimizer is exactly the SCUAS routing law \eqref{eq:scuas_law}, and the minimum value is
+\begin{equation}
+\label{eq:scuas_min_value}
+-\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} r_i^{\scuas}
+\exp\!\bigl(-\temp x_i^{\scuas}(\Qstate,\srvrate)\bigr).
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+Expand the KL divergence:
+\[
+\KL{p}{r^{\scuas}}
+=
+\sum_i p_i \log p_i - \sum_i p_i \log r_i^{\scuas}.
+\]
+Substituting \eqref{eq:scuas_prior} into \eqref{eq:scuas_variational_obj} yields
+\[
+\mathcal{G}_{\mathrm{SCUAS}}(p)
+=
+\sum_i p_i \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}
+- \frac{\calgamma}{\temp}\sum_i p_i \log \srvrate_i
++ \frac{1}{\temp}\sum_i p_i \log p_i
++ \frac{1}{\temp}\log Z_{\calbeta,\calgamma,\caloffset},
+\]
+which is the SCUAS free energy up to the additive constant $(1/\temp)\log Z_{\calbeta,\calgamma,\caloffset}$.
+Strict convexity of $\KL{p}{r^{\scuas}}$ over the open simplex gives uniqueness.
+The first-order optimality conditions on the simplex imply
+\[
+\log p_i
+=
+\mathrm{const}
+- \temp x_i^{\scuas}(\Qstate,\srvrate)
++ \log r_i^{\scuas},
+\]
+and normalization yields \eqref{eq:scuas_law}.
+Substituting the minimizer back into the objective gives \eqref{eq:scuas_min_value}.
+\end{proof}
+
+\begin{lemma}[SCUAS drift identity]
+\label{lem:scuas_drift}
+For the weighted Lyapunov function
+\begin{equation}
+\label{eq:scuas_lyapunov}
+\lyap_{\mathrm{SCUAS}}(\Qstate)
+=
+\frac12 \sum_{i=1}^{\Nservers} \frac{\Qlen{i}^2}{\srvrate_i^{\calbeta}},
+\end{equation}
+the generator under \eqref{eq:scuas_law} satisfies
+\begin{equation}
+\label{eq:scuas_drift_identity}
+\gen \lyap_{\mathrm{SCUAS}}(\Qstate)
+=
+\arrate \sum_{i=1}^{\Nservers} \rprob{i}^{\scuas}(\Qstate,\srvrate)\,
+\frac{\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}
+- \sum_{i=1}^{\Nservers} \Qlen{i}\srvrate_i^{1-\calbeta}
++ \frac12 \sum_{i=1}^{\Nservers} \srvrate_i^{1-\calbeta}\Ind_{\Qlen{i}>0}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+An arrival to server~$i$ increases $\lyap_{\mathrm{SCUAS}}$ by
+\[
+\frac{1}{2\srvrate_i^{\calbeta}}
+\left[(\Qlen{i}+1)^2-\Qlen{i}^2\right]
+=
+\frac{\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}.
+\]
+A departure from server~$i$ occurs at rate $\srvrate_i$ when $\Qlen{i}>0$ and changes the Lyapunov function by
+\[
+\frac{1}{2\srvrate_i^{\calbeta}}
+\left[(\Qlen{i}-1)^2-\Qlen{i}^2\right]
+=
+\frac{-\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}.
+\]
+Multiplying the departure increment by $\srvrate_i\Ind_{\Qlen{i}>0}$ gives
+\[
+\srvrate_i\Ind_{\Qlen{i}>0}
+\frac{-\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}
+=
+-\Qlen{i}\srvrate_i^{1-\calbeta}
++ \frac12 \srvrate_i^{1-\calbeta}\Ind_{\Qlen{i}>0},
+\]
+which yields \eqref{eq:scuas_drift_identity} after summing over all servers.
+\end{proof}
+
+\begin{lemma}[SCUAS arrival-term bound]
+\label{lem:scuas_arrival}
+Define
+\begin{equation}
+\label{eq:scuas_ai}
+a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)
+:=
+\frac{\srvrate_i^{\calgamma-\calbeta}
+\exp\!\left(-\temp \caloffset/\srvrate_i^{\calbeta}\right)}
+{Z_{\calbeta,\calgamma,\caloffset}}.
+\end{equation}
+Under \eqref{eq:scuas_law},
+\begin{equation}
+\label{eq:scuas_arrival_bound}
+\sum_{i=1}^{\Nservers} \rprob{i}^{\scuas}(\Qstate,\srvrate)\,
+\frac{\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}
+\le
+\sum_{i=1}^{\Nservers} a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)\,\Qlen{i}
++ \frac12 \max_{1 \le i \le \Nservers} \srvrate_i^{-\calbeta}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+By \cref{prop:scuas_variational},
+\[
+\sum_i \rprob{i}^{\scuas}\,x_i^{\scuas}
++ \frac{1}{\temp}\KL{p^{\scuas}}{r^{\scuas}}
+=
+-\frac{1}{\temp}\log\sum_i r_i^{\scuas} e^{-\temp x_i^{\scuas}}.
+\]
+Since $\KL{p^{\scuas}}{r^{\scuas}}\ge 0$,
+\[
+\sum_i \rprob{i}^{\scuas}\,x_i^{\scuas}
+\le
+-\frac{1}{\temp}\log\sum_i r_i^{\scuas} e^{-\temp x_i^{\scuas}}.
+\]
+Applying Jensen's inequality to the convex map $u \mapsto e^{-\temp u}$,
+\[
+\sum_i r_i^{\scuas} e^{-\temp x_i^{\scuas}}
+\ge
+\exp\!\left(-\temp \sum_i r_i^{\scuas} x_i^{\scuas}\right),
+\]
+so
+\[
+-\frac{1}{\temp}\log\sum_i r_i^{\scuas} e^{-\temp x_i^{\scuas}}
+\le
+\sum_i r_i^{\scuas} x_i^{\scuas}
+=
+\sum_i a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)\,\Qlen{i}.
+\]
+Therefore
+\[
+\sum_i \rprob{i}^{\scuas}(\Qstate,\srvrate)\,\frac{\Qlen{i}}{\srvrate_i^{\calbeta}}
+\le
+\sum_i a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)\,\Qlen{i}.
+\]
+Finally,
+\[
+\sum_i \rprob{i}^{\scuas}(\Qstate,\srvrate)\,\frac{\Qlen{i}+1/2}{\srvrate_i^{\calbeta}}
+=
+\sum_i \rprob{i}^{\scuas}(\Qstate,\srvrate)\,\frac{\Qlen{i}}{\srvrate_i^{\calbeta}}
++ \frac12 \sum_i \rprob{i}^{\scuas}(\Qstate,\srvrate)\,\srvrate_i^{-\calbeta},
+\]
+and the last sum is bounded by $\max_i \srvrate_i^{-\calbeta}$.
+\end{proof}
+
+\begin{theorem}[SCUAS positive Harris recurrence]
+\label{thm:scuas}
+Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,1]$ and define
+\begin{equation}
+\label{eq:scuas_epsilon}
+\varepsilon_{\calbeta,\calgamma,\caloffset}
+:=
+\min_{1 \le i \le \Nservers}
+\left(
+\srvrate_i^{1-\calbeta}
+- \arrate \, a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)
+\right).
+\end{equation}
+If $\varepsilon_{\calbeta,\calgamma,\caloffset} > 0$, then under the SCUAS routing law \eqref{eq:scuas_law} the CTMC is non-explosive, irreducible, and positive Harris recurrent.
+\end{theorem}
+
+\begin{proof}
+Non-explosion and irreducibility follow exactly as in \cref{thm:softmax} and \cref{thm:uas}: the total jump rate is bounded by $\arrate + \totcap$, and all routing probabilities remain strictly positive.
+The Lyapunov function \eqref{eq:scuas_lyapunov} is norm-like on $\Nats^\Nservers$ because each $\srvrate_i^{-\calbeta}$ is a finite positive constant.
+
+Combining \cref{lem:scuas_drift} with \cref{lem:scuas_arrival},
+\begin{align}
+\gen \lyap_{\mathrm{SCUAS}}(\Qstate)
+&\le
+\arrate \sum_{i=1}^{\Nservers} a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)\,\Qlen{i}
++ \frac{\arrate}{2} \max_i \srvrate_i^{-\calbeta}
+- \sum_{i=1}^{\Nservers} \Qlen{i}\srvrate_i^{1-\calbeta}
++ \frac12 \sum_{i=1}^{\Nservers} \srvrate_i^{1-\calbeta} \nonumber \\
+&=
+\sum_{i=1}^{\Nservers}
+\Qlen{i}
+\left(
+\arrate \, a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)
+- \srvrate_i^{1-\calbeta}
+\right)
++ R_{\calbeta,\calgamma,\caloffset},
+\label{eq:scuas_pre_drift}
+\end{align}
+where
+\begin{equation}
+\label{eq:scuas_R}
+R_{\calbeta,\calgamma,\caloffset}
+:=
+\frac{\arrate}{2}\max_{1 \le i \le \Nservers} \srvrate_i^{-\calbeta}
++ \frac12 \sum_{i=1}^{\Nservers} \srvrate_i^{1-\calbeta}.
+\end{equation}
+By \eqref{eq:scuas_epsilon},
+\[
+\arrate \, a_i(\calbeta,\calgamma,\caloffset;\temp,\srvrate)
+- \srvrate_i^{1-\calbeta}
+\le
+-\varepsilon_{\calbeta,\calgamma,\caloffset}
+\qquad \text{for all } i,
+\]
+so \eqref{eq:scuas_pre_drift} becomes
+\begin{equation}
+\label{eq:scuas_final_drift}
+\gen \lyap_{\mathrm{SCUAS}}(\Qstate)
+\le
+-\varepsilon_{\calbeta,\calgamma,\caloffset}\,\abs{\Qstate}_1
++ R_{\calbeta,\calgamma,\caloffset}.
+\end{equation}
+Hence for the finite set
+\begin{equation}
+\label{eq:scuas_compact}
+C_{\mathrm{SCUAS}}
+=
+\left\{
+\Qstate \in \Nats^\Nservers :
+\abs{\Qstate}_1 \le
+\frac{R_{\calbeta,\calgamma,\caloffset}+1}
+{\varepsilon_{\calbeta,\calgamma,\caloffset}}
+\right\},
+\end{equation}
+we have $\gen \lyap_{\mathrm{SCUAS}}(\Qstate)\le -1$ for all $\Qstate \notin C_{\mathrm{SCUAS}}$.
+The continuous-time Foster--Lyapunov criterion therefore implies positive Harris recurrence.
+\end{proof}
+
+\begin{remark}[Relation to UAS and theorem scope]
+\label{rem:scuas_scope}
+When $(\calbeta,\calgamma,\caloffset)=(1,1,1)$, the routing law \eqref{eq:scuas_law} coincides algebraically with UAS.
+However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does not replace the stronger UAS result \cref{thm:uas}, whose drift constants are temperature-independent and are derived from a different variational decomposition.
+Accordingly, the manuscript's formal claims are split as follows:
+UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical in general.
+\end{remark}
 
 \subsection{Parameter Semantics}
 Each parameter modifies a distinct structural aspect of UAS:
@@ -32,7 +327,7 @@ Each parameter modifies a distinct structural aspect of UAS:
 \end{itemize}
 
 \subsection{Benchmark Parameters}
-The benchmark values used throughout this paper are
+The empirical benchmark values used throughout are
 \begin{equation}
 \label{eq:caluas_params}
 (\calbeta, \calgamma, \caloffset) = (0.85,\; 0.5,\; 0.5),
@@ -40,11 +335,20 @@ The benchmark values used throughout this paper are
 selected via a grid search over $\calbeta \in \{0.5, 0.7, 0.85, 1.0\}$, $\calgamma \in \{0.25, 0.5, 0.75, 1.0\}$, and $\caloffset \in \{0.25, 0.5, 0.75, 1.0\}$ (64 configurations).
 Each configuration was evaluated over 16 independent replications on a validation set separate from the 32-replication anchor benchmark.
 The selected parameters minimize mean total queue length on the validation set.
-We acknowledge that this grid is coarse and that the parameter surface may not be convex; a more systematic optimization procedure (e.g., Bayesian optimization over a continuous domain) is left for future work.
+The grid is coarse and the parameter surface may be non-convex; systematic optimization (e.g., Bayesian optimization over a continuous domain) is deferred to future work.
+
+The theorem in this section is parameter-conditional.
+For the benchmark-default empirical setting, we do not relabel the policy as certified unless the explicit constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ is verified to be positive under the benchmark configuration.
+Therefore the headline benchmark policy remains in the empirical layer.
 
 \subsection{Anchor Benchmark Result}
-Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (Section~\ref{sec:exp:policy}):
-\begin{center}
+Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (\cref{sec:exp:policy}):
+\begin{table}[htbp]
+\centering
+\small
+\caption{Anchor benchmark excerpt: top closed-form policies ($\Nservers{=}10$, $\rho{=}0.80$, 32 replications).}
+\label{tab:caluas_benchmark}
+\renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{}lr@{}}
 \toprule
 \textbf{Policy} & \textbf{Mean $\E[\sum_i\Qlen{i}]$} \\
@@ -54,7 +358,5 @@ JSSQ & 11.016 \\
 UAS ($\temp{=}10$) & 11.495 \\
 \bottomrule
 \end{tabular}
-\end{center}
-
-
-
+\end{table}
+These improvements over JSSQ and baseline UAS demonstrate that relaxing the analytical parameterization yields measurable steady-state gains, establishing Calibrated UAS as a competitive empirical closed-form baseline.

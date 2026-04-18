@@ -27,16 +27,16 @@
 
 % Figure search path
 \graphicspath{
-  {data/policy/final_20260414_113920/figures/}
-  {data/ablation/final_20260414_113804/figures/}
-  {data/critical/final_20260415_032426/figures/}
-  {data/generalize/final_20260415_024645/figures/}
-  {data/stats/final_20260415_024532/figures/}
-  {data/drift/final_20260411_202133/figures/}
-  {data/reinforce_check/final_20260411_202109/figures/}
-  {data/reinforce_train/final_20260411_202209/figures/}
-  {data/sweep/final_20260411_202209/figures/}
-  {data/stress/final_20260411_203420/figures/}
+  {data/policy/figures/}
+  {data/ablation/figures/}
+  {data/critical/figures/}
+  {data/generalize/figures/}
+  {data/stats/figures/}
+  {data/drift/figures/}
+  {data/reinforce_check/figures/}
+  {data/reinforce_train/figures/}
+  {data/sweep/figures/}
+  {data/stress/figures/}
 }
 
 % Tables and floats
@@ -87,14 +87,15 @@
 \titlespacing*{\subsubsection}{0pt}{1.5ex plus 0.5ex minus .2ex}{1ex plus .2ex}
 
 % Level 4: Micro-Detail (Paragraph)
-% Standard: Run-in style, Italicized, with auto-appended period terminator
+% Standard: Run-in style, Bold, with auto-appended colon terminator
 \titleformat{\paragraph}[runin]
-  {\normalfont\normalsize\itshape}
+  {\normalfont\normalsize\bfseries}
   {}
   {0pt}
   {}
-  [.\hspace{0.5em}]
+  [:~]
 \titlespacing*{\paragraph}{0pt}{1.5ex plus 0.2ex}{0em}
+
 
 % Caption and list styling
 \captionsetup{
@@ -104,8 +105,10 @@
   skip=6pt
 }
 \captionsetup[table]{position=top}
-\setlist[itemize]{leftmargin=1.5em, itemsep=2pt, topsep=4pt, parsep=0pt, partopsep=0pt}
-\setlist[enumerate]{leftmargin=1.7em, itemsep=2pt, topsep=4pt, parsep=0pt, partopsep=0pt}
+\usepackage{etoolbox}
+\AtBeginEnvironment{table}{\centering\small\renewcommand{\arraystretch}{1.25}}
+\setlist[itemize]{leftmargin=1.5em, itemsep=4pt, topsep=6pt, parsep=3pt, partopsep=0pt}
+\setlist[enumerate]{leftmargin=1.7em, itemsep=5pt, topsep=6pt, parsep=3pt, partopsep=0pt}
 
 % Manual replacements for missing packages
 \newcommand{\coloneqq}{\mathrel{\mathop:}=}
@@ -192,6 +195,7 @@
 
 % Calibrated UAS
 \newcommand{\caluas}{\mathrm{cal}}
+\newcommand{\scuas}{\mathrm{SC}}
 \newcommand{\calbeta}{\beta}
 \newcommand{\calgamma}{\gamma}
 \newcommand{\caloffset}{c}
