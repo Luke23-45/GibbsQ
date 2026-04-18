@@ -127,7 +127,7 @@ Let $\uasenergy{i}(\Qstate, \srvrate) = (\Qlen{i}+1)/\srvrate_i$ and $\uasprior{
 \begin{equation}
 \label{eq:uas_arrival_bound}
 \sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{1}{\srvrate_i}\bigl(\Qlen{i}+\tfrac{1}{2}\bigr)
-\leq \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+\leq \frac{\abs{\Qstate}_1}{\totcap} + \frac{\Nservers}{\totcap}.
 \end{equation}
 \end{lemma}
 
@@ -155,13 +155,14 @@ Therefore
 \label{eq:uas_jensen_result}
 -\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}
 \leq \sum_{i=1}^{\Nservers} \uasprior{i}\, \uasenergy{i}
-= \frac{1}{\totcap}\sum_{i=1}^{\Nservers} \srvrate_i \frac{\Qlen{i}+1}{\srvrate_i}
-= \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+= \sum_{i=1}^{\Nservers} \!\left(\frac{\srvrate_i}{\totcap}\right) \!\left(\frac{\Qlen{i}+1}{\srvrate_i}\right)
+= \frac{1}{\totcap}\sum_{i=1}^{\Nservers} (\Qlen{i}+1)
+= \frac{\abs{\Qstate}_1}{\totcap} + \frac{\Nservers}{\totcap}.
 \end{equation}
 Hence
 \begin{equation}
 \label{eq:uas_x_bound}
-\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{\Qlen{i}+1}{\srvrate_i} \leq \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}.
+\sum_{i=1}^{\Nservers} \rprob{i}(\Qstate, \srvrate)\,\frac{\Qlen{i}+1}{\srvrate_i} \leq \frac{\abs{\Qstate}_1}{\totcap} + \frac{\Nservers}{\totcap}.
 \end{equation}
 Finally,
 \begin{equation}
@@ -169,7 +170,8 @@ Finally,
 \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{1}{\srvrate_i}\bigl(\Qlen{i}+\tfrac{1}{2}\bigr)
 = \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1}{\srvrate_i}
 - \frac{1}{2}\sum_{i=1}^{\Nservers} \frac{\rprob{i}}{\srvrate_i}
-\leq \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1}{\srvrate_i},
+\leq \sum_{i=1}^{\Nservers} \rprob{i}\,\frac{\Qlen{i}+1}{\srvrate_i}
+\leq \frac{\abs{\Qstate}_1}{\totcap} + \frac{\Nservers}{\totcap},
 \end{equation}
 which gives~\eqref{eq:uas_arrival_bound}.
 \end{proof}
@@ -206,7 +208,7 @@ The drift identity (\cref{lem:uas_drift}) gives
 Applying the arrival-term bound (\cref{lem:uas_arrival}) to the first sum and bounding the indicator sum by~$\Nservers/2$,
 \begin{align}
 \gen \lyap_{\mathrm{UAS}}(\Qstate)
-&\leq \arrate \cdot \frac{\abs{\Qstate}_1 + \Nservers}{\totcap}
+&\leq \arrate \left( \frac{\abs{\Qstate}_1}{\totcap} + \frac{\Nservers}{\totcap} \right)
   \;-\; \abs{\Qstate}_1
   \;+\; \frac{\Nservers}{2} \nonumber \\
 &= \frac{\arrate}{\totcap}\,\abs{\Qstate}_1

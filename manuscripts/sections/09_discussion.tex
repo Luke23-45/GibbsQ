@@ -40,7 +40,7 @@ Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified 
 \item \textbf{Default pipeline uses a suboptimal teacher:}
 The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, yielding higher mean total queue length and underperforming both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
 The variant with the calibrated teacher ($9.82$) was identified through ablation and not as part of the original design.
-The ablation findings suggest that switching the pipeline to use Calibrated UAS as the BC teacher would improve $\ngibbsq$ from $11.68$ to $9.82$ without any architectural change.
+The ablation findings (Protocol B) show that switching the pipeline to use Calibrated UAS as the BC teacher instead improves the model substantially. This highlights that the strongest neural result is not the default learned policy. Note that the absolute values from the main benchmark (Protocol A) and the ablation study differ in simulation horizons and are not directly comparable.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
 The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$.
