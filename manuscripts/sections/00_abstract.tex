@@ -18,7 +18,17 @@ Calibrated UAS, a closed-form empirical extension of UAS with three tunable
 parameters. Despite lacking a blanket formal stability proof over its full
 parameter range, it reduces steady-state queue lengths by 8.9\% and 12.6\%
 relative to JSSQ and baseline UAS, respectively, under the standard evaluation
-protocol. We further observe a teacher-choice effect: an
+protocol. A post-validation audit of the anchor benchmark finds that the
+default calibrated setting and the three audited SCUAS grid candidates all
+yield negative values of the sufficient drift constant
+$\varepsilon_{\calbeta,\calgamma,\caloffset}$, so the calibrated benchmark
+results remain empirical rather than theorem-certified in this study. We
+also identify a benchmark-specific piecewise Lyapunov candidate whose exact
+generator is strictly negative on all $9.85$ million states in the boundary
+shells $|\Qstate|_1 \in \{16,17,18\}$ and on additional sampled higher-load
+states, which strengthens the case for a future full calibrated proof without
+itself constituting one. We
+further observe a teacher-choice effect: an
 RL agent initialized through behavior cloning from Calibrated UAS and
 fine-tuned via \reinforce{} attains the lowest queue length among the policies
 evaluated in this study, surpassing even its closed-form teacher, while an

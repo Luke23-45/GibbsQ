@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.1.9)  18 APR 2026 19:06
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (TeX Live 2024) (preloaded format=pdflatex 2025.1.9)  18 APR 2026 23:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -932,42 +932,43 @@ LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
 
 {c:/tools/TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ot1-tlf.enc}{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf-pc.enc}]
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 8.0pt on input line 37.
+(Font)              scaled to size 8.0pt on input line 40.
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
-(Font)              scaled to size 6.1pt on input line 37.
+(Font)              scaled to size 6.1pt on input line 40.
 ) (./sections/02_related_work.tex
 
 [2]) (./sections/03_model.tex
 Package hyperref Info: bookmark level for unknown definition defaults to 0 on input line 12.
+
+
+[3]
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
 (Font)              scaled to size 10.95pt on input line 29.
 
 
-[3]
-
 [4]) (./sections/04_softmax_theorem.tex
-
-[5]
 Package hyperref Info: bookmark level for unknown theorem defaults to 0 on input line 19.
 
 
-[6]) (./sections/05_uas_theorem.tex
+[5]
 
-[7]
+[6]
+
+[7]) (./sections/05_uas_theorem.tex
 Package hyperref Info: bookmark level for unknown proposition defaults to 0 on input line 31.
+
+
+[8]
 LaTeX Font Info:    Trying to load font information for TS1+ntxtlf on input line 66.
  (c:/tools/TinyTeX/texmf-dist/tex/latex/newtx/ts1ntxtlf.fd
 File: ts1ntxtlf.fd 2015/01/18 v1.0 fd file for TS1/ntxtlf
 )
 LaTeX Font Info:    Font shape `TS1/ntxtlf/m/n' will be
 (Font)              scaled to size 10.95pt on input line 66.
-
-
-[8{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/tex-gyre/q-ts1.enc}]
 Package hyperref Info: bookmark level for unknown lemma defaults to 0 on input line 108.
 
 
-[9]
+[9{c:/tools/TinyTeX/texmf-dist/fonts/enc/dvips/tex-gyre/q-ts1.enc}]
 
 [10]) (./sections/06_calibrated_uas.tex
 Package hyperref Info: bookmark level for unknown remark defaults to 0 on input line 8.
@@ -977,98 +978,102 @@ Package hyperref Info: bookmark level for unknown remark defaults to 0 on input 
 
 [12]
 
-[13]) (./sections/07_neural_policy.tex
+[13]
 
-[14]) (./sections/08_experiments.tex
+[14]
 
 [15]
+LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
+(Font)              scaled to size 10.0pt on input line 416.
+) (./sections/07_neural_policy.tex
+
+[16]) (./sections/08_experiments.tex
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
 (Font)              scaled to size 7.3pt on input line 44.
 LaTeX Font Info:    Font shape `T1/ntxtlf/m/n' will be
 (Font)              scaled to size 5.5pt on input line 44.
-<data/policy/figures/policy_comparison_regenerated.png, id=606, 911.68605pt x 694.87605pt>
+
+
+[17]
+<data/policy/figures/policy_comparison_regenerated.png, id=647, 911.68605pt x 694.87605pt>
 File: data/policy/figures/policy_comparison_regenerated.png Graphic file (type png)
 <use data/policy/figures/policy_comparison_regenerated.png>
 Package pdftex.def Info: data/policy/figures/policy_comparison_regenerated.png  used on input line 92.
 (pdftex.def)             Requested size: 368.82741pt x 281.11577pt.
-LaTeX Font Info:    Font shape `T1/ntxtlf/m/it' will be
-(Font)              scaled to size 10.0pt on input line 127.
-
-
-[16]
-<data/ablation/figures/ablation_ssa_regenerated.png, id=623, 947.82104pt x 803.28105pt>
+<data/ablation/figures/ablation_ssa_regenerated.png, id=655, 947.82104pt x 803.28105pt>
 File: data/ablation/figures/ablation_ssa_regenerated.png Graphic file (type png)
 <use data/ablation/figures/ablation_ssa_regenerated.png>
-Package pdftex.def Info: data/ablation/figures/ablation_ssa_regenerated.png  used on input line 141.
+Package pdftex.def Info: data/ablation/figures/ablation_ssa_regenerated.png  used on input line 143.
 (pdftex.def)             Requested size: 331.69894pt x 281.11581pt.
 
 
-[17 <./data/policy/figures/policy_comparison_regenerated.png>]
-<data/stats/figures/stats_boxplot.png, id=635, 569.4876pt x 428.68155pt>
+[18]
+
+[19 <./data/policy/figures/policy_comparison_regenerated.png>]
+<data/stats/figures/stats_boxplot.png, id=675, 569.4876pt x 428.68155pt>
 File: data/stats/figures/stats_boxplot.png Graphic file (type png)
 <use data/stats/figures/stats_boxplot.png>
-Package pdftex.def Info: data/stats/figures/stats_boxplot.png  used on input line 189.
+Package pdftex.def Info: data/stats/figures/stats_boxplot.png  used on input line 191.
 (pdftex.def)             Requested size: 326.77502pt x 245.97977pt.
-
-
-[18 <./data/ablation/figures/ablation_ssa_regenerated.png>]
-<data/generalize/figures/generalization_heatmap.png, id=644, 445.4241pt x 409.2891pt>
+<data/generalize/figures/generalization_heatmap.png, id=677, 445.4241pt x 409.2891pt>
 File: data/generalize/figures/generalization_heatmap.png Graphic file (type png)
 <use data/generalize/figures/generalization_heatmap.png>
-Package pdftex.def Info: data/generalize/figures/generalization_heatmap.png  used on input line 231.
+Package pdftex.def Info: data/generalize/figures/generalization_heatmap.png  used on input line 233.
 (pdftex.def)             Requested size: 267.6983pt x 245.98128pt.
 
 
-[19 <./data/stats/figures/stats_boxplot.png>]
-<data/critical/figures/critical_load_curve.png, id=655, 658.74104pt x 441.93105pt>
+[20 <./data/ablation/figures/ablation_ssa_regenerated.png>]
+<data/critical/figures/critical_load_curve.png, id=687, 658.74104pt x 441.93105pt>
 File: data/critical/figures/critical_load_curve.png Graphic file (type png)
 <use data/critical/figures/critical_load_curve.png>
-Package pdftex.def Info: data/critical/figures/critical_load_curve.png  used on input line 270.
+Package pdftex.def Info: data/critical/figures/critical_load_curve.png  used on input line 272.
 (pdftex.def)             Requested size: 362.78111pt x 243.37975pt.
 
 
-[20 <./data/generalize/figures/generalization_heatmap.png>]
-<data/drift/figures/drift_vs_norm.png, id=668, 505.4082pt x 340.03035pt>
+[21 <./data/stats/figures/stats_boxplot.png>]
+
+[22 <./data/generalize/figures/generalization_heatmap.png> <./data/critical/figures/critical_load_curve.png>]
+<data/drift/figures/drift_vs_norm.png, id=711, 505.4082pt x 340.03035pt>
 File: data/drift/figures/drift_vs_norm.png Graphic file (type png)
 <use data/drift/figures/drift_vs_norm.png>
-Package pdftex.def Info: data/drift/figures/drift_vs_norm.png  used on input line 297.
+Package pdftex.def Info: data/drift/figures/drift_vs_norm.png  used on input line 309.
 (pdftex.def)             Requested size: 362.76768pt x 244.06415pt.
-<data/sweep/figures/alpha_sweep_regenerated.png, id=669, 556.2381pt x 393.26926pt>
+<data/sweep/figures/alpha_sweep_regenerated.png, id=712, 556.2381pt x 393.26926pt>
 File: data/sweep/figures/alpha_sweep_regenerated.png Graphic file (type png)
 <use data/sweep/figures/alpha_sweep_regenerated.png>
-Package pdftex.def Info: data/sweep/figures/alpha_sweep_regenerated.png  used on input line 306.
+Package pdftex.def Info: data/sweep/figures/alpha_sweep_regenerated.png  used on input line 318.
 (pdftex.def)             Requested size: 347.91107pt x 245.9787pt.
 ) (./sections/09_discussion.tex
 
-[21 <./data/critical/figures/critical_load_curve.png> <./data/drift/figures/drift_vs_norm.png>]
+[23 <./data/drift/figures/drift_vs_norm.png>]
 
-[22 <./data/sweep/figures/alpha_sweep_regenerated.png>]) (./sections/10_conclusion.tex
+[24 <./data/sweep/figures/alpha_sweep_regenerated.png>]) (./sections/10_conclusion.tex
 
-[23]) (./main.bbl
+[25]) (./main.bbl
 
-[24]) (./appendix/A_drift_verification.tex) (./appendix/B_gradient_check.tex
+[26]) (./appendix/A_drift_verification.tex) (./appendix/B_gradient_check.tex
 
-[25]
-<data/reinforce_check/figures/gradient_scatter.png, id=718, 473.8503pt x 374.71996pt>
+[27]
+<data/reinforce_check/figures/gradient_scatter.png, id=765, 473.8503pt x 374.71996pt>
 File: data/reinforce_check/figures/gradient_scatter.png Graphic file (type png)
 <use data/reinforce_check/figures/gradient_scatter.png>
 Package pdftex.def Info: data/reinforce_check/figures/gradient_scatter.png  used on input line 39.
 (pdftex.def)             Requested size: 311.05025pt x 245.97797pt.
 ) (./appendix/C_training_details.tex
 
-[26 <./data/reinforce_check/figures/gradient_scatter.png>]
-<data/reinforce_train/figures/reinforce_training_curve.png, id=729, 1004.3121pt x 711.8595pt>
+[28 <./data/reinforce_check/figures/gradient_scatter.png>]
+<data/reinforce_train/figures/reinforce_training_curve.png, id=776, 1004.3121pt x 711.8595pt>
 File: data/reinforce_train/figures/reinforce_training_curve.png Graphic file (type png)
 <use data/reinforce_train/figures/reinforce_training_curve.png>
 Package pdftex.def Info: data/reinforce_train/figures/reinforce_training_curve.png  used on input line 69.
 (pdftex.def)             Requested size: 347.03973pt x 245.98282pt.
 ) (./appendix/D_stress_sweep.tex
 
-[27])
+[29])
 
-[28 <./data/reinforce_train/figures/reinforce_training_curve.png>]
+[30 <./data/reinforce_train/figures/reinforce_training_curve.png>]
 
-[29] (./main.aux)
+[31] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 1
 L3 programming layer <2020/03/25>
@@ -1079,21 +1084,21 @@ LaTeX Font Warning: Size substitutions with differences
 (Font)              up to 0.5pt have occurred.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 8079638BA86593EE6AA00BF96B4626F4;11265.
+(rerunfilecheck)             Checksum: 382685BE2C37162B3E9F33D708AD32BF;11924.
  ) 
 Here is how much of TeX's memory you used:
- 20824 strings out of 475170
- 331957 string characters out of 5766445
- 756135 words of memory out of 5000000
- 42875 multiletter control sequences out of 15000+600000
- 669561 words of font info for 288 fonts, out of 8000000 for 9000
+ 20846 strings out of 475170
+ 332353 string characters out of 5766445
+ 757917 words of memory out of 5000000
+ 42884 multiletter control sequences out of 15000+600000
+ 669789 words of font info for 290 fonts, out of 8000000 for 9000
  36 hyphenation exceptions out of 8191
- 85i,16n,120p,1001b,671s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 85i,16n,120p,1190b,676s stack positions out of 10000i,1000n,20000p,200000b,200000s
 <c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI5.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qtmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexas.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsym.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb><c:/tools/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
-Output written on main.pdf (29 pages, 5859575 bytes).
+Output written on main.pdf (31 pages, 5873929 bytes).
 PDF statistics:
- 879 PDF objects out of 1000 (max. 8388607)
- 793 compressed objects within 8 object streams
- 288 named destinations out of 1000 (max. 500000)
- 39422 words of extra memory for PDF output out of 42996 (max. 10000000)
+ 930 PDF objects out of 1000 (max. 8388607)
+ 839 compressed objects within 9 object streams
+ 297 named destinations out of 1000 (max. 500000)
+ 39438 words of extra memory for PDF output out of 42996 (max. 10000000)
 

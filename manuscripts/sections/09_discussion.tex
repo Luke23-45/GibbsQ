@@ -33,7 +33,9 @@ The $1.45$-unit improvement over UAS ($10.04$ vs.\ $11.495$) confirms substantia
 \item \textbf{Full Calibrated UAS family remains open:}
 Section~\ref{sec:calibrated_uas} now proves positive Harris recurrence for the named subclass SCUAS under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
 However, this theorem does not cover the unrestricted three-parameter family uniformly.
-Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified subclass remains an open theoretical question.
+Moreover, the post-validation audit in Table~\ref{tab:scuas_audit} shows that the benchmark default and the three audited candidate grid points all have negative $\varepsilon_{\calbeta,\calgamma,\caloffset}$ under the anchor benchmark.
+We partially narrow this gap numerically through the benchmark-specific piecewise candidate reported in Table~\ref{tab:piecewise_candidate}, whose exact generator is negative on the verified boundary shells and sampled higher-load shells.
+Stability for general $(\calbeta, \calgamma, \caloffset)$ outside the certified subclass nevertheless remains an open theoretical question, because those numerical checks are not yet a symbolic all-states proof.
 
 \item \textbf{Default pipeline uses a suboptimal teacher:}
 The standard $\ngibbsq$ model (UAS teacher) achieves $11.68$ in the anchor benchmark, below both JSSQ ($11.02$) and Calibrated UAS ($10.04$).
@@ -61,7 +63,8 @@ Variance reduction techniques such as generalized advantage estimation (GAE) or 
 \begin{enumerate}[label=\textbf{F\arabic*.}, leftmargin=2.2em]
 \item \textbf{Beyond the certified subclass:}
 Extending the SCUAS Lyapunov argument to cover the full three-parameter family $(\calbeta, \calgamma, \caloffset)$ would close the remaining gap between the analytical and empirical layers.
-The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity.
+The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity, ideally far enough to certify practically competitive calibrated points under the anchor benchmark.
+The piecewise candidate in \cref{eq:piecewise_candidate} suggests that a boundary-refined Foster--Lyapunov construction based on quadratic, cubic, and imbalance terms is a concrete route for that extension.
 
 \item \textbf{Competitive comparisons at intermediate scale:}
 Competitive policy comparisons at $\Nservers \in \{32, 64, 128\}$---which connects the primary benchmark ($\Nservers = 10$) to the stress test ($\Nservers = 128{+}$)---would establish whether the learned-policy advantage persists as server count grows.

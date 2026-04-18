@@ -56,6 +56,7 @@ from gibbsq.engines.numpy_engine import run_replications  # noqa: E402
 from gibbsq.utils.exporter import append_metrics_jsonl  # noqa: E402
 from gibbsq.utils.logging import get_run_config  # noqa: E402
 from gibbsq.utils.run_artifacts import metadata_path, metrics_path  # noqa: E402
+from experiments.verification import calibrated_uas_proof_search as ps  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +69,11 @@ ANCHOR_BURN_IN_FRACTION = 0.2
 ANCHOR_BASE_SEED = 42
 DEFAULT_UAS_ALPHA = 10.0
 DEFAULT_CALIBRATED_ALPHA = 20.0
+DEFAULT_PIECEWISE_TRAJ_REPS = 12
+DEFAULT_PIECEWISE_TRAJ_SIM_TIME = 5000.0
+DEFAULT_PIECEWISE_TRAJ_SAMPLE_INTERVAL = 2.0
+DEFAULT_PIECEWISE_RANDOM_SEED = 314159
+DEFAULT_PIECEWISE_BATCH_SIZE = 50000
 
 
 @dataclass(frozen=True)
@@ -92,6 +98,17 @@ class ValidationProtocol:
     base_seed: int = ANCHOR_BASE_SEED
     alpha_uas: float = DEFAULT_UAS_ALPHA
     alpha_calibrated: float = DEFAULT_CALIBRATED_ALPHA
+
+
+@dataclass(frozen=True)
+class PiecewiseVerificationProtocol:
+    trajectory_reps: int = DEFAULT_PIECEWISE_TRAJ_REPS
+    trajectory_sim_time: float = DEFAULT_PIECEWISE_TRAJ_SIM_TIME
+    trajectory_sample_interval: float = DEFAULT_PIECEWISE_TRAJ_SAMPLE_INTERVAL
+    random_shell_seed: int = DEFAULT_PIECEWISE_RANDOM_SEED
+    batch_size: int = DEFAULT_PIECEWISE_BATCH_SIZE
+    max_refinement_rounds: int = 5
+    violation_augment_size: int = 256
 
 
 def default_candidate_catalog() -> list[CandidateSpec]:
@@ -483,6 +500,396 @@ def render_summary_markdown(
     return "\n".join(lines) + "\n"
 
 
+def render_piecewise_summary_markdown(
+    *,
+    piecewise_result: dict[str, object],
+) -> str:
+    candidate_row = piecewise_result["candidate_row"]
+    lines = [
+        "# Piecewise Candidate Verification",
+        "",
+        "This report documents a numerically verified piecewise Lyapunov candidate for the benchmark-default calibrated policy.",
+        "It is evidence for a proof direction, not by itself a formal theorem.",
+        "",
+        "## Candidate",
+        f"- policy: {piecewise_result['policy_name']}",
+        f"- beta: {piecewise_result['policy_beta']}",
+        f"- gamma: {piecewise_result['policy_gamma']}",
+        f"- c: {piecewise_result['policy_c']}",
+        f"- alpha: {piecewise_result['policy_alpha']}",
+        f"- sampled tail threshold: {candidate_row['sampled_eventual_threshold']}",
+        f"- tail-norm threshold used in search: {piecewise_result['tail_norm_threshold']}",
+        f"- state bank size: {piecewise_result['state_bank_size']}",
+        f"- max_tail_drift on search bank: {candidate_row['max_tail_drift']}",
+        f"- combo support: {candidate_row['combo_support']}",
+        "",
+        "## Exact Boundary Shells",
+    ]
+    for row in piecewise_result["exact_shell_rows"]:
+        lines.append(
+            "- "
+            f"total={row['total_queue']}: "
+            f"states={row['num_states']}, "
+            f"processed={row['processed_states']}, "
+            f"max_drift={row['max_drift']:.12f}, "
+            f"positive_count={row['positive_count']}, "
+            f"passes={row['passes']}, "
+            f"worst_state={row['worst_state']}"
+        )
+    random_summary = piecewise_result["random_shell_summary"]
+    lines.extend(
+        [
+            "",
+            "## Random High-Load Shells",
+            "- "
+            f"norms={random_summary['norms']}, "
+            f"per_norm={random_summary['per_norm']}, "
+            f"num_states={random_summary['num_states']}, "
+            f"max_drift={random_summary['max_drift']:.12f}, "
+            f"positive_count={random_summary['positive_count']}, "
+            f"passes={random_summary['passes']}, "
+            f"max_normalized_drift={random_summary['max_normalized_drift']:.12f}",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def parse_combo_support(text: str) -> dict[str, float]:
+    support: dict[str, float] = {}
+    if not text:
+        return support
+    for chunk in text.split(";"):
+        item = chunk.strip()
+        if not item:
+            continue
+        if ":" not in item:
+            raise ValueError(f"Malformed combo-support item: {item}")
+        name, raw_weight = item.split(":", 1)
+        support[name.strip()] = float(raw_weight.strip())
+    return support
+
+
+def _template_index() -> dict[str, ps.CandidateTemplate]:
+    return {template.name: template for template in ps.enumerate_templates()}
+
+
+def exact_combo_drift(
+    states: np.ndarray,
+    *,
+    mu: np.ndarray,
+    arrival_rate: float,
+    policy_point: ps.PolicyPoint,
+    combo_support: dict[str, float],
+    template_index: dict[str, ps.CandidateTemplate],
+) -> np.ndarray:
+    drifts = np.zeros(states.shape[0], dtype=np.float64)
+    for template_name, weight in combo_support.items():
+        template = template_index.get(template_name)
+        if template is None:
+            raise KeyError(f"Unknown template in combo support: {template_name}")
+        drifts += weight * ps.exact_generator_drift(
+            states,
+            mu=mu,
+            arrival_rate=arrival_rate,
+            policy_point=policy_point,
+            template=template,
+        )
+    return drifts
+
+
+def generate_composition_batches(
+    *,
+    total: int,
+    num_servers: int,
+    batch_size: int,
+) -> Iterable[np.ndarray]:
+    if total < 0:
+        raise ValueError(f"total must be >= 0, got {total}")
+    if num_servers <= 0:
+        raise ValueError(f"num_servers must be > 0, got {num_servers}")
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be > 0, got {batch_size}")
+
+    current = [0] * num_servers
+    batch: list[list[int]] = []
+
+    def _emit() -> Iterable[np.ndarray]:
+        nonlocal batch
+        if batch:
+            arr = np.asarray(batch, dtype=np.int64)
+            batch = []
+            yield arr
+
+    def _recurse(index: int, remaining: int) -> Iterable[np.ndarray]:
+        nonlocal batch
+        if index == num_servers - 1:
+            current[index] = remaining
+            batch.append(list(current))
+            if len(batch) >= batch_size:
+                yield from _emit()
+            return
+        for value in range(remaining + 1):
+            current[index] = value
+            yield from _recurse(index + 1, remaining - value)
+
+    yield from _recurse(0, total)
+    yield from _emit()
+
+
+def composition_count(*, total: int, num_servers: int) -> int:
+    return math.comb(total + num_servers - 1, num_servers - 1)
+
+
+def verify_exact_shell(
+    *,
+    total: int,
+    num_servers: int,
+    batch_size: int,
+    mu: np.ndarray,
+    arrival_rate: float,
+    policy_point: ps.PolicyPoint,
+    combo_support: dict[str, float],
+    template_index: dict[str, ps.CandidateTemplate],
+    top_k_violations: int = 0,
+) -> dict[str, object]:
+    total_states = composition_count(total=total, num_servers=num_servers)
+    max_drift = -math.inf
+    min_drift = math.inf
+    positive_count = 0
+    processed = 0
+    worst_state: list[int] | None = None
+    top_violations: list[tuple[float, list[int]]] = []
+
+    for batch in generate_composition_batches(
+        total=total,
+        num_servers=num_servers,
+        batch_size=batch_size,
+    ):
+        drifts = exact_combo_drift(
+            batch,
+            mu=mu,
+            arrival_rate=arrival_rate,
+            policy_point=policy_point,
+            combo_support=combo_support,
+            template_index=template_index,
+        )
+        batch_max_idx = int(np.argmax(drifts))
+        batch_max = float(drifts[batch_max_idx])
+        if batch_max > max_drift:
+            max_drift = batch_max
+            worst_state = batch[batch_max_idx].tolist()
+        min_drift = min(min_drift, float(np.min(drifts)))
+        positive_count += int(np.count_nonzero(drifts > 0.0))
+        if top_k_violations > 0:
+            positive_idx = np.flatnonzero(drifts > 0.0)
+            if positive_idx.size > 0:
+                order = positive_idx[np.argsort(drifts[positive_idx])[::-1]]
+                for idx in order[:top_k_violations]:
+                    top_violations.append((float(drifts[idx]), batch[int(idx)].tolist()))
+                top_violations.sort(key=lambda item: item[0], reverse=True)
+                if len(top_violations) > top_k_violations:
+                    top_violations = top_violations[:top_k_violations]
+        processed += int(batch.shape[0])
+
+    return {
+        "total_queue": int(total),
+        "num_states": int(total_states),
+        "processed_states": int(processed),
+        "max_drift": float(max_drift),
+        "min_drift": float(min_drift),
+        "positive_count": int(positive_count),
+        "passes": bool(positive_count == 0),
+        "worst_state": worst_state,
+        "top_violations": [
+            {"drift": drift, "state": state}
+            for drift, state in top_violations
+        ],
+    }
+
+
+def random_shell_bank(
+    *,
+    num_servers: int,
+    norms: Sequence[int],
+    per_shell: int,
+    seed: int,
+) -> np.ndarray:
+    rows = []
+    for offset, norm in enumerate(norms):
+        rows.append(
+            ps.shell_random_states(
+                num_servers=num_servers,
+                norms=(int(norm),),
+                per_shell=int(per_shell),
+                seed=seed + offset,
+            )
+        )
+    return np.vstack(rows).astype(np.int64)
+
+
+def run_piecewise_candidate_verification(
+    *,
+    cfg: ExperimentConfig,
+    run_dir: Path,
+    protocol: ValidationProtocol,
+    piecewise_protocol: PiecewiseVerificationProtocol,
+    tail_norm_threshold: float,
+    exact_shell_totals: Sequence[int] | None,
+    random_shell_norms: Sequence[int],
+    random_shell_per_norm: int,
+) -> dict[str, object]:
+    mu = np.asarray(cfg.system.service_rates, dtype=np.float64)
+    policy_point = ps.PolicyPoint(
+        "default",
+        0.85,
+        0.5,
+        0.5,
+        protocol.alpha_calibrated,
+        "benchmark_default",
+    )
+    templates = ps.enumerate_templates()
+    states = ps.build_state_bank(
+        cfg=cfg,
+        seed=protocol.base_seed,
+        include_trajectories=True,
+        trajectory_reps=piecewise_protocol.trajectory_reps,
+        trajectory_sim_time=piecewise_protocol.trajectory_sim_time,
+        trajectory_sample_interval=piecewise_protocol.trajectory_sample_interval,
+        trajectory_policy=policy_point,
+    )
+    template_index = _template_index()
+    refinement_history: list[dict[str, object]] = []
+    combo: ps.TemplateEvaluation | None = None
+    combo_support: dict[str, float] = {}
+    shell_totals = list(exact_shell_totals) if exact_shell_totals else []
+    exact_shell_rows: list[dict[str, object]] = []
+
+    for round_idx in range(piecewise_protocol.max_refinement_rounds):
+        effective_tail_threshold = (
+            min(float(tail_norm_threshold), float(min(shell_totals)))
+            if shell_totals
+            else float(tail_norm_threshold)
+        )
+        template_evaluations = [
+            ps.evaluate_template_on_policy(
+                states=states,
+                mu=mu,
+                arrival_rate=cfg.system.arrival_rate,
+                policy_point=policy_point,
+                template=template,
+                tail_norm_threshold=effective_tail_threshold,
+            )
+            for template in templates
+        ]
+        combo = ps.optimize_convex_template_combo(
+            states=states,
+            mu=mu,
+            arrival_rate=cfg.system.arrival_rate,
+            policy_point=policy_point,
+            template_evaluations=template_evaluations,
+            tail_norm_threshold=effective_tail_threshold,
+            scope_name="tail",
+        )
+        if combo is None:
+            raise RuntimeError("Failed to construct a convex tail candidate for the default calibrated policy.")
+        combo_support = parse_combo_support(str(combo.row.get("combo_support", "")))
+        if not combo_support:
+            raise RuntimeError("Convex tail candidate had empty support.")
+
+        threshold = combo.row.get("sampled_eventual_threshold")
+        computed_threshold = int(math.ceil(float(threshold))) if threshold not in (None, "") else None
+        if not shell_totals and computed_threshold is not None:
+            shell_totals = [computed_threshold]
+        if not shell_totals:
+            raise RuntimeError("No exact shell totals were provided and no sampled eventual threshold was available.")
+
+        exact_shell_rows = [
+            verify_exact_shell(
+                total=int(total),
+                num_servers=cfg.system.num_servers,
+                batch_size=piecewise_protocol.batch_size,
+                mu=mu,
+                arrival_rate=cfg.system.arrival_rate,
+                policy_point=policy_point,
+                combo_support=combo_support,
+                template_index=template_index,
+                top_k_violations=piecewise_protocol.violation_augment_size,
+            )
+            for total in shell_totals
+        ]
+        refinement_history.append(
+            {
+                "round": int(round_idx),
+                "state_bank_size": int(states.shape[0]),
+                "candidate_row": combo.row,
+                "exact_shell_rows": exact_shell_rows,
+            }
+        )
+        if all(bool(row["passes"]) for row in exact_shell_rows):
+            break
+
+        violating_states = []
+        for row in exact_shell_rows:
+            for violation in row["top_violations"]:
+                violating_states.append(np.asarray(violation["state"], dtype=np.int64))
+        if not violating_states:
+            break
+        states = np.unique(
+            np.vstack([states, np.vstack(violating_states)]),
+            axis=0,
+        )
+
+    if combo is None:
+        raise RuntimeError("No piecewise candidate was produced.")
+
+    random_states = random_shell_bank(
+        num_servers=cfg.system.num_servers,
+        norms=random_shell_norms,
+        per_shell=random_shell_per_norm,
+        seed=piecewise_protocol.random_shell_seed,
+    )
+    random_drifts = exact_combo_drift(
+        random_states,
+        mu=mu,
+        arrival_rate=cfg.system.arrival_rate,
+        policy_point=policy_point,
+        combo_support=combo_support,
+        template_index=template_index,
+    )
+    random_norms = random_states.sum(axis=1).astype(np.float64)
+    random_summary = {
+        "num_states": int(random_states.shape[0]),
+        "norms": [int(norm) for norm in random_shell_norms],
+        "per_norm": int(random_shell_per_norm),
+        "max_drift": float(np.max(random_drifts)),
+        "min_drift": float(np.min(random_drifts)),
+        "positive_count": int(np.count_nonzero(random_drifts > 0.0)),
+        "passes": bool(np.all(random_drifts < 0.0)),
+        "max_normalized_drift": float(np.max(random_drifts / np.maximum(random_norms, 1.0))),
+    }
+
+    result = {
+        "policy_name": policy_point.name,
+        "policy_beta": policy_point.beta,
+        "policy_gamma": policy_point.gamma,
+        "policy_c": policy_point.c,
+        "policy_alpha": policy_point.alpha,
+        "tail_norm_threshold": float(tail_norm_threshold),
+        "state_bank_size": int(states.shape[0]),
+        "candidate_row": combo.row,
+        "combo_support": combo_support,
+        "exact_shell_rows": exact_shell_rows,
+        "random_shell_summary": random_summary,
+        "piecewise_protocol": asdict(piecewise_protocol),
+        "refinement_history": refinement_history,
+    }
+    metadata_path(run_dir, "piecewise_candidate_summary.json").write_text(
+        json.dumps(result, indent=2),
+        encoding="utf-8",
+    )
+    return result
+
+
 def run_audit(
     *,
     cfg: ExperimentConfig,
@@ -565,6 +972,7 @@ def write_summary_files(
     protocol: ValidationProtocol,
     audit_rows: Sequence[dict[str, object]],
     rerun_rows: Sequence[dict[str, object]],
+    piecewise_result: dict[str, object] | None = None,
 ) -> None:
     summary_md = render_summary_markdown(
         system_summary=compute_system_summary(cfg),
@@ -576,6 +984,11 @@ def write_summary_files(
         summary_md,
         encoding="utf-8",
     )
+    if piecewise_result is not None:
+        metadata_path(run_dir, "piecewise_candidate_summary.md").write_text(
+            render_piecewise_summary_markdown(piecewise_result=piecewise_result),
+            encoding="utf-8",
+        )
 
 
 def configure_logging() -> None:
@@ -592,7 +1005,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mode",
-        choices=["audit", "rerun", "full"],
+        choices=["audit", "rerun", "full", "piecewise", "all"],
         default=DEFAULT_MODE,
         help="Which validation stage to execute.",
     )
@@ -655,6 +1068,72 @@ def build_parser() -> argparse.ArgumentParser:
         help="Additional SCUAS candidate triplet formatted as beta,gamma,c.",
     )
     parser.add_argument(
+        "--piecewise-tail-threshold",
+        type=float,
+        default=20.0,
+        help="Tail threshold used when searching the default calibrated piecewise candidate.",
+    )
+    parser.add_argument(
+        "--piecewise-trajectory-reps",
+        type=int,
+        default=DEFAULT_PIECEWISE_TRAJ_REPS,
+        help="Replication count for the dense piecewise-candidate state bank.",
+    )
+    parser.add_argument(
+        "--piecewise-trajectory-sim-time",
+        type=float,
+        default=DEFAULT_PIECEWISE_TRAJ_SIM_TIME,
+        help="Simulation horizon for the dense piecewise-candidate state bank.",
+    )
+    parser.add_argument(
+        "--piecewise-trajectory-sample-interval",
+        type=float,
+        default=DEFAULT_PIECEWISE_TRAJ_SAMPLE_INTERVAL,
+        help="Sampling interval for the dense piecewise-candidate state bank.",
+    )
+    parser.add_argument(
+        "--piecewise-exact-shell",
+        action="append",
+        default=[],
+        help="Exact total-queue shell to verify exhaustively. Defaults to the sampled eventual threshold.",
+    )
+    parser.add_argument(
+        "--piecewise-random-shell",
+        action="append",
+        default=[],
+        help="Random-shell norm for high-load stress verification. Can be repeated.",
+    )
+    parser.add_argument(
+        "--piecewise-random-per-shell",
+        type=int,
+        default=1024,
+        help="Number of random states per high-load shell norm.",
+    )
+    parser.add_argument(
+        "--piecewise-random-seed",
+        type=int,
+        default=DEFAULT_PIECEWISE_RANDOM_SEED,
+        help="Base seed for high-load random shell generation.",
+    )
+    parser.add_argument(
+        "--piecewise-batch-size",
+        type=int,
+        default=DEFAULT_PIECEWISE_BATCH_SIZE,
+        help="Batch size for exact shell verification.",
+    )
+    parser.add_argument(
+        "--piecewise-max-refinement-rounds",
+        type=int,
+        default=5,
+        help="Maximum number of exact-shell refinement rounds for the piecewise candidate.",
+    )
+    parser.add_argument(
+        "--piecewise-violation-augment-size",
+        type=int,
+        default=256,
+        help="Number of top exact-shell violating states to feed back into each refinement round.",
+    )
+    parser.add_argument(
         "overrides",
         nargs="*",
         help="Additional OmegaConf dotlist overrides, e.g. system.service_rates=[...]",
@@ -671,6 +1150,18 @@ def build_protocol(args: argparse.Namespace) -> ValidationProtocol:
         base_seed=args.base_seed,
         alpha_uas=args.alpha_uas,
         alpha_calibrated=args.alpha_calibrated,
+    )
+
+
+def build_piecewise_protocol(args: argparse.Namespace) -> PiecewiseVerificationProtocol:
+    return PiecewiseVerificationProtocol(
+        trajectory_reps=args.piecewise_trajectory_reps,
+        trajectory_sim_time=args.piecewise_trajectory_sim_time,
+        trajectory_sample_interval=args.piecewise_trajectory_sample_interval,
+        random_shell_seed=args.piecewise_random_seed,
+        batch_size=args.piecewise_batch_size,
+        max_refinement_rounds=args.piecewise_max_refinement_rounds,
+        violation_augment_size=args.piecewise_violation_augment_size,
     )
 
 
@@ -704,11 +1195,39 @@ def log_rerun_table(rows: Sequence[dict[str, object]]) -> None:
         )
 
 
+def log_piecewise_result(result: dict[str, object]) -> None:
+    candidate_row = result["candidate_row"]
+    log.info(
+        "Piecewise candidate | sampled_eventual_threshold=%s | max_tail_drift=%.12f | support=%s",
+        candidate_row["sampled_eventual_threshold"],
+        candidate_row["max_tail_drift"],
+        candidate_row["combo_support"],
+    )
+    for row in result["exact_shell_rows"]:
+        log.info(
+            "  exact shell total=%d | states=%d | max_drift=%.12f | positive_count=%d | passes=%s",
+            row["total_queue"],
+            row["num_states"],
+            row["max_drift"],
+            row["positive_count"],
+            row["passes"],
+        )
+    random_summary = result["random_shell_summary"]
+    log.info(
+        "  random shells | norms=%s | max_drift=%.12f | positive_count=%d | passes=%s",
+        random_summary["norms"],
+        random_summary["max_drift"],
+        random_summary["positive_count"],
+        random_summary["passes"],
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     configure_logging()
     parser = build_parser()
     args = parser.parse_args(argv)
     protocol = build_protocol(args)
+    piecewise_protocol = build_piecewise_protocol(args)
 
     cfg, resolved_raw = load_policy_experiment_config(
         config_name=args.config_name,
@@ -724,8 +1243,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     audit_rows: list[dict[str, object]] = []
     rerun_rows: list[dict[str, object]] = []
+    piecewise_result: dict[str, object] | None = None
 
-    if args.mode in {"audit", "full", "rerun"}:
+    if args.mode in {"audit", "full", "rerun", "all"}:
         audit_rows = run_audit(
             cfg=cfg,
             run_dir=run_dir,
@@ -738,7 +1258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "Audit found no theorem-certified SCUAS candidates for the active setup."
             )
 
-    if args.mode in {"rerun", "full"}:
+    if args.mode in {"rerun", "full", "all"}:
         rerun_rows = run_rerun(
             cfg=cfg,
             run_dir=run_dir,
@@ -747,12 +1267,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         log_rerun_table(rerun_rows)
 
+    if args.mode in {"piecewise", "all"}:
+        exact_shell_totals = [int(value) for value in args.piecewise_exact_shell]
+        random_shell_norms = (
+            [int(value) for value in args.piecewise_random_shell]
+            if args.piecewise_random_shell
+            else [24, 32, 48, 64, 96, 128, 160, 256]
+        )
+        piecewise_result = run_piecewise_candidate_verification(
+            cfg=cfg,
+            run_dir=run_dir,
+            protocol=protocol,
+            piecewise_protocol=piecewise_protocol,
+            tail_norm_threshold=args.piecewise_tail_threshold,
+            exact_shell_totals=exact_shell_totals,
+            random_shell_norms=random_shell_norms,
+            random_shell_per_norm=args.piecewise_random_per_shell,
+        )
+        log_piecewise_result(piecewise_result)
+
     write_summary_files(
         cfg=cfg,
         run_dir=run_dir,
         protocol=protocol,
         audit_rows=audit_rows,
         rerun_rows=rerun_rows,
+        piecewise_result=piecewise_result,
     )
     log.info("Validation outputs written under %s", run_dir)
     return 0

@@ -35,7 +35,7 @@ The ablation study quantifies the impact of teacher quality, showing that replac
 \paragraph{RL for queueing and resource allocation}
 RL has been applied, e.g., to queueing control, scheduling, and routing~\cite{dai2022queueing}.
 These approaches generally learn policies end-to-end without analytical stability guarantees.
-GibbsQ addresses this gap by offering proven stable analytical policies, including a certified calibrated subclass, as both baselines and BC teachers.
+GibbsQ addresses this gap by offering proven stable analytical policies together with a parameter-conditional certified calibrated subclass in theory, while the calibrated baselines and BC teachers used in the experiments remain empirical unless separately certified.
 
 \paragraph{Mean-field approximations}
 For large server pools ($\Nservers \to \infty$), mean-field models approximate queueing dynamics~\cite{kleinrock1975queueing,kelly2011reversibility}.

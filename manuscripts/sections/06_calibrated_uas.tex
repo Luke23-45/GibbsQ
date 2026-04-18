@@ -341,6 +341,97 @@ The theorem in this section is parameter-conditional.
 For the benchmark-default empirical setting, we do not relabel the policy as certified unless the explicit constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ is verified to be positive under the benchmark configuration.
 Therefore the headline benchmark policy remains in the empirical layer.
 
+\subsection{Post-Validation Audit Under the Anchor Benchmark}
+\label{sec:scuas_audit}
+
+After completing the manuscript theorem revision, we audited the sufficient drift constant
+$\varepsilon_{\calbeta,\calgamma,\caloffset}$ under the exact anchor benchmark protocol used in \cref{sec:exp:policy}:
+$\Nservers = 10$, load factor $\rho = 0.80$ (hence $\arrate = 11.2$), calibrated temperature $\temp = 20$,
+and the fixed service-rate vector from Protocol~A in \cref{sec:exp:policy}.
+Table~\ref{tab:scuas_audit} reports the resulting values.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{SCUAS theorem audit under the anchor benchmark configuration. All audited points yield $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$, so none are certified by Theorem~\ref{thm:scuas} under this setup.}
+\label{tab:scuas_audit}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}lccc r c@{}}
+\toprule
+\textbf{Policy point} & $\calbeta$ & $\calgamma$ & $\caloffset$ & $\varepsilon_{\calbeta,\calgamma,\caloffset}$ & \textbf{Certified?} \\
+\midrule
+Benchmark default        & 0.85 & 0.50 & 0.50 & $-1.199$ & No \\
+Candidate 1              & 0.50 & 0.25 & 0.25 & $-0.270$ & No \\
+Candidate 2              & 0.50 & 0.50 & 0.25 & $-0.382$ & No \\
+Candidate 3              & 0.70 & 0.25 & 0.25 & $-0.405$ & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This audit has two implications.
+First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region.
+Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
+
+\subsection{Numerically Verified Piecewise Drift Candidate}
+\label{sec:caluas_piecewise_candidate}
+
+The negative values in Table~\ref{tab:scuas_audit} only show that the simple SCUAS sufficient condition is too conservative for the benchmark-default calibrated point; they do not rule out alternative Lyapunov constructions.
+To probe that gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
+
+For the benchmark-default calibrated policy $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$ at $\temp=20$, the best refined candidate is
+\begin{equation}
+\label{eq:piecewise_candidate}
+\begin{aligned}
+\lyap_{\mathrm{PW}}(\Qstate)
+&=
+0.541679
+\left[
+\frac12 \sum_{i=1}^{\Nservers} \frac{\Qlen{i}^2}{\srvrate_i}
++
+2 \sum_{i=1}^{\Nservers}
+\left(
+\frac{\Qlen{i}}{\srvrate_i}
+-
+\frac{1}{\Nservers}\sum_{j=1}^{\Nservers}\frac{\Qlen{j}}{\srvrate_j}
+\right)^2
+\right] \\
+&\quad
++ 0.187796 \left(\sum_{i=1}^{\Nservers}\Qlen{i}\right)^2
++ 0.175661 \sum_{i=1}^{\Nservers}\frac{\Qlen{i}^3}{\srvrate_i}
++ 0.092741 \left(\sum_{i=1}^{\Nservers}\frac{\Qlen{i}}{\srvrate_i^{1/2}}\right)^2
++ 0.002124 \max_{1\le i\le \Nservers}\Qlen{i}^2.
+\end{aligned}
+\end{equation}
+where the displayed coefficients are rounded to six decimal places from the verification capsule.
+
+\cref{eq:piecewise_candidate} is a \emph{numerically selected} benchmark-specific candidate, not a theorem-backed symbolic Lyapunov function.
+Its role is evidentiary: it shows that the failure of $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ does not prevent the existence of much stronger negative-drift candidates near the benchmark tail boundary.
+
+The dedicated verification capsule evaluates the exact generator of the benchmark-default calibrated policy against \cref{eq:piecewise_candidate} on three exhaustive boundary shells and on additional high-load random shells.
+Table~\ref{tab:piecewise_candidate} reports the results.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Numerical piecewise-drift verification for the benchmark-default calibrated policy at $\temp=20$. The candidate \eqref{eq:piecewise_candidate} is \emph{not} a formal proof, but its exact generator evaluation is strictly negative on all states in the three verified boundary shells and on all sampled higher-load shells listed below.}
+\label{tab:piecewise_candidate}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}l r r r c@{}}
+\toprule
+\textbf{Check set} & \textbf{States} & \textbf{Max drift} & \textbf{Positive states} & \textbf{Pass?} \\
+\midrule
+$|\Qstate|_1 = 16$ & 2{,}042{,}975 & $-4.6446$ & 0 & Yes \\
+$|\Qstate|_1 = 17$ & 3{,}124{,}550 & $-4.6447$ & 0 & Yes \\
+$|\Qstate|_1 = 18$ & 4{,}686{,}825 & $-4.9245$ & 0 & Yes \\
+Random shells $|\Qstate|_1 \in \{24,32,48,64,96,128,160,256\}$ & 8{,}192 & $-21.5534$ & 0 & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These checks substantially strengthen the empirical-theory interface for the benchmark-default calibrated point.
+However, they still stop short of a full positive Harris recurrence theorem because they do not provide a symbolic drift inequality valid for \emph{all} sufficiently large states.
+Accordingly, the manuscript treats \cref{eq:piecewise_candidate} and Table~\ref{tab:piecewise_candidate} as numerical evidence for a promising piecewise Foster--Lyapunov route, not as a replacement for \cref{thm:scuas}.
+
 \subsection{Anchor Benchmark Result}
 Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (\cref{sec:exp:policy}):
 \begin{table}[htbp]
@@ -360,3 +451,4 @@ UAS ($\temp{=}10$) & 11.495 \\
 \end{tabular}
 \end{table}
 These improvements over JSSQ and baseline UAS demonstrate that relaxing the analytical parameterization yields measurable steady-state gains, establishing Calibrated UAS as a competitive empirical closed-form baseline.
+Combined with Table~\ref{tab:scuas_audit}, they also clarify the analytical--empirical split in this study: the default calibrated benchmark performs best among the closed-form rules we tested, but it is not theorem-certified under the anchor benchmark.

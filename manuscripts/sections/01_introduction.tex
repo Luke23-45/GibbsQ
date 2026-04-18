@@ -32,6 +32,9 @@ While UAS is provably stable, its parameterization favors analytical tractabilit
 Calibrated UAS addresses this with a three-parameter extension that achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard heterogeneous benchmark, outperforming JSSQ ($11.02$), UAS ($11.50$), and JSQ ($11.81$).
 The $1.45$-unit margin over UAS confirms meaningful empirical improvement beyond the provably stable parameterization.
 We explicitly distinguish the full Calibrated UAS family from the certified subclass SCUAS: the full family is an empirical, heuristic extension designed to optimize steady-state behavior, while only the parameter settings covered by Theorem~\ref{thm:scuas} carry a formal calibrated stability guarantee.
+In the post-validation audit reported later, the benchmark default and the three audited SCUAS candidate grid points all have $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor benchmark, so the calibrated policies used in the experiments remain empirical in this paper.
+At the same time, a separate post-validation piecewise search identifies a benchmark-specific Lyapunov candidate whose exact generator is strictly negative on all states in the boundary shells $|\Qstate|_1 \in \{16,17,18\}$ and on additional higher-load sampled shells.
+We report that result as numerical evidence for a viable full-family proof route, not as a theorem.
 
 \item \textbf{Learned policy via structured ablation:}
 A neural policy ($\ngibbsq$) can capture distributional structure beyond the reach of any fixed closed-form rule.
