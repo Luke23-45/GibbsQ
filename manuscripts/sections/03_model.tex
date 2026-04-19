@@ -57,7 +57,7 @@ The GibbsQ framework defines four policy classes: two analytical (provably stabl
 
 \begin{definition}[Raw softmax routing]
 \label{def:raw_softmax}
-For temperature parameter $\temp > 0$, the raw softmax routing law assigns
+For concentration parameter $\temp > 0$ (inverse temperature in the Boltzmann distribution), the raw softmax routing law assigns
 \begin{equation}
 \label{eq:raw_softmax}
 \rprob{i}(\Qstate) = \frac{\exp(-\temp \Qlen{i})}{\sum_{j=1}^{\Nservers} \exp(-\temp \Qlen{j})}.
@@ -66,9 +66,9 @@ This is a homogeneous entropy-regularized policy that ignores service-rate heter
 \end{definition}
 
 
-\begin{definition}[Unified Archimedean Softmax (UAS)]
+\begin{definition}[Unified Capacity-Aware Softmax (UAS)]
 \label{def:uas}
-For temperature $\temp > 0$ and service rates $\srvrate_1, \dots, \srvrate_\Nservers > 0$, the UAS routing law assigns
+For concentration parameter $\temp > 0$ and service rates $\srvrate_1, \dots, \srvrate_\Nservers > 0$, the UAS routing law assigns
 \begin{equation}
 \label{eq:uas_routing}
 \rprob{i}(\Qstate, \srvrate) = \frac{\srvrate_i \exp\!\bigl(-\temp (\Qlen{i}+1)/\srvrate_i\bigr)}{\sum_{j=1}^{\Nservers} \srvrate_j \exp\!\bigl(-\temp (\Qlen{j}+1)/\srvrate_j\bigr)}.
@@ -154,8 +154,7 @@ $\Qstate(t)$ & Queue-length vector $(\Qlen{1}(t), \dots, \Qlen{\Nservers}(t))$ \
 $\Simplex$ & Probability simplex in $\Reals^\Nservers$ \\
 $\rprob{i}(\Qstate)$ & Routing probability for server $i$ \\
 \addlinespace[3pt]
-$\temp$ & Temperature (entropy-regularization strength) \\
-$\alpha$ & Inverse temperature (softmax concentration parameter); not to be confused with arrival rate $\arrate$ \\
+$\temp$ & Concentration parameter (inverse temperature in the Boltzmann distribution; higher $\temp$ concentrates routing mass more aggressively) \\
 $\entropy(p)$ & Shannon entropy $-\sum_i p_i \log p_i$ \\
 $\KL{p}{r}$ & Kullback--Leibler divergence \\
 \addlinespace[3pt]

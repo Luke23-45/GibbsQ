@@ -12,7 +12,7 @@ Recall from \cref{def:raw_softmax} that the raw softmax routing law is given by
 \label{eq:softmax_law}
 \rprob{i}(\Qstate) = \frac{\exp(-\temp \Qlen{i})}{\sum_{j=1}^{\Nservers} \exp(-\temp \Qlen{j})}
 \end{equation}
-for temperature $\temp > 0$. This is the entropy-regularized minimizer of the linear cost $\sum_i q_i \Qlen{i}$ over the simplex $\Simplex$, penalized by the negative Shannon entropy.
+for concentration parameter $\temp > 0$. This is the entropy-regularized minimizer of the linear cost $\sum_i q_i \Qlen{i}$ over the simplex $\Simplex$, penalized by the negative Shannon entropy.
 
 \subsection{Theorem Statement}
 

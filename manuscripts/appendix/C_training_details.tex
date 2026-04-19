@@ -25,8 +25,8 @@ Loss / Optimizer      & Cross-entropy / Adam ($\alpha = 3 \times 10^{-4}$) \\
 \midrule
 Initialization        & BC pretrained weights \\
 Ensemble seeds        & 5 independent initializations (select best on validation) \\
-Batch size / Epochs   & 16 episodes / 15 \\
-Sim.\ time / episode  & 1{,}000 time units \\
+Batch size / Epochs   & 8 episodes / 8 (ablation budget) \\
+Sim.\ time / episode  & 750 time units (ablation budget) \\
 Optimizer             & Adam ($\alpha = 1 \times 10^{-4}$) \\
 Baseline              & Running average of episode returns \\
 \midrule
@@ -45,13 +45,13 @@ Zero-Init Final       & Zero-initializes final layer weights before BC training.
 \end{tabular}
 \end{table}
 
-The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the calibrated-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, no gradient clipping or entropy regularization bonus is applied during training; the BC initialization provides sufficient stability to avoid catastrophic divergence. Convergence is typically observed by epoch 10--12, verifying 15 epochs as a sufficient optimization horizon for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
+The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the calibrated-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, no gradient clipping or entropy regularization bonus is applied during training; the BC initialization provides sufficient stability to avoid catastrophic divergence. Convergence is typically observed by epoch 6--8 under the ablation budget, verifying 8 epochs as sufficient for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
 
 \begin{figure}[htbp!]
 \centering
 \includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{reinforce_training_curve.png}
 \caption{\reinforce{} training curve: deterministic policy score vs.\ epoch.
-  Rapid convergence from the BC initialization is visible; the score plateaus by epoch 10--12.}
+  Rapid convergence from the BC initialization is visible; the score plateaus by epoch 6--8.}
 \label{fig:reinforce_training}
 \end{figure}
 

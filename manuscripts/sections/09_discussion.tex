@@ -53,6 +53,18 @@ Therefore, a more systematic search method (e.g., Bayesian optimization) could e
 The \reinforce{} estimator demonstrates 32.6\% relative magnitude error versus finite differences (Appendix~\ref{sec:appendix_gradient}).
 While directionally validated (cosine similarity $1.0000$), the gradient signal remains somewhat noisy. The magnitude mismatch effectively reduces the learning rate, demonstrating that the full \reinforce{} training story is not fully solved and variance reduction techniques remain necessary.
 Variance reduction techniques such as generalized advantage estimation (GAE) or actor-critic baselines could reduce this error; trust-region methods such as PPO would additionally stabilize step sizes.
+
+\item \textbf{Best-of-5 seed selection bias:}
+The strongest neural result ($9.82$ under Protocol B) is the best of 5 random initialization seeds selected on a held-out validation set.
+This selection introduces optimistic bias whose magnitude cannot be quantified without per-seed logs (which were not preserved).
+A Bonferroni-adjusted 95\% CI (Table~\ref{tab:stats}) still excludes zero, but the unbiased ensemble mean remains unknown.
+
+\item \textbf{Near-critical load experiments underpowered:}
+The near-critical load comparison (Table~\ref{tab:critical}) uses only $n{=}2$ replications per load factor, which is insufficient for statistically reliable confidence intervals.
+The reported improvement percentages (8.8\%--22.2\%) are indicative directional evidence, not conclusive quantitative claims.
+
+\item \textbf{No independent seed-range replication:}
+All experiments use seeds 42--73. A sensitivity check across an independent seed block (e.g., 100--131) was not performed, so all results depend on a single seed range.
 \end{enumerate}
 
 \subsection{Future Directions}

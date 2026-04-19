@@ -1,20 +1,20 @@
 
-\section{Unified Archimedean Softmax: Stability Theorem and Proof}
+\section{Unified Capacity-Aware Softmax (UAS): Stability Theorem and Proof}
 \label{sec:uas_theorem}
 
-This section presents the second main analytical result: positive Harris recurrence of the CTMC under the Unified Archimedean Softmax (UAS) routing law. UAS extends raw softmax to heterogeneous servers by incorporating service rates into a prior-weighted variational objective and employing a weighted Lyapunov function.
+This section presents the second main analytical result: positive Harris recurrence of the CTMC under the Unified Capacity-Aware Softmax (UAS) routing law. UAS extends raw softmax to heterogeneous servers by incorporating service rates into a prior-weighted variational objective and employing a weighted Lyapunov function.
 
 \subsection{UAS Routing Law}
 \label{sec:uas:routing}
 
 \begin{definition}[UAS potential]
 \label{def:uas_potential}
-For temperature $\temp > 0$, define the UAS potential
+For concentration parameter $\temp > 0$, define the UAS potential
 \begin{equation}
 \label{eq:uas_potential}
 \uaspot{i}(\Qstate, \srvrate) = \frac{\Qlen{i}+1}{\srvrate_i} - \frac{1}{\temp}\log \srvrate_i.
 \end{equation}
-The policy's name derives from the potential's $\frac{\Qlen{i}+1}{\srvrate_i}$ term, which acts structurally as a capacity-weighted proxy broadly comparable to an Archimedean generator function.\footnote{The analogy to Archimedean generators is structural and motivational, not algebraic---the UAS potential is not a copula generator and does not inherit copula properties.} Specifically, similar to how an Archimedean copula generates dependence structures via a monotonic generator function mapping to $[0,\infty)$, the UAS potential generates routing dependence via a monotonic mapping from state--capacity space to a strictly convex objective.
+The policy's name reflects its unifying role: the potential's $\frac{\Qlen{i}+1}{\srvrate_i}$ term integrates both queue state and service capacity into a single energy variable, enabling a capacity-aware softmax that generalizes the homogeneous raw softmax law to heterogeneous servers.
 \end{definition}
 
 The corresponding routing law is
@@ -77,8 +77,8 @@ If all queues are empty ($\Qlen{i} = 0$ for all $i$), the routing law reduces to
 \label{eq:uas_empty_state}
 p_i(\mathbf{0}, \srvrate) \propto \srvrate_i\, e^{-\temp/\srvrate_i}.
 \end{equation}
-At large $\temp$ (low temperature, exploitative regime), $e^{-\temp/\srvrate_i} \to 0$ for slow servers while remaining close to $1$ for fast servers, so UAS heuristically approaches JSSQ-like behavior, concentrating routing mass on the fastest server.
-At small $\temp$ (high temperature, exploratory regime), $e^{-\temp/\srvrate_i} \to 1$ for all $i$, so UAS approaches proportional routing ($p_i \propto \srvrate_i$).
+At large $\temp$ (exploitative regime), $e^{-\temp/\srvrate_i} \to 0$ for slow servers while remaining close to $1$ for fast servers, so UAS heuristically approaches JSSQ-like behavior, concentrating routing mass on the fastest server.
+At small $\temp$ (exploratory regime), $e^{-\temp/\srvrate_i} \to 1$ for all $i$, so UAS approaches proportional routing ($p_i \propto \srvrate_i$).
 This smooth interpolation between exploitative and proportional routing at the idle state distinguishes UAS from threshold-based policies.
 
 \subsubsection{Pairwise Crossover Law}
@@ -248,7 +248,7 @@ Four structural properties of the UAS stability result merit emphasis.
 \label{sec:uas:discussion:independence}
 UAS is \emph{not} a corollary of \cref{thm:softmax}. It uses a different variational objective (prior-weighted KL divergence $\KL{p}{r}$ instead of uniform entropy), a different Lyapunov function ($\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ instead of $\frac{1}{2}\sum_i \Qlen{i}^2$), and a different arrival-term bound (Jensen's inequality on the prior-weighted $\logsumexp$ instead of the entropy ceiling $\entropy \leq \log \Nservers$). These are structurally distinct proof paths.
 
-\paragraph{Temperature-independent stability guarantee}
+\paragraph{Concentration-parameter-independent stability guarantee}
 Temperature independence is an artifact of the conservative Jensen bound, which discards all $\temp$-dependence. This yields a uniform (though loose) guarantee across all $\temp > 0$. The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ depend only on $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$. A tighter, $\temp$-dependent analysis would likely recover stronger bounds at higher temperatures. Exploring Lagrangian dual formulations of the drift inequality may yield tighter certified regions.
 
 \paragraph{Motivation for empirical extensions}

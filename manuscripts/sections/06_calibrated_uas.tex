@@ -15,7 +15,7 @@ Importantly, no competitive configuration evaluated in this paper is SCUAS-certi
 
 \begin{definition}[Calibrated UAS family]
 \label{def:caluas_family}
-The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,\infty)$:
+The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,\infty)$, where $\calbeta \le 1$ ensures the Lyapunov weight $\srvrate_i^{-\calbeta}$ remains bounded and the drift decomposition in \cref{sec:scuas_theorem} tractable:
 \begin{equation}
 \label{eq:caluas_law}
 \rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}\right).
@@ -249,9 +249,9 @@ Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,\infty)$ and def
 If $\varepsilon_{\calbeta,\calgamma,\caloffset} > 0$, then under the SCUAS routing law \eqref{eq:scuas_law} the CTMC is non-explosive, irreducible, and positive Harris recurrent.
 \end{theorem}
 
-\begin{remark}[Temperature-conditional certification]
+\begin{remark}[Concentration-parameter-conditional certification]
 \label{rem:scuas_temp_dependence}
-Unlike UAS which provides temperature-independent drift constants, SCUAS certification is strictly temperature-conditional. The constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ in \eqref{eq:scuas_epsilon} depends on $\temp$ through $a_i$. Thus, a parameterization $(\calbeta, \calgamma, \caloffset)$ certified at one temperature $\temp$ is not guaranteed to remain certified at another.
+Unlike UAS which provides concentration-parameter-independent drift constants, SCUAS certification is strictly concentration-parameter-conditional. The constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ in \eqref{eq:scuas_epsilon} depends on $\temp$ through $a_i$. Thus, a parameterization $(\calbeta, \calgamma, \caloffset)$ certified at one concentration $\temp$ is not guaranteed to remain certified at another.
 \end{remark}
 
 \begin{proof}
@@ -393,6 +393,7 @@ Certified example ($\temp{=}5$) & 0.20 & 0.00 & 1.30 & $0.255$ & Yes \\
 This audit has two implications.
 First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region. The theorem's contribution is therefore architectural---it establishes the correct proof template for the calibrated family---rather than certifying any practical policy instance.
 Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
+We emphasize that $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ means the \emph{sufficient condition} fails, not that instability is implied: the SCUAS condition is conservative (it uses a Jensen bound that discards all $\temp$-dependence), and the piecewise Lyapunov candidate in \cref{sec:caluas_piecewise_candidate} provides numerical evidence that the benchmark-default policy may still be stable under a tighter analysis.
 
 \subsection{Numerically Verified Piecewise Drift Candidate (Not Theorem-Grade)}
 \label{sec:caluas_piecewise_candidate}
