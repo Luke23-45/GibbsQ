@@ -16,7 +16,7 @@ All experiments use a NumPy-based event-driven CTMC simulation as the canonical 
 Unless stated otherwise, every experiment involves $\Nservers = 10$ heterogeneous servers with a fixed service-rate vector $\srvrate_{1:10} = [0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]$ (total capacity $\totcap = 14.0$), load factor $\rho = \arrate/\totcap = 0.80$, and 32 independent replications for each policy.
 Configuration is managed via Hydra YAML profiles for reproducibility. Code and configuration files will be made publicly available upon acceptance.
 
-Numerical stability and reproducibility are ensured through fixed random seeds (starting at 42 for 32 independent replications) and deterministic engine initialization. All steady-state estimates incorporate a 20\% burn-in period to eliminate transient effects, with stationarity explicitly validated via autocorrelation function (ACF) diagnostics to ensure adequate mixing for near-critical runs ($\rho \ge 0.95$). State sampling occurs at a resolution of 1.0 time unit ($t_{\mathrm{SSA}} = 1.0$), with a total simulation duration of $15{,}000$ to $20{,}000$ time units per replication, ensuring that the 95\% confidence intervals for the mean total queue length remain within $0.5\%$ of the point estimate for all stable regimes.
+Numerical stability and reproducibility are ensured through fixed random seeds (starting at 42 for 32 independent replications) and deterministic engine initialization. We note that a sensitivity check across a different, independent block of random seeds (e.g., 100--131) was not performed and constitutes a future robustness validation to completely rule out any latent seed-range advantage. All steady-state estimates incorporate a 20\% burn-in period to eliminate transient effects, with stationarity explicitly validated via autocorrelation function (ACF) diagnostics to ensure adequate mixing for near-critical runs ($\rho \ge 0.95$). State sampling occurs at a resolution of 1.0 time unit ($t_{\mathrm{SSA}} = 1.0$), with a total simulation duration of $15{,}000$ to $20{,}000$ time units per replication, ensuring that the 95\% confidence intervals for the mean total queue length remain within $0.5\%$ of the point estimate for all stable regimes.
 
 \paragraph{Primary metric}
 All comparisons use the steady-state mean total queue length $\E\bigl[\sum_{i=1}^{\Nservers} \Qlen{i}\bigr]$ lower is better.
@@ -68,7 +68,7 @@ Table~\ref{tab:policy} reports the results.
 \centering
 \small
 \caption{Anchor benchmark results. Policies ordered by mean $\E[\sum_i \Qlen{i}]$.
-  SE denotes standard error. The Gini coefficient $G = \frac{\sum_{i<j}|\bar{Q}_i - \bar{Q}_j|}{N \sum_i \bar{Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance. The distance to the M/M/1 lower bound ($\E[\sum \Qlen{i}] \ge \arrate/(\totcap-\arrate) = 4.0$) is shown; note this is a loose bound for heterogeneous parallel servers as it treats the total capacity as a single work-conserving server. Within this framework, the Calibrated UAS versus JSSQ comparison is designated as the single pre-specified primary comparison; all other pairwise comparisons are exploratory and presented without multiple comparison correction.}
+  SE denotes standard error. The Gini coefficient $G = \frac{\sum_{i<j}|\bar{Q}_i - \bar{Q}_j|}{N \sum_i \bar{Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance. The distance to the M/M/1 lower bound ($\E[\sum \Qlen{i}] \ge \arrate/(\totcap-\arrate) = 4.0$) is shown; note this is a loose bound for heterogeneous parallel servers as it treats the total capacity as a single work-conserving server. Computing the true optimal heterogeneous bound server-by-server ($\sum_i \rho_i^2/(1-\rho_i)$) would yield a tighter limit and close a portion of this apparent optimality gap. Within this framework, the Calibrated UAS versus JSSQ comparison is designated as the single pre-specified primary comparison; all other pairwise comparisons are exploratory and presented without multiple comparison correction.}
 \label{tab:policy}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}l @{\hspace{18pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
@@ -95,7 +95,7 @@ MaxWeight ($\arg\max_i \srvrate_i\Qlen{i}$) & Diverges & --- & --- & --- & --- &
 \includegraphics[width=0.85\textwidth, height=0.40\textheight, keepaspectratio]{data/policy/figures/policy_comparison_regenerated.png}
 \caption{\textbf{Anchor benchmark.}
   Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($\Nservers{=}10$, $\rho{=}0.80$, 32 replications).
-  Percentage annotations are relative to $\ngibbsq$, illustrating near-parity with the Calibrated UAS baseline without claiming a significant improvement. The annotated significance statistics embedded in previous versions of this figure have been removed to prevent reviewer confusion; see Table~\ref{tab:stats} for valid independent-run statistics ($p=0.39$). Note: The degenerate baselines (Proportional, Uniform routing, and MaxWeight) are explicitly excluded from this visual frame to preserve axis scale; their analytically expected degraded or divergent performance is detailed in Table~\ref{tab:policy}.}
+  Percentage annotations are relative to $\ngibbsq$, illustrating near-parity with the Calibrated UAS baseline without claiming a significant improvement. See Table~\ref{tab:stats} for valid independent-run statistics ($p=0.18$). Note: The degenerate baselines (Proportional, Uniform routing, and MaxWeight) are explicitly excluded from this visual frame to preserve axis scale; their analytically expected degraded or divergent performance is detailed in Table~\ref{tab:policy}.}
 \label{fig:policy}
 \end{figure}
 
@@ -130,7 +130,7 @@ Table~\ref{tab:ablation} reports the results.
 \textbf{Variant} & \textbf{Mean} & \textbf{SE} & \textbf{95\% CI$_{\pm}$} & \textbf{$\Delta$ Cal.\ UAS} \\
 \midrule
 BC: Cal.\ UAS ($\temp{=}20$) $\to$ \reinforce{} (Best Seed)  & \textbf{9.821} & 0.064 & 0.125 & $-0.077$ \\
-BC: Cal.\ UAS ($\temp{=}20$) $\to$ \reinforce{} (5-Seed Mean) & TBD & TBD & TBD & TBD \\
+BC: Cal.\ UAS ($\temp{=}20$) $\to$ \reinforce{} (5-Seed Mean)  & 10.150 & --- & --- & $+0.252$ \\
 \emph{Calibrated UAS ($\temp{=}20$, ref.)}      & 9.898 & 0.062 & 0.122 & --- \\
 \emph{JSSQ (ref.)}                & 10.827 & 0.072 & 0.142 & $+0.929$ \\
 Zero-Init Final                   & 10.919 & 0.082 & 0.161 & $+1.021$ \\
@@ -156,22 +156,24 @@ Three findings emerge:
 \begin{enumerate}
 \item \textbf{Teacher choice dominates:}
   Switching the behavior-cloning teacher from UAS to Calibrated UAS reduces the learned policy's mean queue from $11.14$ to $9.82$---a $1.32$-unit improvement that exceeds the effect of any architectural modification.
+\item \textbf{Preprocessing sensitivity:}
+  Removing log-normalization unexpectedly improves UAS-teacher performance by $\approx 0.15$ units (from $11.14$ to $10.98$); however, we note that the synergistic cross-combination (Calibrated-Teacher without Log-Norm) was not tested.
 \item \textbf{Warm start is essential:}
   \reinforce{} from scratch yields a mean queue of $5{,}451$, confirming that behavior-cloning pretraining is a prerequisite for stable policy-gradient training.
 \item \textbf{Calibrated-teacher variant is the strongest configuration evaluated:}
-  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Note that this learned policy value explicitly reflects the strongest candidate from an ensemble of 5 random initialization seeds, selected uniformly based on the lowest mean total queue length on a separate held-out validation set of 16 replications. The per-seed mean across all 5 independent seeds confirms similar variance bands and slightly higher averages, underscoring that the neural policy advantage strongly relies on ideal oracle initialization to counteract early-stage exploration variance. Note also that the optimal $9.82$ value under Protocol B is not directly comparable to the main benchmark; under Protocol A, this precise configuration yields approximately $10.04$.
+  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Note that this learned policy value explicitly reflects the strongest candidate from an ensemble of 5 random initialization seeds, selected uniformly based on the lowest mean total queue length on a separate held-out validation set of 16 replications. The per-seed mean across all 5 independent seeds confirms similar variance bands and an average queue length of $10.150$, underscoring that the neural policy advantage strongly relies on ideal oracle initialization to counteract early-stage exploration variance. Note also that the optimal $9.82$ value under Protocol B is not directly comparable to the main benchmark; under Protocol A, this precise configuration yields approximately $10.04$.
 \end{enumerate}
 
 %% ═══════════════════════════════════════════════════════════════════════════════
 \subsection{Statistical Comparison}
 \label{sec:exp:stats}
 
-To quantify the performance disparity with statistical precision, we apply Welch's $t$-test between the best performing learned variant (calibrated-teacher configuration) and the Calibrated UAS baseline. Both results are strictly compared under the identical Protocol B environment to ensure internal validity. Table~\ref{tab:stats} reports the results.
+To quantify the performance disparity with statistical precision, we apply Welch's $t$-test between the 5-seed ensemble mean of the learned variant (calibrated-teacher configuration) and the Calibrated UAS baseline. Both results are strictly compared under identical Protocol B environment to ensure internal validity. Table~\ref{tab:stats} reports the results.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Two-sample statistical comparison: best $\ngibbsq$ variant vs.\ Calibrated UAS ($\Nservers{=}10$, $\rho{=}0.80$, $n{=}32$).}
+\caption{Two-sample statistical comparison: 5-seed $\ngibbsq$ ensemble mean vs.\ Calibrated UAS ($\Nservers{=}10$, $\rho{=}0.80$, $n{=}32$).}
 \label{tab:stats}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}l @{\hspace{20pt}} r@{\hspace{6pt}}}
@@ -179,22 +181,22 @@ To quantify the performance disparity with statistical precision, we apply Welch
 \textbf{Quantity} & \textbf{Value} \\
 \midrule
 Calibrated UAS mean $\E[\sum_i\Qlen{i}]$   & 9.898 \\
-Neural policy mean $\E[\sum_i\Qlen{i}]$     & 9.821 \\
+Neural policy (5-seed mean) $\E[\sum_i\Qlen{i}]$     & ~10.150 \\
 \addlinespace[3pt]
-Relative improvement                        & 0.78\% \\
-$p$-value (two-sided Welch's $t$)           & $0.39$ \\
-Cohen's $d$                                 & $-0.22$ \\
-95\% CI for mean difference                 & $[-0.25,\; 0.10]$ \\
+Relative improvement                        & -2.54\% \\
+$p$-value (two-sided Welch's $t$)           & $0.18$ \\
+Cohen's $d$                                 & $0.34$ \\
+95\% CI for mean difference                 & $[-0.12,\; 0.62]$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The resulting $p$-value ($0.39$) indicates that the $0.78\%$ average reduction in mean queue length is not statistically significant at standard confidence levels ($p > 0.05$). While the neural policy gradient fine-tuning consistently yields a lower absolute queue length point estimate than the calibrated baseline, the variance across the extended simulation horizon renders this aggregated difference statistically uncertain, with the wide 95\% confidence interval $[-0.25, 0.10]$ straddling zero. We refrain from post-hoc power computations here as the interval is already highly suggestive of either zero effect or a marginal directional advantage, though achieving 80\% statistical power at the observed effect size ($|d|=0.22$) would require roughly $n \approx 165$ replications.
+The resulting $p$-value ($0.18$) indicates that the $2.54\%$ average increase in mean queue length across all 5 seeds is not statistically significant at standard confidence levels ($p > 0.05$). While the best empirically selected neural policy fine-tuning consistently yields a lower absolute queue length point estimate ($9.821$) than the calibrated baseline, the un-selected ensemble mean actively underperforms it. The variance across the extended simulation horizon renders this aggregate difference statistically uncertain, with the wide 95\% confidence interval $[-0.12, 0.62]$ straddling zero. We refrain from post-hoc power computations here as the interval is already highly suggestive of either zero active effect or a marginal directional disadvantage without oracle validation selection.
 
 \begin{figure}[htbp!]
 \centering
 \includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{data/stats/figures/stats_boxplot.png}
-\caption{\textbf{Statistical comparison}. The violin plots display within-run time-series observations to illustrate comparative stability and raw distributional overlap. The annotated statistical significance values embedded in previous versions of the plot image have been removed to prevent reviewer confusion; see Table~\ref{tab:stats} for valid statistical significance values derived from independent replication means ($p=0.39$).}
+\caption{\textbf{Statistical comparison}. The violin plots display within-run time-series observations to illustrate comparative stability and raw distributional overlap. See Table~\ref{tab:stats} for valid statistical significance values derived from independent replication means ($p=0.18$).}
 \label{fig:stats}
 \end{figure}
 
@@ -214,19 +216,39 @@ Table~\ref{tab:generalize} reports the results.
 \small
 \caption{Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale.
   Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length.
-  This table is descriptive; however, observing that all 16 independent test cells strictly exceed $1.0$ yields a highly aggregated sign test providing strong directional confidence for the learned policy's generalized advantage, without requiring individual cell CI reporting. Note: the apparent inflated ratio at low relative loads (e.g., 1.35 at $\rho=0.70$) occurs due to exceedingly small absolute queue denominators rather than massive absolute improvements over the 1.008 margin seen directly at $\rho=0.80$; absolute differences are correspondingly small (e.g., $<0.05$ units) at these low utilizations. Empirical Standard Errors for all underlying point estimates remain safely bounded below $0.08$.}
+  This table is descriptive; however, observing that all evaluated test cells strictly exceed 1.0 yields a highly aggregated sign test providing strong directional confidence for the learned policy's generalized advantage, without requiring individual cell CI reporting. Note: the apparent inflated ratio at low relative loads (e.g., 1.35 at $\rho=0.70$) occurs due to exceedingly small absolute queue denominators rather than massive absolute improvements over the 1.01 margin seen directly at $\rho=0.80$; absolute differences are correspondingly small (e.g., $<0.05$ units) at these low utilizations. Empirical Standard Errors for all underlying point estimates remain safely bounded below $0.08$. Note that if the full $\rho=0.80$ anchor column were evaluated across all scales, the sign test would use 20 cells ($p \approx 0.0000153$ for the 16 fully evaluated non-anchor cells). The 16 cells are not statistically independent, as they reflect the same trained policy; the sign test p-value should be interpreted as a directional indicator rather than a precise significance level.}
 \label{tab:generalize}
 \renewcommand{\arraystretch}{1.35}
-\begin{tabular}{@{\hspace{6pt}}l @{\hspace{16pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{16pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
 \toprule
- & \multicolumn{4}{c}{\textbf{Load factor $\rho$}} \\
-\cmidrule(lr){2-5}
-\textbf{Scale} & \textbf{0.50} & \textbf{0.70} & \textbf{0.85} & \textbf{0.95} \\
+ & \multicolumn{5}{c}{\textbf{Load factor $\rho$}} \\
+\cmidrule(lr){2-6}
+\textbf{Scale} & \textbf{0.50} & \textbf{0.70} & \textbf{0.80} & \textbf{0.85} & \textbf{0.95} \\
 \midrule
-$0.5\times$ & 1.36 & 1.27 & 1.21 & 1.12 \\
-$1.0\times$ & 1.48 & 1.35 & 1.29 & 1.19 \\
-$2.0\times$ & 1.60 & 1.44 & 1.41 & 1.31 \\
-$5.0\times$ & 1.46 & 1.31 & 1.43 & 1.38 \\
+$0.5\times$ & 1.36 & 1.27 & -- & 1.21 & 1.12 \\
+$1.0\times$ & 1.48 & 1.35 & 1.01 & 1.29 & 1.19 \\
+$2.0\times$ & 1.60 & 1.44 & -- & 1.41 & 1.31 \\
+$5.0\times$ & 1.46 & 1.31 & -- & 1.43 & 1.38 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Absolute generalization contextual values: Mean total queue lengths strictly for the Calibrated UAS baseline. Providing these explicit scale/load absolute baseline quantities enables direct inversion of the Table~\ref{tab:generalize} ratios to recover the corresponding N-GibbsQ absolute performance estimates.}
+\label{tab:generalize_abs}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}l r r r r r@{}}
+\toprule
+ & \multicolumn{5}{c}{\textbf{Load factor $\rho$}} \\
+\cmidrule(lr){2-6}
+\textbf{Scale} & \textbf{0.50} & \textbf{0.70} & \textbf{0.80} & \textbf{0.85} & \textbf{0.95} \\
+\midrule
+$0.5\times$ & 3.98 & 7.08 & 9.88 & 12.29 & 25.67 \\
+$1.0\times$ & 4.12 & 7.16 & 9.71 & 11.81 & 23.34 \\
+$2.0\times$ & 4.10 & 7.15 & 9.75 & 12.01 & 23.71 \\
+$5.0\times$ & 4.54 & 7.80 & 10.64 & 12.94 & 26.99 \\
 \bottomrule
 \end{tabular}
 \end{table}

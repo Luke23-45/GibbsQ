@@ -22,7 +22,7 @@ GibbsQ makes contributions at three levels:
 \item \textbf{Stability theorems:}
 We prove positive Harris recurrence~\cite{meyn2012markov}, the standard criterion ensuring a unique stationary distribution, for three analytical routing laws.
 Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Archimedean Softmax (UAS, Theorem~\ref{thm:uas})---so named because its capacity-weighted potential offset functions analogously to an Archimedean structure generator---are established under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
-We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}).
+We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}) (Note: under the anchor benchmark, no competitive routing configuration currently satisfies the SCUAS sufficient condition; the certified region and empirically performant region are disjoint as further detailed in Section 6.4).
 The raw softmax proof uses a quadratic Lyapunov function, the UAS proof uses a capacity-weighted Lyapunov function together with a prior-weighted KL variational identity, and the SCUAS proof uses a matched weighted Lyapunov function together with a calibrated prior decomposition.
 All three proofs provide explicit drift constants.
 In contrast to the raw softmax bound, which degrades as $\temp \to 0$, the UAS drift constants are independent of $\temp$, ensuring stability at all temperatures.
@@ -39,9 +39,11 @@ We report that result as numerical evidence for a viable full-family proof route
 \item \textbf{Learned policy via structured ablation:}
 A neural policy ($\ngibbsq$) can capture distributional structure beyond the reach of any fixed closed-form rule.
 Our ablation study quantifies the imitation-learning dynamic that the choice of teacher policy is the dominant factor influencing learned-policy quality, outweighing architectural considerations in this benchmark.
-A neural policy initialized through behavior cloning from Calibrated UAS and fine-tuned with \reinforce{} achieves a mean queue length of $9.82$. Notably, this strongest neural result is not the default learned policy configuration; the same architecture trained from the uncalibrated UAS teacher yields $11.14$ (underperforming both JSSQ and UAS), and training from scratch leads to catastrophic divergence ($5{,}451$).
+Under a controlled extended-horizon ablation protocol (Protocol B) using evaluation tracking of the best-performing seed from an ensemble of 5, a neural policy initialized through behavior cloning from Calibrated UAS and fine-tuned with \reinforce{} achieves a mean queue length of $9.82$. 
+This marks the lowest point estimate (under extended-horizon Protocol B, best-of-5 seed selection; under primary Protocol A, this variant matches Calibrated UAS at $\approx 10.04$ --- see Section 8.3) of queue length among evaluated policies, outperforming its closed-form teacher.
+Notably, this strongest neural result is not the default learned policy configuration; the same architecture trained from the uncalibrated UAS teacher yields $11.14$ (underperforming both JSSQ and UAS), and training from scratch leads to catastrophic divergence ($5{,}451$).
 
-This learned-policy advantage is consistent across the 16 operating configurations tested and persists into near-critical load regimes up to $\rho = 0.98$.
+This learned-policy directional advantage under extended evaluation is consistent across the 16 operating configurations tested and persists into near-critical load regimes up to $\rho = 0.98$.
 \end{enumerate}
 
 To clarify the hierarchical relationship between these routing policies, Table~\ref{tab:claims_map} provides a rigorous map of the terminology used throughout the manuscript.

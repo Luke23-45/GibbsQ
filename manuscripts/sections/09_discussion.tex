@@ -38,7 +38,7 @@ While we provide \textbf{numerical evidence} for negative drift through a JAX-ba
 \item \textbf{Default learned configuration is not the strongest:}
 The standard $\ngibbsq$ model (trained with a UAS teacher) achieves $11.68$ in the anchor benchmark, underperforming JSSQ ($11.02$) and Calibrated UAS ($10.04$).
 The configuration with the calibrated teacher ($9.82$) was identified through ablation.
-These findings confirm that the choice of teacher policy is the dominant factor in policy-gradient performance, but they also clarify that our reported neural "best" refers specifically to this calibrated-teacher variant, which requires separate behavior-cloning initialization.
+These findings confirm that the choice of teacher policy is the dominant factor in policy-gradient performance, but they also clarify that our reported neural "best" refers specifically to this calibrated-teacher variant, which requires separate behavior-cloning initialization. Additionally, interaction effects between ablation factors were not exhaustively tested; for instance, the combination of the Calibrated UAS teacher with architectural modifications (e.g., removing Log-Normalization) may yield further improvement.
 Crucially, absolute values from Protocol A and the ablation study (Protocol B) reflect different simulation horizons ($15{,}000$ vs.\ $20{,}000$ units) and are not directly comparable.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}

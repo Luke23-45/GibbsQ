@@ -329,7 +329,7 @@ However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does no
 \noindent\fbox{
 \parbox{0.95\linewidth}{
 \textbf{Key Distinction (Why SCUAS Bounds Fail for UAS):}
-The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). \textbf{The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS;} it is merely an artifact of this looser analytical bounding path.
+The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). Concretely, $\varepsilon_{1,1,1}$ is also negative under the anchor benchmark by the SCUAS bounding path, yet UAS remains formally certified by the separate and tighter argument in \cref{thm:uas}. \textbf{The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS;} it is merely an artifact of this looser analytical bounding path.
 }}
 \vspace{0.5em}
 
@@ -355,6 +355,7 @@ Eq. \eqref{eq:caluas_params} was selected via a grid search at $\temp=20$ over $
 Each configuration was evaluated over 16 independent replications on a validation set separate from the 32-replication anchor benchmark.
 The selected parameters minimize mean total queue length on the validation set. Given the noise floor of $\mathrm{SE} \approx 0.02$--$0.03$ at 16 replications, the minimum over 64 configurations is naturally subject to selection bias; however, the top-5 candidate configurations all clustered tightly near each other with similar validation-set scores, providing robustness to the selection before anchoring to the independent 32-replication final test set.
 The grid is coarse and the parameter surface may be non-convex; systematic optimization (e.g., Bayesian optimization over a continuous domain, notably computationally omitting the region $\caloffset > 1$ despite forming part of the larger analytical domain) is deferred to future work.
+Since the grid search excluded $\caloffset > 1$ by computational design, it systematically avoided the parameter region where SCUAS certification has been empirically verified ($\caloffset = 1.30$ in Table~\ref{tab:scuas_audit}); exploring $\caloffset > 1$ empirically may narrow or close the certified-empirical disjointness.
 Crucially, the SCUAS certified region is non-empty and accommodates multiple robust configurations: for example, the testing point $(\calbeta, \calgamma, \caloffset) = (0.2, 0.0, 1.3)$ at $\temp = 5$ under the anchor benchmark yields a strictly positive constant $\varepsilon = 0.255$, guaranteeing formal stability for that setting, though its steady-state performance is naturally sub-optimal compared to the uncertified empirical defaults.
 
 The theorem in this section is parameter-conditional.
@@ -394,7 +395,7 @@ This audit has two implications.
 First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region.
 Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
 
-\subsection{Numerically Verified Piecewise Drift Candidate}
+\subsection{Numerically Verified Piecewise Drift Candidate (Not Theorem-Grade)}
 \label{sec:caluas_piecewise_candidate}
 
 The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions.

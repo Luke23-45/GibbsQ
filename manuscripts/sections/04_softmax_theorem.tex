@@ -134,7 +134,7 @@ Outside the finite set $\bigl\{\Qstate : \varepsilon \abs{\Qstate}_1 \leq R + 1\
 The proof reveals several structural features of entropy-regularized routing.
 
 \paragraph{Role of entropy regularization}
-The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law routes each arrival to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive penalty $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature the policy explores suboptimal servers, but this cost is controllable through~$\temp$.
+The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law routes each arrival to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive penalty $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature the policy explores suboptimal servers, but this cost is controllable through~$\temp$. However, as $\temp \to 0$, this penalty diverges, which analytically renders the compact set bound $R/\varepsilon$ vacuous; for example, beneath $\temp \approx 0.05$ under the anchor benchmark, the bounded region's radius easily exceeds $10^3$.
 
 \paragraph{Homogeneous limitation}
 Raw softmax ignores service-rate heterogeneity: the routing probabilities in~\eqref{eq:softmax_law} depend only on queue lengths, not on service rates. This limitation motivates the UAS extension (\cref{sec:uas_theorem}), which incorporates service rates into both the energy function and the prior.
