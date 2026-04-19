@@ -17,11 +17,11 @@ Our proposed framework centers on producing continuous-valued stochastic routing
 Alternatively, queue routing can be framed as a restless multi-armed bandit problem. In such setups, Whittle index policies~\cite{weber1990index, ninomora2002restless} provide a classical analytical approach. For parallel M/M/1 queues, the Whittle index collapses to a service-rate-weighted deterministic assignment closely related to JSSQ~\cite{ninomora2002restless}; we have empirically observed that JSSQ yields identical assignments for the visited state distribution under our anchor benchmark configuration, so JSSQ serves as a practical proxy for approximate Whittle-index performance in this specific setting (this equivalence is not claimed to hold generally). Distinguishing GibbsQ from more complex Whittle-index formulations in non-Markovian settings is deferred to future work; our framework pursues a distinct stochastic Gibbs-measure approach that inherently provides non-deterministic entropy-regularized smoothing with Foster--Lyapunov stability proofs.
 
 \paragraph{Softmax and entropy regularization}
-In reinforcement learning, Boltzmann policies serve as standard methods for exploration~\cite{sutton2018reinforcement}.
+In reinforcement learning, Boltzmann policies serve as standard methods for exploration~\cite{sutton2018reinforcement}. The softmax routing law is equivalent to Boltzmann exploration in multi-armed bandits, where the ``reward'' for server $i$ is the negative queue-length score $-s_i(\Qstate)$. The concentration parameter $\temp$ plays the same role as the inverse temperature in bandit exploration.
 The log-sum-exp function acts as the convex conjugate of the negative entropy~\cite{boyd2004convex}.
 Such duality connects entropy-regularized routing to the Gibbs-measure perspective adopted here.
 Entropy-regularized optimization underpins mirror descent~\cite{nemirovskij1983problem,beck2003mirror}, soft actor-critic~\cite{haarnoja2018soft}, and maximum-entropy RL~\cite{ziebart2010modeling}.
-Despite these relationships to the RL and optimization literatures, explicit Foster--Lyapunov analyses for softmax routing in heterogeneous queues appear to be new to the queueing literature.
+Despite these relationships to the RL and optimization literatures, to our knowledge, explicit Foster--Lyapunov drift analyses for softmax routing in heterogeneous parallel queues have not appeared in the queueing literature.
 
 \paragraph{Foster--Lyapunov and fluid-limit methods for queueing stability}
 An alternative stability paradigm uses fluid-limit arguments~\cite{dai1995fluid} commonly adopted in broader queueing networks. GibbsQ adopts the direct Foster--Lyapunov route because it yields explicit, computable drift constants characterizing bounds directly, whereas fluid-limit arguments typically establish stability without constructive bounds. The continuous-time Foster--Lyapunov framework for positive Harris recurrence is the standard direct stability tool for CTMCs~\cite{meyn2012markov}.
@@ -44,4 +44,4 @@ For large server pools ($\Nservers \to \infty$), mean-field models approximate q
 Our theoretical results are finite-$\Nservers$; stress tests validate UAS behavior up to $\Nservers = 1{,}024$ (Appendix~\ref{sec:appendix_stress}).
 
 \paragraph{Positioning}
-GibbsQ occupies a distinct niche at the intersection of these literatures: it combines constructive Foster--Lyapunov stability proofs with entropy-regularized routing and a teacher-guided neural training pipeline, bridging analytical queueing theory and modern learned policies.
+GibbsQ occupies a distinct niche at the intersection of these literatures: it combines Foster--Lyapunov stability proofs with entropy-regularized routing and a teacher-guided neural training pipeline, bridging analytical queueing theory and modern learned policies.

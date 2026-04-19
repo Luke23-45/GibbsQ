@@ -255,7 +255,7 @@ Unlike UAS which provides concentration-parameter-independent drift constants, S
 \end{remark}
 
 \begin{proof}
-Non-explosion and irreducibility follow exactly as in \cref{thm:softmax} and \cref{thm:uas}: the total jump rate is bounded by $\arrate + \totcap$, and all routing probabilities remain strictly positive.
+Non-explosion follows from Lemma~\ref{lem:non_explosion}. Irreducibility follows because all routing probabilities remain strictly positive.
 The Lyapunov function \eqref{eq:scuas_lyapunov} is norm-like on $\Nats^\Nservers$ because each $\srvrate_i^{-\calbeta}$ is a finite positive constant.
 
 Combining \cref{lem:scuas_drift} with \cref{lem:scuas_arrival},
@@ -315,8 +315,8 @@ C_{\mathrm{SCUAS}}
 The continuous-time Foster--Lyapunov criterion therefore implies positive Harris recurrence.
 \end{proof}
 
-\begin{remark}[Value of the SCUAS theorem despite vacuous instantiation]
-Although no competitive configuration satisfies $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ under the anchor benchmark, the theorem serves three purposes. First, it establishes the correct proof architecture---a matched weighted Lyapunov function with calibrated prior decomposition---that any future certification effort must follow. Second, the failure condition $\varepsilon_{\calbeta,\calgamma,\caloffset}<0$ identifies the exact structural mechanism: fast servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$. Third, the theorem certifies non-competitive parameter regions (e.g., $(\calbeta,\calgamma,\caloffset)=(0.2,0.0,1.30)$ at $\temp=5$ with $\varepsilon=0.255$), proving the framework is not trivially satisfied.
+\begin{remark}[Structural contribution of the SCUAS theorem]
+The SCUAS theorem establishes the proof architecture---a matched weighted Lyapunov function with calibrated prior decomposition---that any future certification effort must follow. Its failure condition $\varepsilon_{\calbeta,\calgamma,\caloffset}<0$ identifies the exact structural mechanism blocking certification: fast servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$, causing the drift bound to fail. This mechanism reveals that fast-server overload under competitive parameters is the certification bottleneck. The theorem also certifies non-competitive parameter regions (e.g., $(\calbeta,\calgamma,\caloffset)=(0.2,0.0,1.30)$ at $\temp=5$ with $\varepsilon=0.255$), proving the framework is not trivially satisfied.
 \end{remark}
 
 \begin{remark}[Geometric intuition for drift failure]
@@ -343,6 +343,7 @@ Each parameter modifies a distinct structural aspect of UAS:
 \item $\calgamma < 1$ \emph{softens} the service-rate prior: $\srvrate_i^{\calgamma}$ flattens the routing bias toward fast servers.
 \item $\caloffset < 1$ \emph{reduces} the look-ahead offset from $\Qlen{i}+1$ to $\Qlen{i}+\caloffset$, attenuating the anticipatory correction.
 \end{itemize}
+The three parameters $(\calbeta,\calgamma,\caloffset)$ can be viewed as hand-engineered features that adjust the capacity-weighting and offset of the UAS score. Whether these parameters could be learned end-to-end (e.g., via differentiable architecture search) is an interesting direction for future work.
 
 \subsection{Benchmark Parameters}
 The empirical benchmark values used throughout are
@@ -395,10 +396,10 @@ First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theo
 Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
 We emphasize that $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ means the \emph{sufficient condition} fails, not that instability is implied: the SCUAS condition is conservative (it uses a Jensen bound that discards all $\temp$-dependence), and the piecewise Lyapunov candidate in \cref{sec:caluas_piecewise_candidate} provides numerical evidence that the benchmark-default policy may still be stable under a tighter analysis.
 
-\subsection{Numerically Verified Piecewise Drift Candidate (Not Theorem-Grade)}
+\subsection{Computationally Verified Piecewise Drift Candidate}
 \label{sec:caluas_piecewise_candidate}
 
-The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions. A post-validation search identified a benchmark-specific piecewise Lyapunov candidate with strictly negative drift on all verified boundary shells (see Appendix~\ref{sec:appendix_piecewise} for exact coefficients and boundary tables). This constitutes numerical evidence for a viable full-family proof route, not a formal proof.
+The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions. A post-validation search identified a benchmark-specific piecewise Lyapunov candidate with strictly negative drift on all verified boundary shells (see Appendix~\ref{sec:appendix_piecewise} for exact coefficients and boundary tables). This constitutes strong computational evidence for a viable full-family proof route, not a formal proof.
 
 \subsection{Anchor Benchmark Result}
 \label{sec:scuas_results}

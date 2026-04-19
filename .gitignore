@@ -42,7 +42,7 @@ docs/logs
 # OS
 .DS_Store
 
-# manuscripts
+manuscripts/dev
 
 manuscripts/data
 Thumbs.db

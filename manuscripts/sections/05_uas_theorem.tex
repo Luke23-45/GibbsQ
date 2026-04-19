@@ -186,7 +186,7 @@ Assume $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Under the UAS ro
 \end{theorem}
 
 \begin{proof}
-Non-explosion and irreducibility follow by the same argument as in \cref{thm:softmax}: the total jump rate is bounded by $\arrate + \totcap < \infty$~\cite[Proposition~2.2.1]{meyn2012markov}, and every state communicates with every other state through a sequence of arrivals and departures because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$. The weighted Lyapunov function $\lyap_{\mathrm{UAS}}$ defined in~\eqref{eq:uas_lyapunov} is norm-like on $\Nats^\Nservers$.
+Non-explosion follows from Lemma~\ref{lem:non_explosion}. Irreducibility follows because every state communicates with every other state through a sequence of arrivals and departures since $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$. The weighted Lyapunov function $\lyap_{\mathrm{UAS}}$ defined in~\eqref{eq:uas_lyapunov} is norm-like on $\Nats^\Nservers$.
 
 Define
 \begin{equation}
@@ -236,7 +236,7 @@ By the standard ergodic theorem, the strictly negative Foster--Lyapunov drift ou
 \label{eq:uas_expectation}
 \E_{\pi}[\abs{\Qstate}_1] \leq \frac{R_{\mathrm{UAS}}}{\varepsilon_{\mathrm{UAS}}} = \frac{\arrate \Nservers / \totcap + \Nservers / 2}{(\totcap - \arrate)/\totcap}.
 \end{equation}
-For the anchor benchmark evaluated in Section~\ref{sec:experiments} ($\Nservers=10, \rho=0.80$), this bound evaluates exactly to $65$. While this establishes formal stability analytically, the magnitude ($65$) is conservative compared to the actual empirical mean ($\approx 11.5$). The looseness stems from the Jensen relaxation $\sum \uasprior{i} e^{-\temp \uasenergy{i}} \ge \exp(-\temp \sum \uasprior{i} \uasenergy{i})$, which is tight only when all normalized loads $\uasenergy{i}$ are equal. Under the heterogeneous benchmark ($\srvrate_i$ ranging 0.5--2.3), the gap is large by design---this is the structural price of the temperature-independent guarantee.
+For the anchor benchmark evaluated in Section~\ref{sec:experiments} ($\Nservers=10, \rho=0.80$), this bound evaluates exactly to $65$. While this establishes formal stability analytically, the magnitude ($65$) is conservative compared to the actual empirical mean ($\approx 11.5$). The 5.6× looseness decomposes approximately as: (a) the Jensen relaxation contributes $\sim$2.5× (the quadratic Lyapunov bound on the arrival term vs.\ the actual nonlinear arrival contribution under heterogeneous service rates), and (b) the temperature-independent guarantee contributes the remaining $\sim$2.2× (the bound must hold for all $\temp > 0$, including near-zero temperatures where the softmax approaches uniform routing). This is the structural price of the temperature-independent guarantee.
 \end{corollary}
 
 \subsection{Properties of the UAS Bound}
@@ -253,4 +253,7 @@ Temperature independence is an artifact of the conservative Jensen bound, which 
 
 \paragraph{Motivation for empirical extensions}
 Although UAS is provably stable, its parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance, motivating the broader Calibrated UAS family and the stability-certified calibrated subclass developed in \cref{sec:calibrated_uas}.
+
+\paragraph{Geometric ergodicity}
+The quadratic Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ satisfies the stronger Foster--Lyapunov criterion for geometric ergodicity~\cite[Theorem~6.1]{meyn2012markov}: since $\gen \lyap_{\mathrm{UAS}}(\Qstate) \leq -\varepsilon_{\mathrm{UAS}} \abs{\Qstate}_1 + R_{\mathrm{UAS}}$ and $\lyap_{\mathrm{UAS}}(\Qstate) \geq c \abs{\Qstate}_1^2$ for some $c > 0$, the drift is quadratic-negative outside the compact set, implying geometric convergence to the stationary distribution.
 

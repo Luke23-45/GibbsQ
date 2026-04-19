@@ -2,7 +2,7 @@
 \label{sec:appendix_piecewise}
 
 The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions.
-The checks reported in this appendix provide \textbf{numerical evidence for a candidate Lyapunov construction and negative drift on verified shells} at $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$, though they do not constitute a formal symbolic proof.
+The checks reported in this appendix provide \textbf{computationally verified negative drift on exhaustive boundary shells} at $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$, constituting strong evidence for a viable piecewise Lyapunov proof route, though they do not constitute a formal symbolic proof.
 To probe the gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
 
 For the benchmark-default calibrated policy $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$ at $\temp=20$, the best refined candidate is

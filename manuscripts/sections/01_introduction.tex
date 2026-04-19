@@ -16,10 +16,10 @@ The log-sum-exp normalizer for each formulation serves as the convex conjugate o
 While entropy-regularized control---structurally analogous to the soft policies of maximum-entropy reinforcement learning and the Soft Actor-Critic (SAC) formulation~\cite{haarnoja2018soft}---is established in reinforcement learning, to the best of our knowledge, we provide explicit Foster--Lyapunov stability proofs for heterogeneous queueing that leverage these convex duality principles.
 
 \subsection{Contributions}
-GibbsQ demonstrates that entropy regularization enables constructive stability proofs for heterogeneous queue routing, and that the resulting analytical policies serve as effective teachers for learned policies. This connection unifies three findings:
+GibbsQ demonstrates that entropy regularization enables stability proofs for heterogeneous queue routing, and that the resulting analytical policies serve as effective teachers for learned policies. This connection unifies three findings:
 
 \begin{enumerate}
-\item \textbf{Constructive stability proofs:}
+\item \textbf{Stability proofs:}
 We prove positive Harris recurrence~\cite{meyn2012markov} for two routing laws under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
 Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Capacity-Aware Softmax (UAS, Theorem~\ref{thm:uas})---so named because its potential unifies queue state and service capacity into a single energy variable---are established via self-contained Foster--Lyapunov arguments with explicit drift constants.
 We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}).
@@ -28,15 +28,17 @@ Under the anchor benchmark, no competitive routing configuration satisfies the S
 
 \item \textbf{Calibrated closed-form policy:}
 Base UAS ($\temp{=}10$ at $11.50$) underperforms JSSQ ($11.02$), indicating that the provably stable parameterization sacrifices empirical performance for analytical tractability.
-Calibrated UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, outperforming JSSQ by 8.84\%.
+Calibrated UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, reducing steady-state queue length by $0.98$ units (8.84\%) relative to JSSQ.
 The benchmark-default parameters are not certified by Theorem~\ref{thm:scuas} (post-validation audit yields $\varepsilon < 0$); a numerically verified piecewise Lyapunov candidate provides evidence for a future certification route.
 
 \item \textbf{Teacher-choice effect in learned policies:}
 The default neural policy ($\ngibbsq$), trained from UAS via behavior cloning and \reinforce{}, underperforms JSSQ ($11.68$ vs.\ $11.02$)---a direct consequence of the teacher-quality bottleneck, since UAS itself underperforms JSSQ.
 Switching the BC teacher to Calibrated UAS resolves this bottleneck, yielding the lowest point estimate among all evaluated policies ($9.82$ under Protocol B, best-of-5 seed selection; matches Calibrated UAS at $\approx 10.04$ under Protocol A).
 This directional advantage persists across 16 generalization configurations and into near-critical loads up to $\rho = 0.98$.
-Training from scratch diverges catastrophically ($5{,}451$), confirming that the analytical teacher---not the RL algorithm---is the dominant factor.
+Training from scratch diverges catastrophically ($5{,}451$), confirming that the analytical teacher---not the RL algorithm---is the dominant factor among the tested training design choices.
 \end{enumerate}
+
+The teacher-choice principle is this paper's most impactful finding for practitioners; the stability theorems provide its theoretical foundation.
 
 To clarify the hierarchical relationship between these routing policies, Table~\ref{tab:claims_map} provides a rigorous map of the terminology used throughout the manuscript.
 

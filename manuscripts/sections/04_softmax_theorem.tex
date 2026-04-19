@@ -16,9 +16,14 @@ for concentration parameter $\temp > 0$. This is the entropy-regularized minimiz
 
 \subsection{Theorem Statement}
 
+\begin{lemma}[Non-explosion]
+\label{lem:non_explosion}
+Under any stationary routing policy $\pi$, the total transition rate of the CTMC $\{\Qstate(t)\}$ is bounded by $\arrate + \totcap < \infty$, ensuring non-explosion.
+\end{lemma}
+
 \begin{theorem}[Raw softmax positive Harris recurrence]
 \label{thm:softmax}
-Assume the strict load condition $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Then for every $\temp > 0$, the CTMC $\Qstate(t)$ under the raw softmax routing law~\eqref{eq:softmax_law} is non-explosive, irreducible, and positive Harris recurrent.
+Assume the strict load condition $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Then for every $\temp > 0$, the CTMC $\Qstate(t)$ under the raw softmax routing law~\eqref{eq:softmax_law} is irreducible and positive Harris recurrent (non-explosion follows from Lemma~\ref{lem:non_explosion}).
 \end{theorem}
 
 \subsection{Proof}
@@ -141,5 +146,8 @@ Raw softmax ignores service-rate heterogeneity: the routing probabilities in~\eq
 
 \paragraph{Closed-form drift constants}
 The drift rate~$\varepsilon$ and the compact-set bound $R/\varepsilon$ depend only on the system parameters $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers, \temp)$ and are given in closed form, making the stability guarantee quantitative rather than merely existential.
+
+\paragraph{Stability-efficiency tradeoff}
+Entropy regularization ensures stability but incurs an efficiency cost: as $\temp \to 0$, the softmax policy approaches the greedy JSQ rule, which is optimal for homogeneous servers. The temperature parameter thus trades off stability (guaranteed for all $\temp > 0$) against efficiency (improved as $\temp \to 0$ for near-homogeneous systems). For heterogeneous servers, UAS provides a better stability-efficiency balance by incorporating service-rate information.
 
 

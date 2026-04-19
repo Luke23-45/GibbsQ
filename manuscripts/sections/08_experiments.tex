@@ -17,6 +17,14 @@ Unless otherwise stated, the Calibrated UAS versus JSSQ comparison under Protoco
 Unless stated otherwise, every experiment involves $\Nservers = 10$ heterogeneous servers with a fixed service-rate vector $\srvrate_{1:10} = [0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]$ (total capacity $\totcap = 14.0$), load factor $\rho = \arrate/\totcap = 0.80$, and 32 independent replications for each policy.
 Configuration is managed via Hydra YAML profiles for reproducibility. Code and configuration files will be made publicly available upon acceptance.
 
+\paragraph{Protocol definitions}
+We use two distinct evaluation protocols:
+\begin{itemize}
+\item \textbf{Protocol A:} Standard evaluation with simulation horizon $15{,}000$ time units and 32 replications. Used for the anchor benchmark (Section~\ref{sec:exp:policy}) and theoretical consistency checks (Section~\ref{sec:exp:theory}).
+\item \textbf{Protocol B:} Extended evaluation with simulation horizon $20{,}000$ time units and 32 replications. Used for the ablation study (Section~\ref{sec:exp:ablation}), statistical comparison (Section~\ref{sec:exp:stats}), generalization (Section~\ref{sec:exp:generalize}), and critical-load experiments (Section~\ref{sec:exp:critical}).
+\end{itemize}
+Due to the differing horizons, absolute steady-state values from Protocol A and Protocol B are not directly comparable.
+
 Numerical stability and reproducibility are ensured through fixed random seeds (starting at 42 for 32 independent replications) and deterministic engine initialization. We note that a sensitivity check across a different, independent block of random seeds (e.g., 100--131) was not performed and constitutes a future robustness validation to completely rule out any latent seed-range advantage. All steady-state estimates incorporate a 20\% burn-in period to eliminate transient effects, with stationarity explicitly validated via autocorrelation function (ACF) diagnostics to ensure adequate mixing for near-critical runs ($\rho \ge 0.95$). State sampling occurs at a resolution of 1.0 time unit ($t_{\mathrm{SSA}} = 1.0$), with a total simulation duration of $15{,}000$ to $20{,}000$ time units per replication, ensuring that the 95\% confidence intervals for the mean total queue length remain within $0.5\%$ of the point estimate for all stable regimes.
 
 \paragraph{Primary metric}
@@ -87,6 +95,8 @@ Uniform                     & 11{,}572.7 & 42.16 & 82.63 & 1{,}033.3 & 0.753 & +
 MaxWeight (arg-max, diverges) & Diverges & --- & --- & --- & --- & --- \\
 \addlinespace[3pt]
 \emph{M/M/1 Lower Bound}    & \emph{4.000} & \emph{---} & \emph{---} & \emph{0.357} & \emph{---} & \emph{0.000} \\
+\addlinespace[3pt]
+\emph{Bernoulli Upper Bound} & \emph{29.900} & \emph{---} & \emph{---} & \emph{---} & \emph{---} & \emph{---} \\
 \bottomrule
 \end{tabular}
 \end{table}
