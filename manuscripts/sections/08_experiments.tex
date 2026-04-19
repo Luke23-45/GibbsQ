@@ -8,6 +8,7 @@ Sections~\ref{sec:exp:policy} to~\ref{sec:exp:stats} detail the anchor benchmark
 Sections~\ref{sec:exp:generalize} and~\ref{sec:exp:critical} evaluate generalization and near-critical load behavior.
 Section~\ref{sec:exp:theory} presents theoretical consistency checks.
 All experiments use a NumPy-based event-driven CTMC simulation as the canonical evaluation engine.
+Unless otherwise stated, the Calibrated UAS versus JSSQ comparison under Protocol~A is the single pre-specified primary comparison; all other pairwise comparisons (including neural vs.\ closed-form in the stats, generalize, and critical experiments) are exploratory and presented without multiple-comparison correction.
 
 \subsection{Experimental Protocol}
 \label{sec:exp:setup}
@@ -81,7 +82,7 @@ UAS ($\temp{=}10$)          & 11.495 & 0.026 & 0.051 & 1.026 & 0.328 & +7.495 \\
 $\ngibbsq$ (default)        & 11.679 & 0.024 & 0.047 & 1.043 & 0.332 & +7.679 \\
 JSQ                         & 11.814 & 0.023 & 0.045 & 1.055 & 0.074 & +7.814 \\
 \addlinespace[3pt]
-Proportional (Analytical)   & 40.000 & 0.000 & 0.000 & 3.571 & 0.045 & +36.000 \\
+Proportional$^\dagger$      & 40.198 & 0.222 & 0.435 & 3.589 & 0.045 & +36.198 \\
 Uniform                     & 11{,}572.7 & 42.16 & 82.63 & 1{,}033.3 & 0.753 & +11{,}568.7 \\
 MaxWeight (arg-max, diverges) & Diverges & --- & --- & --- & --- & --- \\
 \addlinespace[3pt]
@@ -101,7 +102,7 @@ MaxWeight (arg-max, diverges) & Diverges & --- & --- & --- & --- & --- \\
 
 Calibrated UAS ranks first among all the closed-form methods, reducing mean queue length by 8.84\% relative to JSSQ ($10.04$ vs.\ $11.02$) and by 12.6\% relative to UAS.
 Sojourn-time rankings mirror queue-length rankings, as expected from Little's law.
-Notably, JSQ achieves the lowest Gini coefficient ($0.074$) but has the highest queue length among competitive policies, highlighting the cost of ignoring service-rate heterogeneity. In contrast, Proportional routing explicitly equates server load ($\rho = 0.80$ uniformly), which explains both its near-zero Gini ($0.045$) and its catastrophically high mean queue length: $E[\sum Q_i] = N \rho / (1 - \rho) = 10 \cdot 4 = 40.0$ analytically. MaxWeight routing diverges completely in this context because it routes exclusively to the server with the maximum $\srvrate_i \Qlen{i}$ product, meaning a queue capable of servicing at most a fraction of the total capacity ($\mu_i < \lambda$) inadvertently accumulates all sequential arrivals in a positive-feedback loop.
+Notably, JSQ achieves the lowest Gini coefficient ($0.074$) but has the highest queue length among competitive policies, highlighting the cost of ignoring service-rate heterogeneity. In contrast, Proportional routing explicitly equates server load ($\rho = 0.80$ uniformly), which explains both its near-zero Gini ($0.045$) and its catastrophically high mean queue length: $E[\sum Q_i] = N \rho / (1 - \rho) = 40.0$ analytically ($^\dagger$simulated: 40.198, reflecting finite-horizon estimation). MaxWeight routing diverges completely in this context because it routes exclusively to the server with the maximum $\srvrate_i \Qlen{i}$ product, meaning a queue capable of servicing at most a fraction of the total capacity ($\mu_i < \lambda$) inadvertently accumulates all sequential arrivals in a positive-feedback loop.
 We also clarify that Calibrated UAS employs $\temp = 20$ (selected to ensure stabilization and reach empirical saturation, see Figure~\ref{fig:alpha_main}), while the UAS baseline uses heavily penalized conservative $\temp = 10$. As Figure~\ref{fig:alpha_main} demonstrates, extending UAS to $\temp=20$ yields roughly $\approx 11.4$ bounded performance, confirming that structural calibration, not mere temperature tuning, accounts for the majority of the policy gap.
 Post-validation theorem auditing, however, shows that the benchmark-default calibrated point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ has $\varepsilon_{\calbeta,\calgamma,\caloffset} = -1.199$ under this protocol, and the three audited candidate points are likewise uncertified; see Table~\ref{tab:scuas_audit}.
 Accordingly, the calibrated results in Table~\ref{tab:policy} should be read as empirical performance results rather than theorem-certified benchmark instances. Finally, we rigidly scope competitive benchmarking in this segment to exactly $N=10$; generalizing scaling claims for empirical policies requires specific evaluations not conducted here.
@@ -160,7 +161,7 @@ Three findings emerge:
 \item \textbf{Warm start is essential:}
   \reinforce{} from scratch yields a mean queue of $5{,}451$, confirming that behavior-cloning pretraining is a prerequisite for stable policy-gradient training.
 \item \textbf{Calibrated-teacher variant is the strongest configuration evaluated:}
-  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Note that this learned policy value explicitly reflects the strongest candidate from an ensemble of 5 random initialization seeds, selected uniformly based on the lowest mean total queue length on a separate held-out validation set of 16 replications. Individual per-seed results were not logged in the output; however, all five seeds achieved comparable variance bands during validation. The selection of the best seed introduces optimistic bias, and the observed advantage of $\Delta = -0.077 \pm 0.025$ (95\% CI, paired across 32 replications) should be interpreted with this caveat. Note also that the optimal $9.82$ value under Protocol B is not directly comparable to the main benchmark; under Protocol A, this precise configuration yields approximately $10.04$.
+  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Note that this learned policy value explicitly reflects the strongest candidate from an ensemble of 5 random initialization seeds, selected uniformly based on the lowest mean total queue length on a separate held-out validation set of 16 replications. Individual per-seed results were not logged in the output; however, all five seeds achieved comparable variance bands during validation. The selection of the best seed introduces optimistic bias whose magnitude cannot be quantified from the preserved logs; the unbiased ensemble mean is unknown. The observed advantage of $\Delta = -0.077 \pm 0.025$ (95\% CI, paired across 32 replications) should be interpreted with this caveat. Note also that the optimal $9.82$ value under Protocol B is not directly comparable to the main benchmark; under Protocol A, this precise configuration yields approximately $10.04$.
 \end{enumerate}
 
 %% ═══════════════════════════════════════════════════════════════════════════════
@@ -184,10 +185,11 @@ Neural policy (best seed) $\E[\sum_i\Qlen{i}]$     & 9.821 \\
 \addlinespace[3pt]
 Paired mean difference ($\Delta$)            & $-0.076$ \\
 SE of paired difference                      & $0.013$ \\
-95\% paired-t CI for $\Delta$                 & $[-0.102,\; -0.051]$ \\
+95\% paired-t CI for $\Delta$\footnotemark  & $[-0.102,\; -0.051]$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+\footnotetext{The paired-t test assumes independent replications; the best-of-5 seed selection may violate this assumption, inflating the apparent significance.}
 
 The paired difference of $\Delta = -0.076$ (neural policy achieves lower queue length) has a standard error of $0.013$, yielding a 95\% confidence interval of $[-0.102, -0.051]$ that excludes zero. However, because this neural policy is the best of 5 random initialization seeds selected on a held-out validation set, the observed advantage is subject to optimistic selection bias. Without per-seed ablation logs (which were not preserved), we cannot compute the unbiased ensemble mean or its corresponding significance level. Accordingly, we interpret this result as a \emph{directional signal} that behavior-cloning initialization from a strong teacher, combined with \reinforce{} fine-tuning, can match or marginally improve upon the closed-form teacher---but the true expected gain of a single randomly-initialized training run remains uncertain.
 
@@ -278,7 +280,7 @@ Table~\ref{tab:critical} compares the two policies at four high-load operating p
 \begin{table}[htbp]
 \centering
 \small
-\caption{\textbf{Near-critical load:} Mean $\E[\sum_i\Qlen{i}]$ and relative improvement ($\Nservers{=}10$, 32 replications). \textbf{WARNING:} The reported Standard Errors (SE) in this table are explicitly theoretical lower bounds derived from conservative $(1-\rho)^{-2}$ asymptotic scaling properties. True empirical confidence intervals under these extreme near-boundary mixing times are significantly larger; therefore, the near-critical improvement percentages must be treated purely as directional estimates with fundamentally underestimated uncertainty.}
+\caption{\textbf{Near-critical load:} Mean $\E[\sum_i\Qlen{i}]$ and relative improvement ($\Nservers{=}10$, 2 replications per $\rho$). \textbf{WARNING:} The reported Standard Errors (SE) in this table are explicitly theoretical lower bounds derived from conservative $(1-\rho)^{-2}$ asymptotic scaling properties. True empirical confidence intervals under these extreme near-boundary mixing times are significantly larger; the reported improvement percentages should be interpreted as upper bounds on the true improvement.}
 \label{tab:critical}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}c @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}

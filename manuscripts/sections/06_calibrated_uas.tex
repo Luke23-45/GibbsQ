@@ -333,7 +333,7 @@ The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exa
 \end{remark}
 
 Accordingly, the manuscript's formal claims are split as follows:
-UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical.
+UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical. The SCUAS proof follows the same template as the UAS proof, differing only in the prior and energy definitions; a unified theorem covering the full calibrated family with a single sufficient condition remains an open problem.
 \end{remark}
 
 \subsection{Parameter Semantics}
@@ -391,7 +391,7 @@ Certified example ($\temp{=}5$) & 0.20 & 0.00 & 1.30 & $0.255$ & Yes \\
 \end{table}
 
 This audit has two implications.
-First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region.
+First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region. The theorem's contribution is therefore architectural---it establishes the correct proof template for the calibrated family---rather than certifying any practical policy instance.
 Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
 
 \subsection{Numerically Verified Piecewise Drift Candidate (Not Theorem-Grade)}

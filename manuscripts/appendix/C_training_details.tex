@@ -16,7 +16,7 @@ The Neural GibbsQ pipeline depends on two sequential phases. The preliminary BC 
 \textbf{Phase 1: Behavior Cloning} & \textbf{Value / Description} \\
 \midrule
 Expert policy         & UAS ($\temp = 10.0$); Calibrated UAS for calibrated-teacher \\
-Preprocessing         & $\log(1 + \Qlen{i})$ \\
+Preprocessing         & $\log(1 + (\Qlen{i}+1)/\srvrate_i)$ (look-ahead potential) \\
 Training steps        & 1{,}000 \\
 Final accuracy        & 99.2\% (best seed, 97--99\% inter-seed range) \\
 Loss / Optimizer      & Cross-entropy / Adam ($\alpha = 3 \times 10^{-4}$) \\
@@ -36,7 +36,7 @@ BC: UAS $\to$ \reinforce{} & Default pipeline. Tests standard two-phase training
 \addlinespace[3pt]
 BC: Cal.\ UAS $\to$ \reinforce{} & Replaces BC teacher. Isolates the teacher-quality effect. \\
 \addlinespace[3pt]
-No Log-Norm           & Removes $\log(1 + \Qlen{i})$ preprocessing. Tests input stability. \\
+No Log-Norm           & Removes $\log(1 + (\Qlen{i}+1)/\srvrate_i)$ preprocessing. Tests input stability. \\
 \addlinespace[3pt]
 Zero-Init Final       & Zero-initializes final layer weights before BC training. \\
 \addlinespace[3pt]
@@ -56,6 +56,12 @@ The exact same network architecture, preprocessing, learning rate, and optimizer
 \end{figure}
 
 The key finding is that teacher choice ($1.32$-unit improvement) dominates all architectural modifications ($< 0.2$-unit effects), while training from scratch without BC diverges catastrophically (mean queue $> 5{,}000$).
+
+\paragraph{Training--evaluation horizon mismatch}
+The ablation training episodes use a horizon of 750 time units, while the evaluation protocol (Protocol~B) uses 20{,}000 time units. This 26$\times$ disparity may introduce a distributional mismatch between the training and evaluation regimes.
+
+\paragraph{Compute budget}
+Wall-clock training times were not systematically logged; the total compute budget for the full experimental campaign is approximately 200 CPU-hours.
 
 \section{Piecewise Lyapunov Candidate Search}
 \label{sec:appendix_piecewise_search}

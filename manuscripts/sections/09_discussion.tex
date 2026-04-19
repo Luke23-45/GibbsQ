@@ -73,6 +73,9 @@ However, trust-region methods (PPO, natural policy gradient) could additionally 
 \item \textbf{Non-stationarity:}
 Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings. A practical online adaptation layer---e.g., lightweight continual fine-tuning of the $\ngibbsq$ network as statistics shift---would bridge the gap to deployed adaptive routing, though such adaptation must be balanced against stability risk during the adaptation transient.
 
-\item \textbf{Geometric ergodicity conjecture:}
-While \cref{thm:uas} establishes positive Harris recurrence, the Foster--Lyapunov framework admits extensions to geometric ergodicity given standard geometric drift and minorization conditions. Under the mild additional requirement of uniform petite sets on compact state spaces, we conjecture that this underlying bounded structure may support exponential mixing rates towards stationarity. This remains an open, speculative question that is essential for deployment in production server loops.
+\item \textbf{Geometric ergodicity:}
+While \cref{thm:uas} establishes positive Harris recurrence, the Foster--Lyapunov framework admits extensions to geometric ergodicity given standard geometric drift and minorization conditions~\cite[Chapter~15]{meyn2012markov}. Under the mild additional requirement of petite sets on compact state spaces, the bounded transition structure of the queue-length process suggests that exponential mixing rates may hold. Establishing this formally---particularly with explicit convergence rate constants---would strengthen the deployment argument and is an important open direction.
+
+\item \textbf{Heavy-traffic and diffusion limits:}
+A heavy-traffic diffusion-limit analysis (e.g., Halfin--Whitt scaling) would substantially strengthen the theoretical contribution by characterizing asymptotic performance as $\rho \to 1$, but is outside the current scope.
 \end{enumerate}

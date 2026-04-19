@@ -4,7 +4,7 @@
 
 \paragraph{Classical parallel-queue routing}
 JSQ is optimal under identical servers~\cite{weber1978optimal,winston1977optimality}.
-JSSQ extends JSQ by directing traffic to the server with the lowest $\Qlen{i}/\srvrate_i$~\cite{ephremides1980simple}.
+JSSQ extends JSQ by directing traffic to the server with the lowest expected sojourn time $(\Qlen{i}+1)/\srvrate_i$ under FCFS~\cite{ephremides1980simple}.
 The power-of-$d$-choices method~\cite{mitzenmacher2001power} significantly decreases the tail of the queue-length distribution by sampling $d \geq 2$ servers, although it does not utilize complete queue-state information.
 While power-of-$d$ policies excel in massive-scale load balancing where full state observation is typically unavailable, the GibbsQ framework explicitly targets settings---such as specialized compute clusters---where continuous, centralized full-state telemetry is accessible. GibbsQ uses complete state information with entropy regularization, providing formal stability guarantees. Because our empirical evaluation strictly scopes to policies that actively utilize this available full-state vector, we exclude partial-state methods such as $\mu$-weighted power-of-$d$ choices from the competitive baselines, focusing instead on full-state heuristics like JSQ and JSSQ.
 
@@ -44,4 +44,4 @@ For large server pools ($\Nservers \to \infty$), mean-field models approximate q
 Our theoretical results are finite-$\Nservers$; stress tests validate UAS behavior up to $\Nservers = 1{,}024$ (Appendix~\ref{sec:appendix_stress}).
 
 \paragraph{Positioning}
-GibbsQ offers explicit stability proofs with closed-form drift constants, including a theorem-backed calibrated subclass, alongside an empirically calibrated closed-form policy and ablation evidence that teacher-policy choice is the dominant training design factor.
+GibbsQ occupies a distinct niche at the intersection of these literatures: it combines constructive Foster--Lyapunov stability proofs with entropy-regularized routing and a teacher-guided neural training pipeline, bridging analytical queueing theory and modern learned policies.

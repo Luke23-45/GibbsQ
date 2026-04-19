@@ -1,0 +1,60 @@
+\section{Numerically Verified Piecewise Drift Candidate}
+\label{sec:appendix_piecewise}
+
+The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions.
+The checks reported in this appendix provide \textbf{numerical evidence for a candidate Lyapunov construction and negative drift on verified shells} at $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$, though they do not constitute a formal symbolic proof.
+To probe the gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
+
+For the benchmark-default calibrated policy $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$ at $\temp=20$, the best refined candidate is
+\begin{equation}
+\label{eq:piecewise_candidate}
+\begin{aligned}
+\lyap_{\mathrm{PW}}(\Qstate)
+&=
+0.541679
+\left[
+\frac12 \sum_{i=1}^{\Nservers} \frac{\Qlen{i}^2}{\srvrate_i}
++
+2 \sum_{i=1}^{\Nservers}
+\left(
+\frac{\Qlen{i}}{\srvrate_i}
+-
+\frac{1}{\Nservers}\sum_{j=1}^{\Nservers}\frac{\Qlen{j}}{\srvrate_j}
+\right)^2
+\right] \\
+&\quad
++ 0.187796 \left(\sum_{i=1}^{\Nservers}\Qlen{i}\right)^2
++ 0.175661 \sum_{i=1}^{\Nservers}\frac{\Qlen{i}^3}{\srvrate_i}
++ 0.092741 \left(\sum_{i=1}^{\Nservers}\frac{\Qlen{i}}{\srvrate_i^{1/2}}\right)^2
++ 0.002124 \max_{1\le i\le \Nservers}\Qlen{i}^2.
+\end{aligned}
+\end{equation}
+where the displayed coefficients are rounded to six decimal places from the verification capsule.
+
+These coefficients are benchmark-specific; they serve as existence evidence only. \cref{eq:piecewise_candidate} is a \emph{numerically selected} benchmark-specific candidate, not a theorem-backed symbolic Lyapunov function.
+Its role is evidentiary: it shows that the failure of $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ does not prevent the existence of much stronger negative-drift candidates near the benchmark tail boundary.
+
+The dedicated verification capsule evaluates the exact generator of the benchmark-default calibrated policy against \cref{eq:piecewise_candidate} on three exhaustive boundary shells and on additional high-load random shells. Note that states inside the candidate compact set $C$ (where $|\Qstate|_1 \le 15$) are structurally excluded from verification, as strict negative drift is only required outside $C$, while internal drift is accommodated by the uniform bound $R$.
+Table~\ref{tab:piecewise_candidate} reports the results.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Numerical piecewise-drift verification for the benchmark-default calibrated policy at $\temp=20$. The candidate \eqref{eq:piecewise_candidate} is \emph{not} a formal proof, but its exact generator evaluation is strictly negative on all states in the three verified boundary shells and on all sampled higher-load shells listed below.}
+\label{tab:piecewise_candidate}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}l r r r c@{}}
+\toprule
+\textbf{Check set} & \textbf{States} & \textbf{Max drift} & \textbf{Positive states} & \textbf{Pass?} \\
+\midrule
+$|\Qstate|_1 = 16$ & 2{,}042{,}975 & $-4.6446$ & 0 & Yes \\
+$|\Qstate|_1 = 17$ & 3{,}124{,}550 & $-4.6447$ & 0 & Yes \\
+$|\Qstate|_1 = 18$ & 4{,}686{,}825 & $-4.9245$ & 0 & Yes \\
+Random shells $|\Qstate|_1 \in \{24,32,48,64,96,128,160,256\}$ & 8{,}192 & $-21.5534$ & 0 & Yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These checks substantially strengthen the empirical-theory interface for the benchmark-default calibrated point.
+However, this does not mathematically prove a full positive Harris recurrence theorem for the unrestricted calibrated family because it does not provide a symbolic drift inequality valid for \emph{all} sufficiently large states.
+Accordingly, the manuscript treats \cref{eq:piecewise_candidate} and Table~\ref{tab:piecewise_candidate} purely as numerical evidence for a promising piecewise Foster--Lyapunov route, not as a formal replacement for the certified guarantees of \cref{thm:scuas}.

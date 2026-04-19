@@ -186,7 +186,7 @@ Assume $\totcap = \sum_{i=1}^{\Nservers} \srvrate_i > \arrate$. Under the UAS ro
 \end{theorem}
 
 \begin{proof}
-Non-explosion and irreducibility follow by the same argument as in \cref{thm:softmax}: the total jump rate is bounded by $\arrate + \totcap$, and all rates are strictly positive. The weighted Lyapunov function $\lyap_{\mathrm{UAS}}$ defined in~\eqref{eq:uas_lyapunov} is norm-like on $\Nats^\Nservers$.
+Non-explosion and irreducibility follow by the same argument as in \cref{thm:softmax}: the total jump rate is bounded by $\arrate + \totcap < \infty$~\cite[Proposition~2.2.1]{meyn2012markov}, and every state communicates with every other state through a sequence of arrivals and departures because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$. The weighted Lyapunov function $\lyap_{\mathrm{UAS}}$ defined in~\eqref{eq:uas_lyapunov} is norm-like on $\Nats^\Nservers$.
 
 Define
 \begin{equation}
@@ -249,7 +249,7 @@ Four structural properties of the UAS stability result merit emphasis.
 UAS is \emph{not} a corollary of \cref{thm:softmax}. It uses a different variational objective (prior-weighted KL divergence $\KL{p}{r}$ instead of uniform entropy), a different Lyapunov function ($\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ instead of $\frac{1}{2}\sum_i \Qlen{i}^2$), and a different arrival-term bound (Jensen's inequality on the prior-weighted $\logsumexp$ instead of the entropy ceiling $\entropy \leq \log \Nservers$). These are structurally distinct proof paths.
 
 \paragraph{Temperature-independent stability guarantee}
-Temperature independence is an artifact of the conservative Jensen bound, which discards all $\temp$-dependence. This yields a uniform (though loose) guarantee across all $\temp > 0$. The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ depend only on $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$. A tighter, $\temp$-dependent analysis would likely recover stronger bounds at higher temperatures.
+Temperature independence is an artifact of the conservative Jensen bound, which discards all $\temp$-dependence. This yields a uniform (though loose) guarantee across all $\temp > 0$. The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ depend only on $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$. A tighter, $\temp$-dependent analysis would likely recover stronger bounds at higher temperatures. Exploring Lagrangian dual formulations of the drift inequality may yield tighter certified regions.
 
 \paragraph{Motivation for empirical extensions}
 Although UAS is provably stable, its parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance, motivating the broader Calibrated UAS family and the stability-certified calibrated subclass developed in \cref{sec:calibrated_uas}.

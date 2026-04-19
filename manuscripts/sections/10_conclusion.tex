@@ -4,7 +4,7 @@
 
 This manuscript presented GibbsQ, a framework for entropy-regularized routing in heterogeneous parallel queues that addresses the tension between state-awareness, capacity-awareness, and formal stability guarantees. Our findings span three distinct layers of analysis:
 
-At the \textbf{analytical level}, we formally demonstrated positive Harris recurrence for three routing laws via self-contained Foster--Lyapunov arguments: raw softmax, UAS, and the parameter-conditional SCUAS subclass. These proofs yield computable drift constants; notably, the UAS constants are temperature-independent, ensuring that stability does not degrade with increased entropy regularization.
+At the \textbf{analytical level}, we formally demonstrated positive Harris recurrence for two routing laws via self-contained Foster--Lyapunov arguments (raw softmax and UAS), and established a parameter-conditional stability certificate for the SCUAS subclass. These proofs yield computable drift constants; notably, the UAS constants are temperature-independent, ensuring that stability does not degrade with increased entropy regularization.
 
 At the \textbf{empirical level}, we showed that Calibrated UAS---the unrestricted three-parameter extension---achieves the lowest queue lengths among all evaluated closed-form policies, outperforming JSSQ by 8.8\% and baseline UAS by 12.6\%. We explicitly separate this empirical family from the certified SCUAS subclass, noting that follow-up auditing finds the benchmark-default setting to be uncertified by Theorem 6.7. However, the discovery of a numerically verified piecewise Lyapunov candidate for this default point provides concrete evidence for a future symbolic extension.
 
