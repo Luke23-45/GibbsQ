@@ -8,8 +8,8 @@ It serves as an \emph{empirical} approximation and is not part of the formal sta
 \subsection{Architecture}
 
 The network takes as input the queue-length vector $\Qstate \in \Nats^\Nservers$ and service rates $\srvrate \in \Reals_+^\Nservers$.
-Queue lengths are preprocessed via $\log(1 + \Qlen{i})$ to compress the dynamic range.
-A feedforward network with two hidden layers (widths 32 and 16, respectively) and ReLU activations produces logits, passed through a softmax to yield
+Queue lengths are preprocessed via the look-ahead potential $s_i = (\Qlen{i}+1)/\srvrate_i$, followed by $\log(1 + s_i)$ to compress the dynamic range.
+A feedforward network with two hidden layers of width 128 each and ReLU activations produces logits, passed through a softmax to yield
 \begin{equation}
 \label{eq:neural_output}
 \rprob{i}(\Qstate, \srvrate; \theta) = \softmax\!\bigl(f_\theta(\Qstate, \srvrate)\bigr)_i,
@@ -24,7 +24,7 @@ Training runs for 1{,}000 steps, minimizing cross-entropy to faithfully capture 
 
 \paragraph{Phase~2: REINFORCE Fine-Tuning}
 Starting from BC-pretrained weights, policy gradient optimization proceeds via \reinforce{} with a running-average baseline~\cite{williams1992simple}, using 16-episode batches over 15 epochs (each episode simulates 1{,}000 time units).
-We intentionally employ vanilla \reinforce{} rather than modern alternatives such as PPO (with its surrogate clipped objective) or SAC (a maximum-entropy off-policy architecture). This deliberate experimental design strictly isolates the impact of the starting distribution, demonstrating that guided initialization via behavior cloning---rather than advanced trust-region mechanics---is what fundamentally resolves routing instability. This deliberate constraint means any residual gap between the neural and closed-form policies is attributable to optimization noise rather than architectural capacity---a conservative choice that strengthens rather than weakens the directional finding.
+We intentionally employ vanilla \reinforce{} rather than modern alternatives such as PPO (with its surrogate clipped objective) or SAC (a maximum-entropy off-policy architecture). This deliberate experimental design strictly isolates the impact of the starting distribution, demonstrating that guided initialization via behavior cloning---rather than advanced trust-region mechanics---is what fundamentally resolves routing instability. This means the reported neural results represent a lower bound on achievable performance; more sophisticated RL methods would likely yield further gains.
 The gradient estimator achieves perfect directional agreement with the true gradient (cosine similarity $1.0$; \cref{sec:appendix_gradient}).
 Full hyperparameters are given in \cref{sec:appendix_training}.
 Empirical results for $\ngibbsq$ are reported in \cref{sec:experiments}.

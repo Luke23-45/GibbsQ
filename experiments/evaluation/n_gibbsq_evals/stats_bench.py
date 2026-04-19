@@ -101,9 +101,14 @@ class StatsBenchmark:
         ssa_cfg = sim_cfg.ssa
         mu_np = np.array(self.service_rates, dtype=np.float64)
         baseline_policy_name, _ = _publication_baseline_spec()
+        # NOTE: The Calibrated UAS baseline requires alpha=20.0, matching the
+        # publication benchmark in baselines_comparison.py.  Using cfg.system.alpha
+        # (which defaults to 1.0) would produce a misconfigured, poorly-performing
+        # baseline and an invalid comparison.
+        _CALIBRATED_UAS_ALPHA = 20.0
         baseline_policy = build_policy_by_name(
             baseline_policy_name,
-            alpha=float(self.cfg.system.alpha),
+            alpha=_CALIBRATED_UAS_ALPHA,
             mu=mu_np,
         )
         max_events = compute_poisson_max_steps(self.arrival_rate, mu_np, ssa_cfg.sim_time)

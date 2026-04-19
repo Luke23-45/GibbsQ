@@ -312,9 +312,12 @@ C_{\mathrm{SCUAS}}
 {\varepsilon_{\calbeta,\calgamma,\caloffset}}
 \right\},
 \end{equation}
-we have $\gen \lyap_{\mathrm{SCUAS}}(\Qstate)\le -1$ for all $\Qstate \notin C_{\mathrm{SCUAS}}$.
 The continuous-time Foster--Lyapunov criterion therefore implies positive Harris recurrence.
 \end{proof}
+
+\begin{remark}[Value of the SCUAS theorem despite vacuous instantiation]
+Although no competitive configuration satisfies $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ under the anchor benchmark, the theorem serves three purposes. First, it establishes the correct proof architecture---a matched weighted Lyapunov function with calibrated prior decomposition---that any future certification effort must follow. Second, the failure condition $\varepsilon_{\calbeta,\calgamma,\caloffset}<0$ identifies the exact structural mechanism: fast servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$. Third, the theorem certifies non-competitive parameter regions (e.g., $(\calbeta,\calgamma,\caloffset)=(0.2,0.0,1.30)$ at $\temp=5$ with $\varepsilon=0.255$), proving the framework is not trivially satisfied.
+\end{remark}
 
 \begin{remark}[Geometric intuition for drift failure]
 The sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ structurally demands that every server's normalized departure rate exceeds its bounded arrival factor. Under highly heterogeneous service vectors (such as our evaluated benchmark), the fastest servers ($\srvrate_9, \srvrate_{10}$) receive widely disproportionate routing mass $\arrate \cdot a_i$, which readily exceeds their departure term $\srvrate_i^{1-\calbeta}$ causing the condition to fail. This structural mechanism visually explains why certifying unequal capacity vectors through this unified matched Lyapunov bounding is difficult, and isolates exactly which servers drive the condition to fail.
@@ -325,13 +328,9 @@ The sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ structu
 When $(\calbeta,\calgamma,\caloffset)=(1,1,1)$, the routing law \eqref{eq:scuas_law} coincides algebraically with UAS.
 However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does not replace the stronger UAS result \cref{thm:uas}. 
 
-\vspace{0.5em}
-\noindent\fbox{
-\parbox{0.95\linewidth}{
-\textbf{Key Distinction (Why SCUAS Bounds Fail for UAS):}
-The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). Concretely, $\varepsilon_{1,1,1}$ is also negative under the anchor benchmark by the SCUAS bounding path, yet UAS remains formally certified by the separate and tighter argument in \cref{thm:uas}. \textbf{The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS;} it is merely an artifact of this looser analytical bounding path.
-}}
-\vspace{0.5em}
+\begin{remark}[Why SCUAS bounds fail for UAS parameters]
+The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). Concretely, $\varepsilon_{1,1,1}$ is also negative under the anchor benchmark by the SCUAS bounding path, yet UAS remains formally certified by the separate and tighter argument in \cref{thm:uas}. The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS; it is merely an artifact of this looser analytical bounding path.
+\end{remark}
 
 Accordingly, the manuscript's formal claims are split as follows:
 UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical.
@@ -398,63 +397,7 @@ Second, all calibrated results reported in the empirical sections of this paper 
 \subsection{Numerically Verified Piecewise Drift Candidate (Not Theorem-Grade)}
 \label{sec:caluas_piecewise_candidate}
 
-The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions.
-The checks reported in this subsection provide \textbf{numerical evidence for a candidate Lyapunov construction and negative drift on verified shells} at $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$, though they do not constitute a formal symbolic proof.
-To probe the gap, we performed a separate post-validation search over convex combinations of polynomial, imbalance, and smoothed-max Lyapunov templates, with an exact-shell refinement loop that feeds boundary counterexamples back into the search.
-
-For the benchmark-default calibrated policy $(\calbeta,\calgamma,\caloffset)=(0.85,0.5,0.5)$ at $\temp=20$, the best refined candidate is
-\begin{equation}
-\label{eq:piecewise_candidate}
-\begin{aligned}
-\lyap_{\mathrm{PW}}(\Qstate)
-&=
-0.541679
-\left[
-\frac12 \sum_{i=1}^{\Nservers} \frac{\Qlen{i}^2}{\srvrate_i}
-+
-2 \sum_{i=1}^{\Nservers}
-\left(
-\frac{\Qlen{i}}{\srvrate_i}
--
-\frac{1}{\Nservers}\sum_{j=1}^{\Nservers}\frac{\Qlen{j}}{\srvrate_j}
-\right)^2
-\right] \\
-&\quad
-+ 0.187796 \left(\sum_{i=1}^{\Nservers}\Qlen{i}\right)^2
-+ 0.175661 \sum_{i=1}^{\Nservers}\frac{\Qlen{i}^3}{\srvrate_i}
-+ 0.092741 \left(\sum_{i=1}^{\Nservers}\frac{\Qlen{i}}{\srvrate_i^{1/2}}\right)^2
-+ 0.002124 \max_{1\le i\le \Nservers}\Qlen{i}^2.
-\end{aligned}
-\end{equation}
-where the displayed coefficients are rounded to six decimal places from the verification capsule.
-
-\cref{eq:piecewise_candidate} is a \emph{numerically selected} benchmark-specific candidate, not a theorem-backed symbolic Lyapunov function.
-Its role is evidentiary: it shows that the failure of $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ does not prevent the existence of much stronger negative-drift candidates near the benchmark tail boundary.
-
-The dedicated verification capsule evaluates the exact generator of the benchmark-default calibrated policy against \cref{eq:piecewise_candidate} on three exhaustive boundary shells and on additional high-load random shells. Note that states inside the candidate compact set $C$ (where $|\Qstate|_1 \le 15$) are structurally excluded from verification, as strict negative drift is only required outside $C$, while internal drift is accommodated by the uniform bound $R$.
-Table~\ref{tab:piecewise_candidate} reports the results.
-
-\begin{table}[htbp]
-\centering
-\small
-\caption{Numerical piecewise-drift verification for the benchmark-default calibrated policy at $\temp=20$. The candidate \eqref{eq:piecewise_candidate} is \emph{not} a formal proof, but its exact generator evaluation is strictly negative on all states in the three verified boundary shells and on all sampled higher-load shells listed below.}
-\label{tab:piecewise_candidate}
-\renewcommand{\arraystretch}{1.2}
-\begin{tabular}{@{}l r r r c@{}}
-\toprule
-\textbf{Check set} & \textbf{States} & \textbf{Max drift} & \textbf{Positive states} & \textbf{Pass?} \\
-\midrule
-$|\Qstate|_1 = 16$ & 2{,}042{,}975 & $-4.6446$ & 0 & Yes \\
-$|\Qstate|_1 = 17$ & 3{,}124{,}550 & $-4.6447$ & 0 & Yes \\
-$|\Qstate|_1 = 18$ & 4{,}686{,}825 & $-4.9245$ & 0 & Yes \\
-Random shells $|\Qstate|_1 \in \{24,32,48,64,96,128,160,256\}$ & 8{,}192 & $-21.5534$ & 0 & Yes \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-These checks substantially strengthen the empirical-theory interface for the benchmark-default calibrated point.
-However, this does not mathematically prove a full positive Harris recurrence theorem for the unrestricted calibrated family because it does not provide a symbolic drift inequality valid for \emph{all} sufficiently large states.
-Accordingly, the manuscript treats \cref{eq:piecewise_candidate} and Table~\ref{tab:piecewise_candidate} purely as numerical evidence for a promising piecewise Foster--Lyapunov route, not as a formal replacement for the certified guarantees of \cref{thm:scuas}.
+The negative results in Table~\ref{tab:scuas_audit} demonstrate that the simple SCUAS sufficient condition is too conservative for the benchmark default, but they do not rule out the existence of alternative Lyapunov constructions. A post-validation search identified a benchmark-specific piecewise Lyapunov candidate with strictly negative drift on all verified boundary shells (see Appendix~\ref{sec:appendix_piecewise} for exact coefficients and boundary tables). This constitutes numerical evidence for a viable full-family proof route, not a formal proof.
 
 \subsection{Anchor Benchmark Result}
 \label{sec:scuas_results}

@@ -19,7 +19,7 @@ While entropy-regularized control---structurally analogous to the soft policies 
 GibbsQ makes contributions at three levels:
 
 \begin{enumerate}
-\item \textbf{Stability theorems:}
+\item \textbf{Primary contribution — Stability theorems:}
 We prove positive Harris recurrence~\cite{meyn2012markov}, the standard criterion ensuring a unique stationary distribution, for three analytical routing laws.
 Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Archimedean Softmax (UAS, Theorem~\ref{thm:uas})---so named because its capacity-weighted potential offset functions analogously to an Archimedean structure generator---are established under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
 We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}) (Note: under the anchor benchmark, no competitive routing configuration currently satisfies the SCUAS sufficient condition; the certified region and empirically performant region are disjoint as further detailed in Section 6.4).
@@ -27,7 +27,7 @@ The raw softmax proof uses a quadratic Lyapunov function, the UAS proof uses a c
 All three proofs provide explicit drift constants.
 In contrast to the raw softmax bound, which degrades as $\temp \to 0$, the UAS drift constants are independent of $\temp$, ensuring stability at all temperatures.
 
-\item \textbf{Calibrated closed-form policy:}
+\item \textbf{Secondary contribution — Calibrated closed-form policy:}
 While UAS is provably stable, its parameterization favors analytical tractability over empirical performance, and base UAS ($\temp=10$ at $11.50$) actually underperforms JSSQ ($11.02$) empirically.
 Calibrated UAS addresses this tension with a three-parameter extension that achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard heterogeneous benchmark, outperforming JSSQ by 8.84\%, UAS, and JSQ ($11.81$).
 The $1.45$-unit margin over UAS confirms meaningful empirical improvement beyond the provably stable parameterization.
@@ -36,7 +36,7 @@ In the post-validation audit reported later, the benchmark default and the three
 At the same time, a separate post-validation piecewise search identifies a benchmark-specific Lyapunov candidate whose exact generator is strictly negative on all states in the boundary shells $|\Qstate|_1 \in \{16,17,18\}$ and on additional higher-load sampled shells.
 We report that result as numerical evidence for a viable full-family proof route, not as a theorem.
 
-\item \textbf{Learned policy via structured ablation:}
+\item \textbf{Exploratory contribution — Teacher-choice principle in learned policies:}
 A neural policy ($\ngibbsq$) can capture distributional structure beyond the reach of any fixed closed-form rule.
 Our ablation study quantifies the imitation-learning dynamic that the choice of teacher policy is the dominant factor influencing learned-policy quality, outweighing architectural considerations in this benchmark.
 Under a controlled extended-horizon ablation protocol (Protocol B) using evaluation tracking of the best-performing seed from an ensemble of 5, a neural policy initialized through behavior cloning from Calibrated UAS and fine-tuned with \reinforce{} achieves a mean queue length of $9.82$. 
@@ -59,8 +59,11 @@ To clarify the hierarchical relationship between these routing policies, Table~\
 \textbf{Term} & \textbf{Status} & \textbf{Definition and Scope} \\
 \midrule
 \textbf{UAS} & Universally certified & Analytical policy with temperature-independent drift constants (Thm.~\ref{thm:uas}). \\
-\textbf{SCUAS} & Conditionally certified & Subclass covered by the calibrated Lyapunov drift condition (Thm.~\ref{thm:scuas}). \\
-\textbf{Calibrated UAS} & Empirical family & Broad parameter space evaluated for minimum steady-state queue length. \\
+\addlinespace[3pt]
+\textbf{Calibrated UAS} & Empirical & Full three-parameter heuristic family $(\calbeta,\calgamma,\caloffset)$ evaluated via simulations. No unified theorem applies to this family at the benchmark setting. \\
+\addlinespace[3pt]
+\textbf{SCUAS} & Conditionally certified & Subset of Calibrated UAS covered by the calibrated Lyapunov drift condition (\cref{thm:scuas}). SCUAS $\subset$ Calibrated UAS family. \\
+\addlinespace[3pt]
 \textbf{Benchmark default} & Empirical point & The actively evaluated $(0.85, 0.5, 0.5)$ configuration, lacking theorem certification. \\
 \textbf{$\ngibbsq$} & Learned sequence & Neural policy optimized via RL; strictly empirical, directional improvement. \\
 \bottomrule

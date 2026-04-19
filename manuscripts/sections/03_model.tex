@@ -16,7 +16,7 @@ Consider $\Nservers \geq 1$ parallel servers indexed by $i \in \{1, \dots, \Nser
 \label{eq:queue_state}
 \Qstate(t) = \bigl(\Qlen{1}(t), \dots, \Qlen{\Nservers}(t)\bigr) \in \Nats^\Nservers,
 \end{equation}
-where $\Nats = \{0, 1, 2, \dots\}$ is the set of non-negative integers. The state space is $\mathcal{X} = \Nats^\Nservers$.
+where $\Nats = \{0, 1, 2, \dots\}$ is the set of non-negative integers. The state space is $\mathcal{X} = \Nats^\Nservers$. The benchmark configuration used throughout the experimental evaluation specifies $\Nservers = 10$ servers with $\srvrate_{1:10} = [0.5, 0.7, \dots, 2.3]$ ($\totcap = 14.0$); see Section~\ref{sec:exp:setup} for full protocol details.
 \end{definition}
 
 \begin{definition}[Total service capacity and load condition]
@@ -155,6 +155,7 @@ $\Simplex$ & Probability simplex in $\Reals^\Nservers$ \\
 $\rprob{i}(\Qstate)$ & Routing probability for server $i$ \\
 \addlinespace[3pt]
 $\temp$ & Temperature (entropy-regularization strength) \\
+$\alpha$ & Inverse temperature (softmax concentration parameter); not to be confused with arrival rate $\arrate$ \\
 $\entropy(p)$ & Shannon entropy $-\sum_i p_i \log p_i$ \\
 $\KL{p}{r}$ & Kullback--Leibler divergence \\
 \addlinespace[3pt]
