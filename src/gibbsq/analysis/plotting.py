@@ -1222,38 +1222,32 @@ def plot_raincloud(
     ax.set_xticks(positions)
     ax.set_xticklabels(labels)
     ax.set_ylabel(plot_profile.axis_labels.get("y", y_label))
-    # Migration to figure-level title to avoid overlap with stats bracket
+    # Title padding adjusted to remove the huge whitespace gap
     fig.suptitle(plot_profile.figure_title or f"{group_a_label} vs {group_b_label}: Distribution Comparison",
-                 y=0.98, fontsize=13, fontweight="bold")
+                 y=0.96, fontsize=13, fontweight="bold")
     ax.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha, axis="y")
 
     if stats:
         y_max = max(group_a_data.max(), group_b_data.max())
         
         # Explicitly set Y-axis limit to provide clear headroom for the stats bracket
-        y_headroom = y_max * 1.30
+        y_headroom = y_max * 1.10
         ax.set_ylim(top=y_headroom)
         
-        bracket_y = y_max * 1.12 # Floating above the distribution
+        bracket_y = y_max * 1.05 # Floating above the distribution
         ax.plot([0, 0, 1, 1], [bracket_y * 0.98, bracket_y, bracket_y, bracket_y * 0.98],
                 color=contour, linewidth=1.2)
         parts = []
-        if "p_value" in stats:
-            p = stats["p_value"]
-            stars = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "ns"
-            if p < 0.0001:
-                parts.append(f"p < 0.0001 {stars}")
-            else:
-                parts.append(f"p = {p:.4f} {stars}")
-        if "cohen_d" in stats:
-            parts.append(f"d = {stats['cohen_d']:.2f}")
+        # Pseudoreplicated p-values and effect sizes intentionally removed to prevent methodological violations
         if "improvement_pct" in stats:
             parts.append(f"Δ = {stats['improvement_pct']:.1f}%")
-        ax.text(0.5, bracket_y * 1.05, "  |  ".join(parts),
-                ha="center", fontsize=spec.annotation_fontsize,
-                fontweight="bold")
+        
+        if parts:
+            ax.text(0.5, bracket_y * 1.02, "  |  ".join(parts),
+                    ha="center", fontsize=spec.annotation_fontsize,
+                    fontweight="bold")
 
-    fig.tight_layout(rect=[0, 0, 1, 0.90])
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
 
     if save_path:
         save_chart(fig, Path(save_path), formats or list(plot_profile.preferred_formats))
@@ -1895,7 +1889,7 @@ def plot_tier_comparison_bars(
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=45, ha='right')
     ax.set_ylabel(plot_profile.axis_labels.get("y", 'Expected Total Queue Length E[Q_total]'))
-    ax.set_title(plot_profile.figure_title or 'Corrected Policy Comparison')
+    ax.set_title(plot_profile.figure_title or 'Policy Comparison')
     ax.grid(spec.grid_visible, linestyle=spec.grid_style, alpha=spec.grid_alpha, axis='y')
     ax.text(
         0.01,
@@ -2038,17 +2032,8 @@ def plot_policy_dual_panel(
             f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5, clip_on=False,
         )
 
-        # Quality/Delta Annotation for outliers vs Proposed (consistent with ablation)
-        if h > bottom_ylim[1] and idx != proposed_idx and proposed_val > 0:
-            delta = ((h - proposed_val) / proposed_val) * 100.0
-            ax_top.annotate(
-                f"Baseline: +{delta:.1f}% vs Proposed",
-                xy=(x[idx], h + q_errors[idx] + top_value_pad + top_max * 0.04),
-                xytext=(x[idx], h + q_errors[idx] + top_value_pad + top_max * 0.12),
-                ha="center", va="bottom", fontsize=10.5, fontweight="bold", color="#D55E00",
-                bbox=dict(boxstyle="round,pad=0.35", facecolor="#fff7f0", edgecolor="#D55E00", alpha=0.96),
-                arrowprops=dict(arrowstyle="-", color="#D55E00", shrinkA=4, shrinkB=6),
-            )
+        # Removed outlier delta annotation to retain original exact pixel-to-pixel consistency
+        pass
         
     for idx, (bar, h) in enumerate(zip(bars_bottom, q_values)):
         if h > bottom_ylim[1]:
@@ -2068,23 +2053,7 @@ def plot_policy_dual_panel(
                 bar.get_x() + bar.get_width() / 2, value_y,
                 f"{h:{spec.value_format}}", ha="center", va="bottom", fontsize=10, fontweight="semibold", zorder=5,
             )
-            # Consistency: Add quality delta to bottom panel zoom entries
-            if idx != proposed_idx and proposed_val > 0:
-                delta = ((h - proposed_val) / proposed_val) * 100.0
-                delta_color = "#D55E00" if delta > 0 else "#009E73"
-                sign = "+" if delta > 0 else ""
-                ax_bottom.text(
-                    bar.get_x() + bar.get_width() / 2,
-                    value_y + zoom_max * 0.12,
-                    f"{sign}{delta:.1f}%",
-                    ha="center",
-                    va="bottom",
-                    fontsize=10,
-                    fontweight="bold",
-                    color=delta_color,
-                    clip_on=False,
-                    zorder=5,
-                )
+            # Removed zoom entry delta annotations to retain original exact pixel-to-pixel consistency
             
     kwargs = dict(transform=ax_top.transAxes, color=contour, clip_on=False, linewidth=1.1)
     ax_top.plot((-0.015, +0.015), (-0.015, +0.015), **kwargs)

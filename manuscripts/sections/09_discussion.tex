@@ -24,7 +24,7 @@ Calibrated UAS alters three key components of UAS, each influencing performance 
 \end{itemize}
 
 We conjecture that these adjustments improve steady-state performance by rebalancing load distribution, the tempered normalization and softened prior jointly reduce over-routing to fast servers, while the diminished offset increases responsiveness to current state.
-This conjecture is consistent with the Gini coefficients in Table~\ref{tab:policy}: Calibrated UAS achieves $G = 0.174$ versus UAS's $G = 0.328$, a 47\% reduction in load imbalance, suggesting that the tempered parameters substantially balance routing mass across servers.
+This conjecture is consistent with the Gini coefficients in Table~\ref{tab:policy}: Calibrated UAS achieves $G = 0.174$ versus UAS's $G = 0.328$, a 47\% reduction in load imbalance, suggesting that the tempered parameters substantially balance routing mass across servers. This mirrors the theoretical insight extracted from the pairwise crossover law (derived earlier): explicitly reducing $\calbeta < 1$ shifts the routing boundary threshold toward the inherently faster servers, eliminating severe backlog accumulation on slower elements.
 The $1.45$-unit improvement over UAS ($10.04$ vs.\ $11.495$) confirms substantial empirical gain beyond the provably stable parameterization.
 
 \subsection{Limitations}
@@ -42,8 +42,7 @@ These findings confirm that the choice of teacher policy is the dominant factor 
 Crucially, absolute values from Protocol A and the ablation study (Protocol B) reflect different simulation horizons ($15{,}000$ vs.\ $20{,}000$ units) and are not directly comparable.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
-The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$.
-Performing competitive assessments at larger $\Nservers$ would further substantiate the practical claims.
+The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$. The primary constraint is training stability and computational cost: the \reinforce{} policy gradient estimates become increasingly noisy as the action space and state dimension grow with $\Nservers$, and the behavior-cloning phase requires more teacher samples. Investigating architecture choices (e.g., attention over server states, equivariance) that scale to larger $\Nservers$ is an important open problem.
 We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline demonstrates superior optimality at small bounds, no scaling guarantee is claimed for $\ngibbsq$ or Calibrated UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately verified to scale natively to massive capacities such as $\Nservers = 1{,}024$ without the overhead of neural retraining.
 
 \item \textbf{Coarse parameter grid for Calibrated UAS:}
@@ -73,5 +72,8 @@ Variance reduction via GAE or actor-critic baselines would address the \reinforc
 However, trust-region methods (PPO, natural policy gradient) could additionally improve step-size stability and accelerate convergence.
 
 \item \textbf{Non-stationarity:}
-Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings.
+Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings. A practical online adaptation layer---e.g., lightweight continual fine-tuning of the $\ngibbsq$ network as statistics shift---would bridge the gap to deployed adaptive routing, though such adaptation must be balanced against stability risk during the adaptation transient.
+
+\item \textbf{Geometric ergodicity conjecture:}
+While \cref{thm:uas} establishes positive Harris recurrence, the Foster--Lyapunov framework admits extensions to geometric ergodicity given standard geometric drift and minorization conditions. Under the mild additional requirement of uniform petite sets on compact state spaces, we conjecture that this underlying bounded structure may support exponential mixing rates towards stationarity. This remains an open, speculative question that is essential for deployment in production server loops.
 \end{enumerate}

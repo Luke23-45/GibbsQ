@@ -10,11 +10,12 @@ the full Calibrated UAS family, which remains an empirical three-parameter exten
 The full Calibrated UAS family does \textbf{not} receive a blanket formal stability guarantee in this manuscript.
 Instead, \cref{thm:scuas} isolates a stability-certified subclass, denoted SCUAS, whose routing law is analyzed with a matched weighted Lyapunov function.
 The unrestricted family \eqref{eq:caluas_law} remains empirical outside the parameter settings that satisfy the theorem's explicit sufficient condition.
+Importantly, no competitive configuration evaluated in this paper is SCUAS-certified; the formally certified region and the empirically performant region appear disjoint under our anchor benchmark.
 \end{remark}
 
 \begin{definition}[Calibrated UAS family]
 \label{def:caluas_family}
-The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,1]$:
+The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,\infty)$:
 \begin{equation}
 \label{eq:caluas_law}
 \rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}\right).
@@ -234,7 +235,7 @@ and the last sum is bounded by $\max_i \srvrate_i^{-\calbeta}$.
 
 \begin{theorem}[SCUAS positive Harris recurrence]
 \label{thm:scuas}
-Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,1]$ and define
+Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,\infty)$ and define
 \begin{equation}
 \label{eq:scuas_epsilon}
 \varepsilon_{\calbeta,\calgamma,\caloffset}
@@ -247,6 +248,11 @@ Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,1]$ and define
 \end{equation}
 If $\varepsilon_{\calbeta,\calgamma,\caloffset} > 0$, then under the SCUAS routing law \eqref{eq:scuas_law} the CTMC is non-explosive, irreducible, and positive Harris recurrent.
 \end{theorem}
+
+\begin{remark}[Temperature-conditional certification]
+\label{rem:scuas_temp_dependence}
+Unlike UAS which provides temperature-independent drift constants, SCUAS certification is strictly temperature-conditional. The constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ in \eqref{eq:scuas_epsilon} depends on $\temp$ through $a_i$. Thus, a parameterization $(\calbeta, \calgamma, \caloffset)$ certified at one temperature $\temp$ is not guaranteed to remain certified at another.
+\end{remark}
 
 \begin{proof}
 Non-explosion and irreducibility follow exactly as in \cref{thm:softmax} and \cref{thm:uas}: the total jump rate is bounded by $\arrate + \totcap$, and all routing probabilities remain strictly positive.
@@ -310,12 +316,25 @@ we have $\gen \lyap_{\mathrm{SCUAS}}(\Qstate)\le -1$ for all $\Qstate \notin C_{
 The continuous-time Foster--Lyapunov criterion therefore implies positive Harris recurrence.
 \end{proof}
 
+\begin{remark}[Geometric intuition for drift failure]
+The sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ structurally demands that every server's normalized departure rate exceeds its bounded arrival factor. Under highly heterogeneous service vectors (such as our evaluated benchmark), the fastest servers ($\srvrate_9, \srvrate_{10}$) receive widely disproportionate routing mass $\arrate \cdot a_i$, which readily exceeds their departure term $\srvrate_i^{1-\calbeta}$ causing the condition to fail. This structural mechanism visually explains why certifying unequal capacity vectors through this unified matched Lyapunov bounding is difficult, and isolates exactly which servers drive the condition to fail.
+\end{remark}
+
 \begin{remark}[Relation to UAS and theorem scope]
 \label{rem:scuas_scope}
 When $(\calbeta,\calgamma,\caloffset)=(1,1,1)$, the routing law \eqref{eq:scuas_law} coincides algebraically with UAS.
-However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does not replace the stronger UAS result \cref{thm:uas}, whose drift constants are temperature-independent and are derived from a different variational decomposition.
+However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does not replace the stronger UAS result \cref{thm:uas}. 
+
+\vspace{0.5em}
+\noindent\fbox{
+\parbox{0.95\linewidth}{
+\textbf{Key Distinction (Why SCUAS Bounds Fail for UAS):}
+The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). \textbf{The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS;} it is merely an artifact of this looser analytical bounding path.
+}}
+\vspace{0.5em}
+
 Accordingly, the manuscript's formal claims are split as follows:
-UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical in general.
+UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical.
 \end{remark}
 
 \subsection{Parameter Semantics}
@@ -332,10 +351,11 @@ The empirical benchmark values used throughout are
 \label{eq:caluas_params}
 (\calbeta, \calgamma, \caloffset) = (0.85,\; 0.5,\; 0.5),
 \end{equation}
-selected via a grid search over $\calbeta \in \{0.5, 0.7, 0.85, 1.0\}$, $\calgamma \in \{0.25, 0.5, 0.75, 1.0\}$, and $\caloffset \in \{0.25, 0.5, 0.75, 1.0\}$ (64 configurations).
+Eq. \eqref{eq:caluas_params} was selected via a grid search at $\temp=20$ over $\calbeta \in \{0.5, 0.7, 0.85, 1.0\}$, $\calgamma \in \{0.25, 0.5, 0.75, 1.0\}$, and $\caloffset \in \{0.25, 0.5, 0.75, 1.0\}$ (64 configurations).
 Each configuration was evaluated over 16 independent replications on a validation set separate from the 32-replication anchor benchmark.
-The selected parameters minimize mean total queue length on the validation set.
-The grid is coarse and the parameter surface may be non-convex; systematic optimization (e.g., Bayesian optimization over a continuous domain) is deferred to future work.
+The selected parameters minimize mean total queue length on the validation set. Given the noise floor of $\mathrm{SE} \approx 0.02$--$0.03$ at 16 replications, the minimum over 64 configurations is naturally subject to selection bias; however, the top-5 candidate configurations all clustered tightly near each other with similar validation-set scores, providing robustness to the selection before anchoring to the independent 32-replication final test set.
+The grid is coarse and the parameter surface may be non-convex; systematic optimization (e.g., Bayesian optimization over a continuous domain, notably computationally omitting the region $\caloffset > 1$ despite forming part of the larger analytical domain) is deferred to future work.
+Crucially, the SCUAS certified region is non-empty and accommodates multiple robust configurations: for example, the testing point $(\calbeta, \calgamma, \caloffset) = (0.2, 0.0, 1.3)$ at $\temp = 5$ under the anchor benchmark yields a strictly positive constant $\varepsilon = 0.255$, guaranteeing formal stability for that setting, though its steady-state performance is naturally sub-optimal compared to the uncertified empirical defaults.
 
 The theorem in this section is parameter-conditional.
 For the benchmark-default empirical setting, we do not relabel the policy as certified unless the explicit constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ is verified to be positive under the benchmark configuration.
@@ -353,7 +373,7 @@ Table~\ref{tab:scuas_audit} reports the resulting values.
 \begin{table}[htbp]
 \centering
 \small
-\caption{SCUAS theorem audit under the anchor benchmark configuration. All audited points yield $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$, so none are certified by Theorem~\ref{thm:scuas} under this setup.}
+\caption{SCUAS theorem audit under the anchor benchmark configuration. The benchmark default and competitive candidate points yield $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$, so they are not certified by Theorem~\ref{thm:scuas} under this setup. A certified example (evaluated at $\temp=5$) is included to verify the positive threshold.}
 \label{tab:scuas_audit}
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{@{}lccc r c@{}}
@@ -364,6 +384,8 @@ Benchmark default        & 0.85 & 0.50 & 0.50 & $-1.199$ & No \\
 Candidate 1              & 0.50 & 0.25 & 0.25 & $-0.270$ & No \\
 Candidate 2              & 0.50 & 0.50 & 0.25 & $-0.382$ & No \\
 Candidate 3              & 0.70 & 0.25 & 0.25 & $-0.405$ & No \\
+\addlinespace[3pt]
+Certified example ($\temp{=}5$) & 0.20 & 0.00 & 1.30 & $0.255$ & Yes \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -408,7 +430,7 @@ where the displayed coefficients are rounded to six decimal places from the veri
 \cref{eq:piecewise_candidate} is a \emph{numerically selected} benchmark-specific candidate, not a theorem-backed symbolic Lyapunov function.
 Its role is evidentiary: it shows that the failure of $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ does not prevent the existence of much stronger negative-drift candidates near the benchmark tail boundary.
 
-The dedicated verification capsule evaluates the exact generator of the benchmark-default calibrated policy against \cref{eq:piecewise_candidate} on three exhaustive boundary shells and on additional high-load random shells.
+The dedicated verification capsule evaluates the exact generator of the benchmark-default calibrated policy against \cref{eq:piecewise_candidate} on three exhaustive boundary shells and on additional high-load random shells. Note that states inside the candidate compact set $C$ (where $|\Qstate|_1 \le 15$) are structurally excluded from verification, as strict negative drift is only required outside $C$, while internal drift is accommodated by the uniform bound $R$.
 Table~\ref{tab:piecewise_candidate} reports the results.
 
 \begin{table}[htbp]
@@ -437,22 +459,6 @@ Accordingly, the manuscript treats \cref{eq:piecewise_candidate} and Table~\ref{
 \label{sec:scuas_results}
 
 We conclude this section with the steady-state performance results of the benchmark-default calibrated policy (which, as established in \cref{sec:scuas_audit}, is \textbf{unrestricted and empirical} in this study).
-Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (\cref{sec:exp:policy}):
-\begin{table}[htbp]
-\centering
-\small
-\caption{Anchor benchmark excerpt: top closed-form policies ($\Nservers{=}10$, $\rho{=}0.80$, 32 replications).}
-\label{tab:caluas_benchmark}
-\renewcommand{\arraystretch}{1.25}
-\begin{tabular}{@{}lr@{}}
-\toprule
-\textbf{Policy} & \textbf{Mean $\E[\sum_i\Qlen{i}]$} \\
-\midrule
-Calibrated UAS & 10.042 \\
-JSSQ & 11.016 \\
-UAS ($\temp{=}10$) & 11.495 \\
-\bottomrule
-\end{tabular}
-\end{table}
-These improvements over JSSQ and baseline UAS demonstrate that relaxing the analytical parameterization yields measurable steady-state gains, establishing Calibrated UAS as a competitive empirical closed-form baseline.
+Calibrated UAS achieves the lowest mean total queue length among all closed-form policies in the anchor benchmark (see Table~\ref{tab:policy} in \cref{sec:exp:policy} for full rankings and statistics).
+These improvements over JSSQ and baseline UAS ($10.04$ vs.\ $11.02$ and $11.50$, respectively) demonstrate that relaxing the analytical parameterization yields measurable steady-state gains, establishing Calibrated UAS as a competitive empirical closed-form baseline.
 Combined with Table~\ref{tab:scuas_audit}, they also clarify the analytical--empirical split in this study: the default calibrated benchmark performs best among the closed-form rules we tested, but it is not theorem-certified under the anchor benchmark.

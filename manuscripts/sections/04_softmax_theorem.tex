@@ -29,7 +29,7 @@ The proof proceeds in five steps.
 \medskip
 \noindent\textbf{Step~1: CTMC regularity and generator.}
 
-The state space $\mathcal{X} = \Nats^\Nservers$ is countable. The total jump rate from any state is bounded by $\arrate + \totcap$, so the chain is non-explosive. Because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$, the chain is irreducible.
+The state space $\mathcal{X} = \Nats^\Nservers$ is countable. The total departure rate satisfies $\sum_{i=1}^\Nservers \srvrate_i \Ind_{\Qlen{i}>0} \le \sum_{i=1}^\Nservers \srvrate_i = \totcap$, so the global jump rate from any state is uniformly bounded by $\arrate + \totcap < \infty$, confirming non-explosion. Because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$, the chain is irreducible.
 
 Define the Lyapunov function
 \begin{equation}

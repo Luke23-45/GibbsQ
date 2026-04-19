@@ -14,6 +14,7 @@ For temperature $\temp > 0$, define the UAS potential
 \label{eq:uas_potential}
 \uaspot{i}(\Qstate, \srvrate) = \frac{\Qlen{i}+1}{\srvrate_i} - \frac{1}{\temp}\log \srvrate_i.
 \end{equation}
+The policy's name derives from the potential's $\frac{\Qlen{i}+1}{\srvrate_i}$ term, which acts structurally as a capacity-weighted proxy broadly comparable to an Archimedean generator function.\footnote{The analogy to Archimedean generators is structural and motivational, not algebraic---the UAS potential is not a copula generator and does not inherit copula properties.} Specifically, similar to how an Archimedean copula generates dependence structures via a monotonic generator function mapping to $[0,\infty)$, the UAS potential generates routing dependence via a monotonic mapping from state--capacity space to a strictly convex objective.
 \end{definition}
 
 The corresponding routing law is
@@ -49,7 +50,7 @@ Expand the KL divergence:
 \KL{p}{r} = \sum_i p_i \log p_i - \sum_i p_i \log \uasprior{i}
 = \sum_i p_i \log p_i - \sum_i p_i \log \srvrate_i + \log \totcap.
 \end{equation}
-Substituting into~\eqref{eq:uas_variational_obj} shows that $\mathcal{G}_{\mathrm{UAS}}(p)$ is algebraically identical to the standard UAS entropy-regularized objective $\sum_i p_i \uaspot{i} + \frac{1}{\temp} \sum_i p_i \log p_i$, up to a constant shift of $+\frac{1}{\temp}\log\totcap$. Strict convexity of $\mathcal{G}_{\mathrm{UAS}}$ in $p$ follows from the strict convexity of $\KL{p}{r}$ over the open simplex, guaranteeing a unique minimizer. The first-order optimality conditions on the simplex yield
+Substituting into~\eqref{eq:uas_variational_obj} shows that $\mathcal{G}_{\mathrm{UAS}}(p)$ is algebraically identical to the standard UAS entropy-regularized objective $\sum_i p_i \uaspot{i} + \frac{1}{\temp} \sum_i p_i \log p_i$, up to a constant shift of $+\frac{1}{\temp}\log\totcap$. Since each $p_i(\Qstate,\srvrate) = \srvrate_i \exp(-\temp\uaspot{i})/Z > 0$ for all $i$, the minimizer lies in the open interior of $\Simplex$, where $\KL{p}{r}$ is strictly convex, confirming uniqueness. The first-order optimality conditions on the simplex yield
 \begin{equation}
 \label{eq:uas_foc}
 \log p_i = \mathrm{const} - \temp\, \uasenergy{i}(\Qstate, \srvrate) + \log \uasprior{i}
@@ -76,7 +77,7 @@ If all queues are empty ($\Qlen{i} = 0$ for all $i$), the routing law reduces to
 \label{eq:uas_empty_state}
 p_i(\mathbf{0}, \srvrate) \propto \srvrate_i\, e^{-\temp/\srvrate_i}.
 \end{equation}
-At large $\temp$ (low temperature, exploitative regime), $e^{-\temp/\srvrate_i} \to 0$ for slow servers while remaining close to $1$ for fast servers, so UAS concentrates routing mass on the fastest server.
+At large $\temp$ (low temperature, exploitative regime), $e^{-\temp/\srvrate_i} \to 0$ for slow servers while remaining close to $1$ for fast servers, so UAS heuristically approaches JSSQ-like behavior, concentrating routing mass on the fastest server.
 At small $\temp$ (high temperature, exploratory regime), $e^{-\temp/\srvrate_i} \to 1$ for all $i$, so UAS approaches proportional routing ($p_i \propto \srvrate_i$).
 This smooth interpolation between exploitative and proportional routing at the idle state distinguishes UAS from threshold-based policies.
 
@@ -93,7 +94,7 @@ Rearranging yields the crossover boundary at which routing mass transfers betwee
 \end{equation}
 The right-hand side is a constant (for fixed $\temp$ and service rates), so the crossover condition defines a hyperplane in the normalized queue-length space $\Qlen{i}/\srvrate_i$.
 For JSQ, the analogous crossover is $\Qlen{f} = \Qlen{s}$; for JSSQ, it is $\Qlen{f}/\srvrate_f = \Qlen{s}/\srvrate_s$.
-UAS interpolates between these extremes through the $\log$-ratio term, which vanishes as $\temp \to \infty$ (recovering JSSQ-like behavior) and dominates as $\temp \to 0$ (favoring the faster server regardless of queue imbalance).
+UAS interpolates between these extremes through the $\log$-ratio term, which vanishes only in the strict limit as $\temp \to \infty$ (recovering exact JSSQ behavior in the limit, though no finite $\temp$ achieves exact deterministic JSSQ assignments) and dominates as $\temp \to 0$ (favoring the faster server regardless of queue imbalance).
 This provides structural intuition for why Calibrated UAS with $\calbeta < 1$ may improve performance: tempering the normalization $\srvrate_i^{\calbeta}$ shifts the crossover boundary toward the faster server.
 
 \subsection{Lyapunov Argument}
@@ -144,7 +145,7 @@ Since $\KL{p}{r} \geq 0$,
 \sum_{i=1}^{\Nservers} \rprob{i}\, \uasenergy{i}
 \leq -\frac{1}{\temp}\log \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}.
 \end{equation}
-Apply Jensen's inequality to the convex map $u \mapsto e^{-\temp u}$:
+Apply Jensen's inequality to the convex map $u \mapsto e^{-\temp u}$. Note that this bound is tight only when the energy terms $\uasenergy{i} = (\Qlen{i}+1)/\srvrate_i$ are constant across all servers; the looseness under heterogeneous congestion directly results in the conservative guarantee detailed later:
 \begin{equation}
 \label{eq:uas_jensen}
 \sum_{i=1}^{\Nservers} \uasprior{i}\, e^{-\temp\, \uasenergy{i}}
@@ -228,6 +229,16 @@ C_{\mathrm{UAS}} = \left\{\Qstate \in \Nats^\Nservers : \abs{\Qstate}_1 \leq \fr
 we have $\gen \lyap_{\mathrm{UAS}}(\Qstate) \leq -1$ for all $\Qstate \notin C_{\mathrm{UAS}}$. By the continuous-time Foster--Lyapunov criterion, the CTMC is positive Harris recurrent.
 \end{proof}
 
+\begin{corollary}[UAS steady-state expectation bound]
+\label{cor:uas_expectation}
+By the standard ergodic theorem, the strictly negative Foster--Lyapunov drift outside the compact set $C_{\mathrm{UAS}}$ implies a closed-form bound on the steady-state mean total queue length:
+\begin{equation}
+\label{eq:uas_expectation}
+\E_{\pi}[\abs{\Qstate}_1] \leq \frac{R_{\mathrm{UAS}}}{\varepsilon_{\mathrm{UAS}}} = \frac{\arrate \Nservers / \totcap + \Nservers / 2}{(\totcap - \arrate)/\totcap}.
+\end{equation}
+For the anchor benchmark evaluated in Section~\ref{sec:experiments} ($\Nservers=10, \rho=0.80$), this bound evaluates exactly to $65$. While this establishes formal stability analytically, the magnitude ($65$) is conservative compared to the actual empirical mean ($\approx 11.5$). The looseness stems from the Jensen relaxation $\sum \uasprior{i} e^{-\temp \uasenergy{i}} \ge \exp(-\temp \sum \uasprior{i} \uasenergy{i})$, which is tight only when all normalized loads $\uasenergy{i}$ are equal. Under the heterogeneous benchmark ($\srvrate_i$ ranging 0.5--2.3), the gap is large by design---this is the structural price of the temperature-independent guarantee.
+\end{corollary}
+
 \subsection{Properties of the UAS Bound}
 \label{sec:uas:discussion}
 
@@ -237,12 +248,8 @@ Four structural properties of the UAS stability result merit emphasis.
 \label{sec:uas:discussion:independence}
 UAS is \emph{not} a corollary of \cref{thm:softmax}. It uses a different variational objective (prior-weighted KL divergence $\KL{p}{r}$ instead of uniform entropy), a different Lyapunov function ($\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ instead of $\frac{1}{2}\sum_i \Qlen{i}^2$), and a different arrival-term bound (Jensen's inequality on the prior-weighted $\logsumexp$ instead of the entropy ceiling $\entropy \leq \log \Nservers$). These are structurally distinct proof paths.
 
-\paragraph{Role of the prior}
-The service-rate prior $\uasprior{i} = \srvrate_i / \totcap$ is the key structural difference from raw softmax. It enables the KL-based variational identity~\eqref{eq:uas_var_id} and the Jensen bound~\eqref{eq:uas_jensen}, which together eliminate the $(\log \Nservers)/\temp$ additive penalty that appears in the raw softmax bound~\eqref{eq:softmax_arrival_bound}.
-
 \paragraph{Temperature-independent stability guarantee}
-The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ depend only on $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$ and are \emph{independent of the temperature~$\temp$}.
-This is a structural advantage over raw softmax, whose constant $R = (\arrate \log \Nservers)/\temp + C_1$ degrades as $\temp \to 0$; UAS is provably stable at the same rate for all $\temp > 0$.
+Temperature independence is an artifact of the conservative Jensen bound, which discards all $\temp$-dependence. This yields a uniform (though loose) guarantee across all $\temp > 0$. The drift constants $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ and $R_{\mathrm{UAS}} = \arrate\Nservers/\totcap + \Nservers/2$ depend only on $(\arrate, \srvrate_1, \dots, \srvrate_\Nservers)$. A tighter, $\temp$-dependent analysis would likely recover stronger bounds at higher temperatures.
 
 \paragraph{Motivation for empirical extensions}
 Although UAS is provably stable, its parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance, motivating the broader Calibrated UAS family and the stability-certified calibrated subclass developed in \cref{sec:calibrated_uas}.

@@ -5,15 +5,15 @@
 The dispatching of tasks to heterogeneous parallel servers is a core challenge in operations research, prevalent in server farms, cloud platforms, and communication networks.
 The classical Join the Shortest Queue (JSQ) policy is optimal under homogeneous servers but ignores service rates.
 Its extension JSSQ, which accounts for server speed, remains a deterministic rule with no natural entropy-regularized generalization providing formal stability bounds.
-RL approaches offer adaptability for complex queueing systems but suffer from catastrophic instability when deployed without theoretical guarantees.
-We close this gap by designing routing laws that depend on the current state, are aware of capacity, enjoy provable stability, and are structured to support neural policy architectures.
+RL approaches offer adaptability for complex queueing systems, but gradient-based RL methods applied without guided initialization often suffer from catastrophic instability when deployed without theoretical guarantees.
+We close this gap by designing routing laws that depend on the current state, are aware of capacity, enjoy provable stability, and are structured to support neural policy architectures. Our formal analysis focuses on standard Markovian conditions (Poisson arrivals, exponential service); evaluating robustness to general non-Markovian model misspecification remains an important future extension. All logarithms in this manuscript denote the natural logarithm unless otherwise specified.
 
 \subsection{Entropy-Regularized Routing}
 We follow the Gibbs-measure perspective: incoming tasks are assigned to servers using a softmax distribution over server scores, where the temperature parameter $\temp > 0$ balances between uniform (exploratory) and greedy (exploitative) routing.
 The softmax function is regularized using a penalty based on Shannon entropy.
 The UAS policy is regularized via KL divergence relative to a capacity-rate prior.
 The log-sum-exp normalizer for each formulation serves as the convex conjugate of its respective regularizer~\cite{boyd2004convex}, linking queue routing to convex duality, which allows for precise Lyapunov drift bounds through variational identities while naturally delivering the smooth, differentiable outputs needed for neural policy gradients.
-While entropy-regularized control is established in reinforcement learning, to the best of our knowledge, we provide explicit Foster--Lyapunov stability proofs for heterogeneous queueing that leverage these convex duality principles.
+While entropy-regularized control---structurally analogous to the soft policies of maximum-entropy reinforcement learning and the Soft Actor-Critic (SAC) formulation~\cite{haarnoja2018soft}---is established in reinforcement learning, to the best of our knowledge, we provide explicit Foster--Lyapunov stability proofs for heterogeneous queueing that leverage these convex duality principles.
 
 \subsection{Contributions}
 GibbsQ makes contributions at three levels:
@@ -21,15 +21,15 @@ GibbsQ makes contributions at three levels:
 \begin{enumerate}
 \item \textbf{Stability theorems:}
 We prove positive Harris recurrence~\cite{meyn2012markov}, the standard criterion ensuring a unique stationary distribution, for three analytical routing laws.
-Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Archimedean Softmax (UAS, Theorem~\ref{thm:uas}) are established under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
+Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Archimedean Softmax (UAS, Theorem~\ref{thm:uas})---so named because its capacity-weighted potential offset functions analogously to an Archimedean structure generator---are established under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
 We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}).
 The raw softmax proof uses a quadratic Lyapunov function, the UAS proof uses a capacity-weighted Lyapunov function together with a prior-weighted KL variational identity, and the SCUAS proof uses a matched weighted Lyapunov function together with a calibrated prior decomposition.
 All three proofs provide explicit drift constants.
 In contrast to the raw softmax bound, which degrades as $\temp \to 0$, the UAS drift constants are independent of $\temp$, ensuring stability at all temperatures.
 
 \item \textbf{Calibrated closed-form policy:}
-While UAS is provably stable, its parameterization favors analytical tractability over empirical performance.
-Calibrated UAS addresses this with a three-parameter extension that achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard heterogeneous benchmark, outperforming JSSQ ($11.02$), UAS ($11.50$), and JSQ ($11.81$).
+While UAS is provably stable, its parameterization favors analytical tractability over empirical performance, and base UAS ($\temp=10$ at $11.50$) actually underperforms JSSQ ($11.02$) empirically.
+Calibrated UAS addresses this tension with a three-parameter extension that achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard heterogeneous benchmark, outperforming JSSQ by 8.84\%, UAS, and JSQ ($11.81$).
 The $1.45$-unit margin over UAS confirms meaningful empirical improvement beyond the provably stable parameterization.
 We explicitly distinguish the full Calibrated UAS family from the certified subclass SCUAS: the full family is an empirical, heuristic extension designed to optimize steady-state behavior, while only the parameter settings covered by Theorem~\ref{thm:scuas} carry a formal calibrated stability guarantee.
 In the post-validation audit reported later, the benchmark default and the three audited candidate points all have $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor benchmark, so the calibrated policies used in the experiments remain empirical in this paper.
@@ -38,7 +38,7 @@ We report that result as numerical evidence for a viable full-family proof route
 
 \item \textbf{Learned policy via structured ablation:}
 A neural policy ($\ngibbsq$) can capture distributional structure beyond the reach of any fixed closed-form rule.
-Our ablation study indicates that the choice of teacher policy is a primary factor influencing learned-policy quality in this benchmark.
+Our ablation study quantifies the imitation-learning dynamic that the choice of teacher policy is the dominant factor influencing learned-policy quality, outweighing architectural considerations in this benchmark.
 A neural policy initialized through behavior cloning from Calibrated UAS and fine-tuned with \reinforce{} achieves a mean queue length of $9.82$. Notably, this strongest neural result is not the default learned policy configuration; the same architecture trained from the uncalibrated UAS teacher yields $11.14$ (underperforming both JSSQ and UAS), and training from scratch leads to catastrophic divergence ($5{,}451$).
 
 This learned-policy advantage is consistent across the 16 operating configurations tested and persists into near-critical load regimes up to $\rho = 0.98$.

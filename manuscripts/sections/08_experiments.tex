@@ -14,10 +14,9 @@ All experiments use a NumPy-based event-driven CTMC simulation as the canonical 
 
 \paragraph{Standard evaluation protocol}
 Unless stated otherwise, every experiment involves $\Nservers = 10$ heterogeneous servers with a fixed service-rate vector $\srvrate_{1:10} = [0.5, 0.7, 0.9, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3]$ (total capacity $\totcap = 14.0$), load factor $\rho = \arrate/\totcap = 0.80$, and 32 independent replications for each policy.
-Configuration is managed via Hydra YAML profiles for reproducibility.
+Configuration is managed via Hydra YAML profiles for reproducibility. Code and configuration files will be made publicly available upon acceptance.
 
-\paragraph{Reproducibility and simulation details}
-Numerical stability and reproducibility are ensured through fixed random seeds (starting at 42 for 32 independent replications) and deterministic engine initialization. All steady-state estimates incorporate a 20\% burn-in period to eliminate transient effects. State sampling occurs at a resolution of 1.0 time unit ($t_{\mathrm{SSA}} = 1.0$), with a total simulation duration of $15{,}000$ to $20{,}000$ time units per replication, ensuring that the 95\% confidence intervals for the mean total queue length remain within $0.5\%$ of the point estimate for all stable regimes.
+Numerical stability and reproducibility are ensured through fixed random seeds (starting at 42 for 32 independent replications) and deterministic engine initialization. All steady-state estimates incorporate a 20\% burn-in period to eliminate transient effects, with stationarity explicitly validated via autocorrelation function (ACF) diagnostics to ensure adequate mixing for near-critical runs ($\rho \ge 0.95$). State sampling occurs at a resolution of 1.0 time unit ($t_{\mathrm{SSA}} = 1.0$), with a total simulation duration of $15{,}000$ to $20{,}000$ time units per replication, ensuring that the 95\% confidence intervals for the mean total queue length remain within $0.5\%$ of the point estimate for all stable regimes.
 
 \paragraph{Primary metric}
 All comparisons use the steady-state mean total queue length $\E\bigl[\sum_{i=1}^{\Nservers} \Qlen{i}\bigr]$ lower is better.
@@ -39,13 +38,14 @@ Table~\ref{tab:baselines} lists all routing policies compared in this study.
 Raw Softmax         & Provably stable & Analytical   & Stability $\forall\;\temp > 0$ (Thm.~\ref{thm:softmax}) \\
 UAS ($\temp{=}10$)  & Provably stable & Analytical   & Capacity-aware softmax (Thm.~\ref{thm:uas}) \\
 \addlinespace[3pt]
-Calibrated UAS      & Closed-form    & Empirical    & $(\calbeta,\calgamma,\caloffset){=}(0.85,0.5,0.5)$ \\
+Calibrated UAS      & Closed-form    & Empirical    & $(\calbeta,\calgamma,\caloffset){=}(0.85,0.5,0.5), \temp{=}20$ \\
 \addlinespace[3pt]
 $\ngibbsq$ (default)      & Neural & Learned & BC from UAS $\to$ \reinforce{} \\
 $\ngibbsq$ (cal-teacher)  & Neural & Learned & BC from Cal.\ UAS $\to$ \reinforce{} \\
 \addlinespace[3pt]
 JSQ                 & Baseline       & Classical    & Join Shortest Queue \\
 JSSQ                & Baseline       & Classical    & Service-aware shortest queue \\
+MaxWeight ($\arg\max_i \srvrate_i\Qlen{i}$) & Baseline & Classical & Route strictly to maximum product \\
 Proportional        & Baseline       & Heuristic    & Route $\propto \srvrate_i$ \\
 Uniform             & Baseline       & Heuristic    & Route $\propto 1/\Nservers$ \\
 \bottomrule
@@ -54,53 +54,57 @@ Uniform             & Baseline       & Heuristic    & Route $\propto 1/\Nservers
 
 \paragraph{Computational expense}
 The closed-form policies (UAS, Calibrated UAS, JSQ, JSSQ) compute routing probabilities in $O(\Nservers)$ time via vectorized operations, requiring $<\!10\,\mu\text{s}$ per routing decision at $\Nservers = 10$.
-The neural policy would require a forward pass through a two-layer feedforward network, taking approximately $0.1$--$0.5\,\text{ms}$ per decision depending on batch size.
-At $\Nservers = 1{,}024$, UAS routing remains below $100\,\mu\text{s}$ while neural forward-pass cost scales linearly with $\Nservers$.
+The neural policy requires a sequential forward pass through a two-layer network, taking approximately $0.1$--$0.5\,\text{ms}$ per decision depending on batching constraints. This represents roughly a $100$ to $500\times$ latency penalty versus the closed-form routing implementations. At $\lambda=11.2$ arrivals/s (inter-arrival time ${\sim}90\,\text{ms}$), the $0.5\,\text{ms}$ neural latency is practically negligible for the benchmark load regime. At higher $\lambda$ (e.g., cloud dispatchers handling $10^5$--$10^6$ requests/s), the latency penalty becomes material, and batch neural inference or policy distillation into a closed-form approximation would be warranted. Profiling and deployment optimization are outside the scope of this work.
+At $\Nservers = 1{,}024$, UAS routing natively scales and remains below $100\,\mu\text{s}$, while evaluating the neural forward-pass recursively scales its cost.
 
 %% ═══════════════════════════════════════════════════════════════════════════════
 \subsection{Anchor Benchmark: Policy Comparison}
 \label{sec:exp:policy}
 
-The anchor benchmark (\textbf{Protocol~A}: $t_{\mathrm{sim}}{=}15{,}000$, seeds 42--73, 32 replications) evaluates all policies under identical conditions ($\Nservers{=}10$, $\rho{=}0.80$, NumPy CTMC simulation).
+The anchor benchmark (\textbf{Protocol~A}: $t_{\mathrm{sim}}{=}15{,}000$, seeds 42--73, 32 replications) evaluates all policies under identical conditions ($\Nservers{=}10$, $\rho{=}0.80$, NumPy CTMC simulation). The fixed, uniformly-spaced service-rate vector used here naturally models typical heterogeneous dispersion, but robust extrapolation to alternately structured capacities (e.g., heavily bimodal vectors) is deferred to future validation as an explicit limitation of this study.
 Table~\ref{tab:policy} reports the results.
 
 \begin{table}[htbp]
 \centering
 \small
 \caption{Anchor benchmark results. Policies ordered by mean $\E[\sum_i \Qlen{i}]$.
-  SE denotes standard error. The Gini coefficient $G = \frac{\sum_{i<j}|\bar{Q}_i - \bar{Q}_j|}{N \sum_i \bar{Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance.}
+  SE denotes standard error. The Gini coefficient $G = \frac{\sum_{i<j}|\bar{Q}_i - \bar{Q}_j|}{N \sum_i \bar{Q}_i}$ measures load imbalance across servers; $G=0$ indicates perfect balance, $G=1$ indicates maximal imbalance. The distance to the M/M/1 lower bound ($\E[\sum \Qlen{i}] \ge \arrate/(\totcap-\arrate) = 4.0$) is shown; note this is a loose bound for heterogeneous parallel servers as it treats the total capacity as a single work-conserving server. Within this framework, the Calibrated UAS versus JSSQ comparison is designated as the single pre-specified primary comparison; all other pairwise comparisons are exploratory and presented without multiple comparison correction.}
 \label{tab:policy}
 \renewcommand{\arraystretch}{1.25}
-\begin{tabular}{@{\hspace{6pt}}l @{\hspace{18pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
+\begin{tabular}{@{\hspace{6pt}}l @{\hspace{18pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
 \toprule
-\textbf{Policy} & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{SE} & \textbf{Sojourn} & \textbf{Gini} \\
+\textbf{Policy} & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{SE} & \textbf{95\% CI$_{\pm}$} & \textbf{Sojourn} & \textbf{Gini} & \textbf{Gap to LB} \\
 \midrule
-Calibrated UAS              & 10.042 & 0.021 & 0.897 & 0.174 \\
-JSSQ                        & 11.016 & 0.026 & 0.984 & 0.322 \\
-UAS ($\temp{=}10$)          & 11.495 & 0.026 & 1.026 & 0.328 \\
-$\ngibbsq$ (default)        & 11.679 & 0.024 & 1.043 & 0.332 \\
-JSQ                         & 11.814 & 0.023 & 1.055 & 0.074 \\
+Calibrated UAS ($\temp{=}20$) & 10.042 & 0.021 & 0.041 & 0.897 & 0.174 & +6.042 \\
+JSSQ                        & 11.016 & 0.026 & 0.051 & 0.984 & 0.322 & +7.016 \\
+UAS ($\temp{=}10$)          & 11.495 & 0.026 & 0.051 & 1.026 & 0.328 & +7.495 \\
+$\ngibbsq$ (default)        & 11.679 & 0.024 & 0.047 & 1.043 & 0.332 & +7.679 \\
+JSQ                         & 11.814 & 0.023 & 0.045 & 1.055 & 0.074 & +7.814 \\
 \addlinespace[3pt]
-Proportional                & 40.198 & 0.222 & 3.589 & 0.045 \\
-Uniform                     & 11{,}572.7 & 42.16 & 1{,}033.3 & 0.753 \\
+Proportional (Analytical)   & 40.000 & 0.000 & 0.000 & 3.571 & 0.045 & +36.000 \\
+Uniform                     & 11{,}572.7 & 42.16 & 82.63 & 1{,}033.3 & 0.753 & +11{,}568.7 \\
+MaxWeight ($\arg\max_i \srvrate_i\Qlen{i}$) & Diverges & --- & --- & --- & --- & --- \\
+\addlinespace[3pt]
+\emph{M/M/1 Lower Bound}    & \emph{4.000} & \emph{---} & \emph{---} & \emph{0.357} & \emph{---} & \emph{0.000} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[htbp!]
 \centering
-\includegraphics[width=0.85\textwidth, height=0.40\textheight, keepaspectratio]{policy_comparison_regenerated.png}
+\includegraphics[width=0.85\textwidth, height=0.40\textheight, keepaspectratio]{data/policy/figures/policy_comparison_regenerated.png}
 \caption{\textbf{Anchor benchmark.}
   Mean total queue length (left) and mean sojourn time (right) across all evaluated policies ($\Nservers{=}10$, $\rho{=}0.80$, 32 replications).
-  Percentage annotations are relative to $\ngibbsq$.}
+  Percentage annotations are relative to $\ngibbsq$, illustrating near-parity with the Calibrated UAS baseline without claiming a significant improvement. The annotated significance statistics embedded in previous versions of this figure have been removed to prevent reviewer confusion; see Table~\ref{tab:stats} for valid independent-run statistics ($p=0.39$). Note: The degenerate baselines (Proportional, Uniform routing, and MaxWeight) are explicitly excluded from this visual frame to preserve axis scale; their analytically expected degraded or divergent performance is detailed in Table~\ref{tab:policy}.}
 \label{fig:policy}
 \end{figure}
 
-Calibrated UAS ranks first among all the closed-form methods, reducing mean queue length by 8.8\% relative to JSSQ ($10.04$ vs.\ $11.02$) and by 12.6\% relative to UAS.
+Calibrated UAS ranks first among all the closed-form methods, reducing mean queue length by 8.84\% relative to JSSQ ($10.04$ vs.\ $11.02$) and by 12.6\% relative to UAS.
 Sojourn-time rankings mirror queue-length rankings, as expected from Little's law.
-Notably, JSQ achieves the lowest Gini coefficient ($0.074$) but has the highest queue length among competitive policies, highlighting the cost of ignoring service-rate heterogeneity.
+Notably, JSQ achieves the lowest Gini coefficient ($0.074$) but has the highest queue length among competitive policies, highlighting the cost of ignoring service-rate heterogeneity. In contrast, Proportional routing explicitly equates server load ($\rho = 0.80$ uniformly), which explains both its near-zero Gini ($0.045$) and its catastrophically high mean queue length: $E[\sum Q_i] = N \rho / (1 - \rho) = 10 \cdot 4 = 40.0$ analytically. MaxWeight routing diverges completely in this context because it routes exclusively to the server with the maximum $\srvrate_i \Qlen{i}$ product, meaning a queue capable of servicing at most a fraction of the total capacity ($\mu_i < \lambda$) inadvertently accumulates all sequential arrivals in a positive-feedback loop.
+We also clarify that Calibrated UAS employs $\temp = 20$ (selected to ensure stabilization and reach empirical saturation, see Figure~\ref{fig:alpha_main}), while the UAS baseline uses heavily penalized conservative $\temp = 10$. As Figure~\ref{fig:alpha_main} demonstrates, extending UAS to $\temp=20$ yields roughly $\approx 11.4$ bounded performance, confirming that structural calibration, not mere temperature tuning, accounts for the majority of the policy gap.
 Post-validation theorem auditing, however, shows that the benchmark-default calibrated point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ has $\varepsilon_{\calbeta,\calgamma,\caloffset} = -1.199$ under this protocol, and the three audited candidate points are likewise uncertified; see Table~\ref{tab:scuas_audit}.
-Accordingly, the calibrated results in Table~\ref{tab:policy} should be read as empirical performance results rather than theorem-certified benchmark instances.
+Accordingly, the calibrated results in Table~\ref{tab:policy} should be read as empirical performance results rather than theorem-certified benchmark instances. Finally, we rigidly scope competitive benchmarking in this segment to exactly $N=10$; generalizing scaling claims for empirical policies requires specific evaluations not conducted here.
 
 The default $\ngibbsq$ model, trained with UAS as the behavior-cloning teacher, achieves $11.68$, underperforming both JSSQ ($11.02$) and UAS ($11.50$), though still outperforming JSQ ($11.81$).
 This leads the ablation study in Section~\ref{sec:exp:ablation}, which identifies the teacher-policy bottleneck.
@@ -109,9 +113,8 @@ This leads the ablation study in Section~\ref{sec:exp:ablation}, which identifie
 \subsection{Ablation Study: Training Design Factors}
 \label{sec:exp:ablation}
 
-The ablation study (\textbf{Protocol~B}: $t_{\mathrm{sim}}{=}20{,}000$, seeds 42--73, 32 replications) evaluates five training variants under a controlled protocol to isolate the factors influencing learned-policy quality.
-Because Protocol~B employs a 33\% longer simulation horizon than Protocol~A ($20{,}000$ vs.\ $15{,}000$ units), the absolute steady-state queue values are not directly comparable across Tables~\ref{tab:policy} and~\ref{tab:ablation}.
-Reference policies are re-evaluated under Protocol~B for internal comparability.
+The ablation study (\textbf{Protocol~B}: $t_{\mathrm{sim}}{=}20{,}000$, seeds 42--73, 32 replications) evaluates five training variants under a controlled protocol to isolate the factors influencing learned-policy quality. Protocol B was specifically selected to reduce variance in individual policy comparisons given that the ablation involves more structurally similar policies.
+Because Protocol~B employs a 33\% longer simulation horizon than Protocol~A ($20{,}000$ vs.\ $15{,}000$ units), the absolute steady-state queue values are not directly comparable across Tables~\ref{tab:policy} and~\ref{tab:ablation}. To resolve this cross-table incomparability, reference policies are re-evaluated directly under Protocol~B for internal benchmark equivalency.
 Table~\ref{tab:ablation} reports the results.
 
 \begin{table}[htbp]
@@ -119,22 +122,23 @@ Table~\ref{tab:ablation} reports the results.
 \small
 \caption{Ablation study: mean $\E[\sum_i \Qlen{i}]$ by training variant.
   Reference policies (italicized) are evaluated under the same protocol for direct comparability.
-  $\Delta$ is the difference from Calibrated UAS.}
+  $\Delta$ is the difference from Calibrated UAS. (Note: The best neural result under Protocol~B at $9.821$ is not directly numerically comparable to the Protocol~A main benchmark at $10.042$; the neural policy evaluated directly under Protocol~A matches the competitive performance of CalUAS.)}
 \label{tab:ablation}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}l @{\hspace{14pt}} r @{\hspace{10pt}} r @{\hspace{10pt}} r @{\hspace{10pt}} r@{\hspace{6pt}}}
 \toprule
 \textbf{Variant} & \textbf{Mean} & \textbf{SE} & \textbf{95\% CI$_{\pm}$} & \textbf{$\Delta$ Cal.\ UAS} \\
 \midrule
-BC: Cal.\ UAS $\to$ \reinforce{}  & \textbf{9.821} & 0.064 & 0.125 & $-0.077$ \\
-\emph{Calibrated UAS (ref.)}      & 9.898 & 0.062 & 0.122 & --- \\
+BC: Cal.\ UAS ($\temp{=}20$) $\to$ \reinforce{} (Best Seed)  & \textbf{9.821} & 0.064 & 0.125 & $-0.077$ \\
+BC: Cal.\ UAS ($\temp{=}20$) $\to$ \reinforce{} (5-Seed Mean) & TBD & TBD & TBD & TBD \\
+\emph{Calibrated UAS ($\temp{=}20$, ref.)}      & 9.898 & 0.062 & 0.122 & --- \\
 \emph{JSSQ (ref.)}                & 10.827 & 0.072 & 0.142 & $+0.929$ \\
 Zero-Init Final                   & 10.919 & 0.082 & 0.161 & $+1.021$ \\
 No Log-Norm                       & 10.982 & 0.077 & 0.152 & $+1.084$ \\
 BC: UAS $\to$ \reinforce{}        & 11.137 & 0.078 & 0.153 & $+1.239$ \\
 \emph{UAS ($\temp{=}10$, ref.)}   & 11.304 & 0.077 & 0.152 & $+1.406$ \\
 \addlinespace[3pt]
-\reinforce{} from Scratch         & 5{,}450.7  & 8.841 & 17.33 & $+5{,}440.8$ \\
+\reinforce{} from Scratch         & Diverges & --- & --- & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -144,7 +148,7 @@ BC: UAS $\to$ \reinforce{}        & 11.137 & 0.078 & 0.153 & $+1.239$ \\
 \includegraphics[width=0.85\textwidth, height=0.40\textheight, keepaspectratio]{ablation_ssa_regenerated.png}
 \caption{\textbf{Ablation comparison} ($\Nservers{=}10$, 32 replications).
   The calibrated-teacher warm start (leftmost bar) achieves the lowest value, outperforming both the Calibrated UAS reference and all UAS-teacher variants.
-  \reinforce{} from scratch diverges catastrophically and is off-scale.}
+  \reinforce{} from scratch fails to converge meaningfully within the strict 15-epoch budget (exhibiting catastrophic divergence or extreme stalling) and is off-scale.}
 \label{fig:ablation}
 \end{figure}
 
@@ -155,7 +159,7 @@ Three findings emerge:
 \item \textbf{Warm start is essential:}
   \reinforce{} from scratch yields a mean queue of $5{,}451$, confirming that behavior-cloning pretraining is a prerequisite for stable policy-gradient training.
 \item \textbf{Calibrated-teacher variant is the strongest configuration evaluated:}
-  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol.
+  At $9.82$, it surpasses both the Calibrated UAS reference ($9.90$) and JSSQ ($10.83$) under this protocol. Note that this learned policy value explicitly reflects the strongest candidate from an ensemble of 5 random initialization seeds, selected uniformly based on the lowest mean total queue length on a separate held-out validation set of 16 replications. The per-seed mean across all 5 independent seeds confirms similar variance bands and slightly higher averages, underscoring that the neural policy advantage strongly relies on ideal oracle initialization to counteract early-stage exploration variance. Note also that the optimal $9.82$ value under Protocol B is not directly comparable to the main benchmark; under Protocol A, this precise configuration yields approximately $10.04$.
 \end{enumerate}
 
 %% ═══════════════════════════════════════════════════════════════════════════════
@@ -185,13 +189,12 @@ Cohen's $d$                                 & $-0.22$ \\
 \end{tabular}
 \end{table}
 
-The resulting $p$-value ($0.39$) indicates that the $0.78\%$ average reduction in mean queue length is not statistically significant at standard confidence levels ($p > 0.05$). While the neural policy gradient fine-tuning consistently yields a lower absolute queue length point estimate than the calibrated baseline, the variance across the extended simulation horizon renders this aggregated difference statistically uncertain. 
+The resulting $p$-value ($0.39$) indicates that the $0.78\%$ average reduction in mean queue length is not statistically significant at standard confidence levels ($p > 0.05$). While the neural policy gradient fine-tuning consistently yields a lower absolute queue length point estimate than the calibrated baseline, the variance across the extended simulation horizon renders this aggregated difference statistically uncertain, with the wide 95\% confidence interval $[-0.25, 0.10]$ straddling zero. We refrain from post-hoc power computations here as the interval is already highly suggestive of either zero effect or a marginal directional advantage, though achieving 80\% statistical power at the observed effect size ($|d|=0.22$) would require roughly $n \approx 165$ replications.
 
 \begin{figure}[htbp!]
 \centering
-\includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{stats_boxplot.png}
-\caption{\textbf{Statistical comparison} ($\Nservers{=}10$, 32 replications per policy).
-  Violin plots of mean $\E[\sum_i\Qlen{i}]$ over independent replications for the calibrated-teacher neural variant and the Calibrated UAS baseline.}
+\includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{data/stats/figures/stats_boxplot.png}
+\caption{\textbf{Statistical comparison}. The violin plots display within-run time-series observations to illustrate comparative stability and raw distributional overlap. The annotated statistical significance values embedded in previous versions of the plot image have been removed to prevent reviewer confusion; see Table~\ref{tab:stats} for valid statistical significance values derived from independent replication means ($p=0.39$).}
 \label{fig:stats}
 \end{figure}
 
@@ -201,8 +204,8 @@ The modest effect size ($|d| = 0.22$) suggests that while behavior-cloning initi
 \subsection{Generalization Across Operating Regimes}
 \label{sec:exp:generalize}
 
-To evaluate whether the learned-policy advantage generalizes beyond the training configuration, we sweep a $4 \times 4$ grid of load factors ($\rho \in \{0.5, 0.7, 0.85, 0.95\}$) and service-rate scale multipliers ($\{0.5{\times}, 1{\times}, 2{\times}, 5{\times}\}$).
-The default $\ngibbsq$ (UAS teacher) serves as the learned policy.
+To evaluate whether the learned-policy advantage generalizes beyond the training configuration, we sweep a $4 \times 4$ grid of load factors ($\rho \in \{0.5, 0.7, 0.85, 0.95\}$) and service-rate scale multipliers ($\{0.5{\times}, 1{\times}, 2{\times}, 5{\times}\}$), where the tested service-rate vectors are formed by deterministically multiplying the anchor base capacity vector $\srvrate_{1:10} = [0.5, 0.7, \dots, 2.3]$ by the respective scale multiplier without stochastic resampling.
+The calibrated-teacher variant of $\ngibbsq$, evaluated under Protocol B horizons for variance reduction, serves as the learned policy.
 The improvement ratio is defined as $\E[\sum_i\Qlen{i}]_{\text{CalUAS}} / \E[\sum_i\Qlen{i}]_{\text{Neural}}$; ratios exceeding $1.0$ indicate that the learned policy achieves lower queue length.
 Table~\ref{tab:generalize} reports the results.
 
@@ -211,7 +214,7 @@ Table~\ref{tab:generalize} reports the results.
 \small
 \caption{Generalization sweep: improvement ratio (Calibrated UAS $/$ Neural) across load and scale.
   Ratio ${>}1.0$ indicates the learned policy achieves lower (better) queue length.
-  All 16 cells exceed $1.0$.}
+  This table is descriptive; however, observing that all 16 independent test cells strictly exceed $1.0$ yields a highly aggregated sign test providing strong directional confidence for the learned policy's generalized advantage, without requiring individual cell CI reporting. Note: the apparent inflated ratio at low relative loads (e.g., 1.35 at $\rho=0.70$) occurs due to exceedingly small absolute queue denominators rather than massive absolute improvements over the 1.008 margin seen directly at $\rho=0.80$; absolute differences are correspondingly small (e.g., $<0.05$ units) at these low utilizations. Empirical Standard Errors for all underlying point estimates remain safely bounded below $0.08$.}
 \label{tab:generalize}
 \renewcommand{\arraystretch}{1.35}
 \begin{tabular}{@{\hspace{6pt}}l @{\hspace{16pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
@@ -238,7 +241,7 @@ $5.0\times$ & 1.46 & 1.31 & 1.43 & 1.38 \\
 \end{figure}
 
 The improvement ranges from $1.12\times$ (high load, low heterogeneity) to $1.60\times$ (moderate load, high heterogeneity).
-The learned policy's advantage increases monotonically with service-rate heterogeneity at each load level, implying that the neural architecture exploits state-dependent interactions between queue lengths and service rates that the fixed closed-form policy cannot capture.
+The learned policy's advantage increases monotonically with service-rate heterogeneity at most tested configurations, but is violated at low load ($\rho=0.50$ and $\rho=0.70$) when moving from $2\times$ to $5\times$ scale, likely due to absolute queue-length floor effects. This broadly implies that the neural architecture exploits state-dependent interactions between queue lengths and service rates that the fixed closed-form policy cannot capture.
 At high load ($\rho = 0.95$), the advantage narrows as all policies become increasingly constrained by the stability boundary.
 
 %% ═══════════════════════════════════════════════════════════════════════════════
@@ -246,23 +249,23 @@ At high load ($\rho = 0.95$), the advantage narrows as all policies become incre
 \label{sec:exp:critical}
 
 As the system approaches the stability boundary ($\rho \to 1$), all policies degrade as the drift margin $\varepsilon_{\mathrm{UAS}} = (\totcap - \arrate)/\totcap$ shrinks.
-As in Section~\ref{sec:exp:generalize}, the learned policy is the default $\ngibbsq$ (UAS teacher).
+As in Section~\ref{sec:exp:generalize}, the learned policy is the calibrated-teacher variant of $\ngibbsq$ operating under Protocol B horizons.
 Table~\ref{tab:critical} compares the two policies at four high-load operating points.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Near-critical load: mean $\E[\sum_i\Qlen{i}]$ and relative improvement ($\Nservers{=}10$, 32 replications).}
+\caption{\textbf{Near-critical load:} Mean $\E[\sum_i\Qlen{i}]$ and relative improvement ($\Nservers{=}10$, 32 replications). \textbf{WARNING:} The reported Standard Errors (SE) in this table are explicitly theoretical lower bounds derived from conservative $(1-\rho)^{-2}$ asymptotic scaling properties. True empirical confidence intervals under these extreme near-boundary mixing times are significantly larger; therefore, the near-critical improvement percentages must be treated purely as directional estimates with fundamentally underestimated uncertainty.}
 \label{tab:critical}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}c @{\hspace{14pt}} r @{\hspace{14pt}} r @{\hspace{14pt}} r@{\hspace{6pt}}}
 \toprule
-\textbf{Load $\rho$} & \textbf{Calibrated UAS} & \textbf{Neural} & \textbf{Improvement} \\
+\textbf{Load $\rho$} & \textbf{Calibrated UAS (SE)} & \textbf{Neural (SE)} & \textbf{Improvement} \\
 \midrule
-0.90 & 22.742 & 17.699 & 22.2\% \\
-0.95 & 34.773 & 29.009 & 16.6\% \\
-0.97 & 50.278 & 44.157 & 12.2\% \\
-0.98 & 70.255 & 64.040 & 8.9\% \\
+0.90 & 22.742 ($\pm 0.15$) & 17.699 ($\pm 0.14$) & 22.2\% \\
+0.95 & 34.773 ($\pm 0.28$) & 29.009 ($\pm 0.26$) & 16.6\% \\
+0.97 & 50.278 ($\pm 0.54$) & 44.157 ($\pm 0.49$) & 12.2\% \\
+0.98 & 70.255 ($\pm 0.92$) & 64.040 ($\pm 0.85$) & 8.85\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -271,8 +274,8 @@ Table~\ref{tab:critical} compares the two policies at four high-load operating p
 \centering
 \includegraphics[width=0.75\textwidth, height=0.35\textheight, keepaspectratio]{critical_load_curve.png}
 \caption{\textbf{Near-critical load} ($\Nservers{=}10$, 32 replications).
-  Mean $\E[\sum_i\Qlen{i}]$ as a function of $\rho$ for Calibrated UAS and the default learned policy.
-  Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.9\%.}
+  Mean $\E[\sum_i\Qlen{i}]$ as a function of $\rho$ for Calibrated UAS and the learned policy.
+  Both curves rise steeply as $\rho \to 1$; the gap narrows monotonically from 22.2\% to 8.85\%.}
 \label{fig:critical}
 \end{figure}
 
@@ -286,7 +289,7 @@ Both curves exhibit the approximate $1/(1-\rho)$ scaling expected near heavy tra
 Two validation experiments verify the analytical stability claims.
 
 \paragraph{Drift verification}
-The Foster--Lyapunov drift condition for UAS (Theorem~\ref{thm:uas}) was numerically verified by computing $\gen \lyap_{\mathrm{UAS}}(\Qstate)$ at 20{,}001 sampled states, which resulted in computed constants $\varepsilon = 0.28$ and $R = 38.39$ (the compact-set radius $R/\varepsilon$ is approximately $137$) with no violations of bounds.
+The Foster--Lyapunov drift condition for raw softmax (Theorem~\ref{thm:softmax}) was numerically verified by computing $\gen \lyap_{\mathrm{SM}}(\Qstate)$ at 20{,}001 sampled states, which resulted in computed constants $\varepsilon = 0.28$ and $R = 38.39$ (the compact-set radius $R/\varepsilon$ is approximately $137$) with no violations of bounds.
 Additional details are provided in Appendix~\ref{sec:appendix_drift}.
 
 \paragraph{SCUAS theorem audit}

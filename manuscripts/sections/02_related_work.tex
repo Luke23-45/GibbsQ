@@ -6,23 +6,25 @@
 JSQ is optimal under identical servers~\cite{weber1978optimal,winston1977optimality}.
 JSSQ extends JSQ by directing traffic to the server with the lowest $\Qlen{i}/\srvrate_i$~\cite{ephremides1980simple}.
 The power-of-$d$-choices method~\cite{mitzenmacher2001power} significantly decreases the tail of the queue-length distribution by sampling $d \geq 2$ servers, although it does not utilize complete queue-state information.
-While power-of-$d$ policies excel in massive-scale load balancing where full state observation is typically unavailable, the GibbsQ framework explicitly targets settings---such as specialized compute clusters---where continuous, centralized full-state telemetry is accessible.
-GibbsQ uses complete state information with entropy regularization, providing formal stability guarantees.
+While power-of-$d$ policies excel in massive-scale load balancing where full state observation is typically unavailable, the GibbsQ framework explicitly targets settings---such as specialized compute clusters---where continuous, centralized full-state telemetry is accessible. GibbsQ uses complete state information with entropy regularization, providing formal stability guarantees. Because our empirical evaluation strictly scopes to policies that actively utilize this available full-state vector, we exclude partial-state methods such as $\mu$-weighted power-of-$d$ choices from the competitive baselines, focusing instead on full-state heuristics like JSQ and JSSQ.
 
 \paragraph{MaxWeight and Lyapunov-based scheduling}
-MaxWeight policies attain optimal throughput in constrained queueing networks~\cite{tassiulas1992stability}.
+MaxWeight policies attain optimal throughput in multi-hop constrained queueing networks, where they possess known deterministic stability properties~\cite{tassiulas1992stability}. However, translating a simple MaxWeight assignment rule ($\arg\max_i \srvrate_i \Qlen{i}$) to independent parallel-queue routing behaves differently, as it lacks the structural backpressure mechanisms native to network scheduling.
 Neely's drift-plus-penalty framework~\cite{neely2010stochastic} extends Lyapunov methods to stochastic network optimization with utility maximization.
-Our proposed framework centers on routing in parallel queues rather than scheduling in multi-hop networks, and produces continuous-valued routing probabilities rather than deterministic threshold assignments.
+Our proposed framework centers on producing continuous-valued stochastic routing probabilities rather than deterministic threshold assignments like MaxWeight, and uses entropy regularization to actively modulate load balancing. Exploring the exact empirical crossover between approximate softmax MaxWeight routing and JSSQ is deferred.
+
+\paragraph{Restless bandits and Whittle index}
+Alternatively, queue routing can be framed as a restless multi-armed bandit problem. In such setups, Whittle index policies~\cite{weber1990index, ninomora2002restless} provide a classical analytical approach. For parallel M/M/1 queues, the Whittle index collapses to a service-rate-weighted deterministic assignment closely related to JSSQ~\cite{ninomora2002restless}; we have empirically verified that JSSQ yields identical assignments under our anchor benchmark configuration, so JSSQ serves as a practical proxy for approximate Whittle-index performance. Distinguishing GibbsQ from more complex Whittle-index formulations in non-Markovian settings is deferred to future work; our framework pursues a distinct stochastic Gibbs-measure approach that inherently provides non-deterministic entropy-regularized smoothing with Foster--Lyapunov stability proofs.
 
 \paragraph{Softmax and entropy regularization}
 In reinforcement learning, Boltzmann policies serve as standard methods for exploration~\cite{sutton2018reinforcement}.
 The log-sum-exp function acts as the convex conjugate of the negative entropy~\cite{boyd2004convex}.
 Such duality connects entropy-regularized routing to the Gibbs-measure perspective adopted here.
 Entropy-regularized optimization underpins mirror descent~\cite{nemirovskij1983problem,beck2003mirror}, soft actor-critic~\cite{haarnoja2018soft}, and maximum-entropy RL~\cite{ziebart2010modeling}.
-Despite these relationship to the RL and optimization literatures, explicit Foster--Lyapunov analyses for softmax routing in heterogeneous queues appear to be new to the queueing literature.
+Despite these relationships to the RL and optimization literatures, explicit Foster--Lyapunov analyses for softmax routing in heterogeneous queues appear to be new to the queueing literature.
 
-\paragraph{Foster--Lyapunov methods for queueing stability}
-The Foster--Lyapunov framework for positive Harris recurrence is the standard stability tool for CTMCs~\cite{meyn2012markov}.
+\paragraph{Foster--Lyapunov and fluid-limit methods for queueing stability}
+An alternative stability paradigm uses fluid-limit arguments~\cite{dai1995fluid} commonly adopted in broader queueing networks. GibbsQ adopts the direct Foster--Lyapunov route because it yields explicit, computable drift constants characterizing bounds directly, whereas fluid-limit arguments typically establish stability without constructive bounds. The continuous-time Foster--Lyapunov framework for positive Harris recurrence is the standard direct stability tool for CTMCs~\cite{meyn2012markov}.
 Quadratic Lyapunov functions are commonly used in homogeneous settings~\cite{neely2010stochastic}, however, weighted versions are used in analyses involving heterogeneous cases~\cite{asmussen2003applied}.
 Our UAS proof uses a capacity-weighted Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ together with a prior-weighted KL variational identity, while the SCUAS extension uses a matched weighted Lyapunov function $\lyap_{\mathrm{SCUAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i^{\calbeta}$ and a calibrated prior decomposition. To our knowledge, this combination of proof templates has not appeared in the queueing literature.
 
