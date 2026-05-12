@@ -166,7 +166,15 @@ proof structure.
 I do not see an algebraic gap in
 [10_direct_ctmc_quadratic_proof_attempt.md](./10_direct_ctmc_quadratic_proof_attempt.md).
 
-If this audit holds under external review, then the fixed-parameter Calibrated
-UAS CTMC is in fact certified under the natural load condition
-\(\lambda<\sum_i \mu_i\), and the earlier "open stochastic theorem" status in
-`z2` should be updated accordingly.
+If this audit survives the level of scrutiny required for theorem promotion,
+then the fixed-parameter Calibrated-UAS CTMC would be certified under the
+natural load condition \(\lambda<\sum_i \mu_i\).
+
+Until that promotion step is explicitly recorded, the correct package-level
+reading is narrower:
+
+- file `10` is an audited stochastic certification route,
+- the deterministic theorem core remains the only unambiguously promoted theorem
+  layer,
+- and the project should avoid claiming that internal code validation alone has
+  settled the stochastic theorem.

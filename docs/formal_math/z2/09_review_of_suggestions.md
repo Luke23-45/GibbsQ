@@ -129,12 +129,14 @@ After reviewing `suggestions.md`, the correct project position is:
    [08_ctmc_generator_analysis.md](./08_ctmc_generator_analysis.md) is sound.
 3. The suggested temperature-scaling argument does **not** yet certify the
    original benchmark CTMC.
-4. The stochastic stability theorem for fixed-parameter Calibrated UAS remains
-   open.
+4. The old scaling-based shortcut does **not** yet certify the original
+   fixed-parameter CTMC.
+5. Any later direct certification route must be judged on its own mathematics
+   and not by importing unsupported claims from `suggestions.md`.
 
 ## 4. Practical Next Step
 
-The mathematically honest next direction is still one of the following:
+The mathematically honest next direction is one of the following:
 
 - strengthen the direct generator argument for the fixed CTMC
 - design a different lattice Lyapunov function

@@ -4,9 +4,10 @@ This note gives a direct Foster-Lyapunov proof attempt for the fixed-parameter
 Calibrated-UAS CTMC. Unlike the `H`-based route, this argument uses a weighted
 quadratic Lyapunov function and an exact softmax minimum bound.
 
-The note is intentionally separated from the earlier `z2` theorem-status files.
-If the proof survives audit, it should replace the previous "open stochastic
-theorem" status for the fixed benchmark CTMC.
+The note is intentionally separated from the deterministic theorem core.
+Within the current package, it should be read as a proof-facing stochastic
+certification route whose promotion to finished theorem status depends on the
+audit outcome and explicit sign-off recorded elsewhere in `z2`.
 
 ## 1. CTMC Model
 
@@ -303,7 +304,7 @@ Therefore
 
 This is the required Foster-Lyapunov inequality.
 
-## 8. Theorem
+## 8. Conditional Theorem Statement
 
 **Theorem 3 (direct CTMC stability for Calibrated UAS).**
 Fix
@@ -341,6 +342,11 @@ outside the finite set
 
 By the continuous-time Foster-Lyapunov criterion, the CTMC is positive Harris
 recurrent. `QED`
+
+Within the current package, this theorem statement should be read together with
+the promotion-sensitive status note in
+[03_theorem_status.md](./03_theorem_status.md) and the audit note in
+[11_audit_of_direct_ctmc_quadratic_proof.md](./11_audit_of_direct_ctmc_quadratic_proof.md).
 
 ## 9. Why This Bypasses The Earlier Failures
 

@@ -1,8 +1,15 @@
 # The Remaining CTMC Scaling Gap
 
-This note explains the one theorem step that is still open after the
+This note explains the original stochastic gap that remained after the
 deterministic convergence result in
 [06_global_convergence_reflected_ode.md](./06_global_convergence_reflected_ode.md).
+
+Its role in the current package is specific:
+
+- it records why the old smooth-ODE-to-CTMC shortcut was invalid,
+- it does **not** override the later direct CTMC route in files `10` and `11`,
+- it should be read as a correction note, not as the final word on every
+  possible stochastic route.
 
 ## 1. What Has Been Fully Proved
 
@@ -106,7 +113,16 @@ paper.
 The deterministic `z2` package is now mathematically coherent and complete on
 its own terms.
 
-The next theorem for the project is **not** another equilibrium or ODE
-calculation. It is a careful answer to the scaling question above. Until that is
-settled, the repo should avoid claiming that global stability of the reflected
-ODE already proves stochastic stability of the original queueing process.
+This note closes only one issue: the classical fixed-\(\alpha\) fluid-scaling
+shortcut is not enough on its own.
+
+It therefore supports the following safe conclusion:
+
+- global stability of the reflected ODE does **not** by itself prove stochastic
+  stability of the original queueing process.
+
+What comes next may be either:
+
+- a scaling-based theorem different from the rejected shortcut, or
+- a direct stochastic Lyapunov theorem such as the later route developed in
+  files `10` and `11`.

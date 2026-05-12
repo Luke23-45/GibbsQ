@@ -1,10 +1,10 @@
 # References For The Deterministic And Stochastic Routes
 
 This file records the external theorem framework relevant to the `z2` notes.
-The references now split into two groups:
+The references now split into two active groups:
 
 - deterministic reflection / projected-gradient references for the reflected ODE
-- queueing fluid-limit references for the still-open CTMC theorem
+- queueing and Lyapunov references for the stochastic certification program
 
 ## Core Queueing-Stability References
 
@@ -99,6 +99,7 @@ The `z2` package now uses these references in two different roles:
 - the queueing references describe the separate stochastic route that would be
   needed for a CTMC stability theorem
 
-What is still missing is not the deterministic convergence theorem. It is the
-correct stochastic bridge from the original CTMC to an analyzable large-scale
-limit.
+What remains package-sensitive is not the deterministic convergence theorem. It
+is the correct stochastic certification route, whether that route is eventually
+framed through a large-scale limit, a direct Foster-Lyapunov argument, or some
+other valid comparison theorem.

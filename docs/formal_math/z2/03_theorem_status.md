@@ -1,22 +1,29 @@
-# Theorem Status And Remaining Gap
+# Theorem Status And Claim Ladder
 
-This note states, as cleanly as possible, what is already established and what
-is still missing for a full queueing stability theorem for Calibrated UAS.
+This note is the authoritative status file for the `z2` package.
 
-## 1. What Is Proved In `z2`
+Its job is to state, without sales language, which parts of the project are:
 
-The notes in this folder prove the following facts.
+- fully proved,
+- conditional / promotion-sensitive,
+- empirically validated,
+- or archival only.
+
+## 1. Fully Proved Deterministic Results
+
+The following statements are established within `z2`.
 
 **Proved fact A.**
-The correct deterministic object is a reflected ODE on \(\mathbb R_+^N\), not
-the unconstrained ODE \(\dot q = \lambda p(q)-\mu\).
+The correct deterministic object associated with Calibrated UAS is a reflected
+ODE on \(\mathbb R_+^N\), not the unconstrained equation
+\(\dot q=\lambda p(q)-\mu\).
 
 **Proved fact B.**
-When \(\lambda < \Lambda\), the reflected ODE has no strictly positive interior
+When \(\lambda<\Lambda\), the reflected ODE has no strictly positive interior
 equilibrium.
 
 **Proved fact C.**
-Any equilibrium must satisfy the complementarity conditions
+Any reflected equilibrium must satisfy the complementarity conditions
 
 \[
 q_i^* \ge 0,
@@ -27,15 +34,15 @@ q_i^*(\mu_i-\lambda p_i(q^*))=0.
 \]
 
 **Proved fact D.**
-The equilibrium is determined by a scalar parameter \(K>0\) and has the
-explicit coordinate form
+The equilibrium is uniquely determined by a scalar parameter \(K^*>0\) and has
+the explicit coordinate form
 
 \[
 q_i^*
 =
 \max\!\left\{
 0,
-\frac{\mu_i^\beta}{\alpha}\log\!\left(\frac{\theta_i}{K}\right)
+\frac{\mu_i^\beta}{\alpha}\log\!\left(\frac{\theta_i}{K^*}\right)
 \right\},
 \qquad
 \theta_i=\mu_i^{\gamma-1}e^{-\alpha c/\mu_i^\beta}.
@@ -54,102 +61,99 @@ The scalar consistency equation
 has a unique solution \(K^*>0\), so the equilibrium is unique.
 
 **Proved fact F.**
-For the benchmark parameters used in the repo, that equilibrium coincides with
-the stored numerical attractor from the deterministic diagnostic.
-
-**Proved fact G.**
 The reflected ODE has an explicit convex potential \(H\) with
 \(\lambda p(q)-\mu=-D\nabla H(q)\), where
 \(D=\operatorname{diag}(\mu_i^\beta)\).
 
-**Proved fact H.**
+**Proved fact G.**
 The constrained potential \(H+I_{\mathbb R_+^N}\) is convex and coercive, has a
-unique minimizer, and that minimizer is exactly the equilibrium \(q^*\).
+unique minimizer, and that minimizer coincides with the unique equilibrium
+\(q^*\).
+
+**Proved fact H.**
+Every reflected-ODE trajectory converges to \(q^*\). The deterministic
+reflected ODE is therefore globally asymptotically stable.
 
 **Proved fact I.**
-Every reflected-ODE trajectory converges to \(q^*\). So the deterministic
-reflected ODE is globally asymptotically stable.
+For the benchmark parameter point used in the repo, the exact equilibrium
+formula agrees with the stored deterministic numerical attractor.
 
-## 2. What Is Not Yet Proved
+These results are carried by files `01`, `02`, `05`, and `06`.
 
-The decisive remaining theorem is now stochastic rather than deterministic.
+## 2. Fully Established Correction Results
 
-**Open stochastic theorem.**
-The calibrated-UAS CTMC is positive Harris recurrent for every
-\(\lambda < \Lambda\).
+The package also establishes two negative-but-important mathematical facts.
 
-What blocks that step is not the deterministic ODE analysis anymore. It is the
-fact that the smooth reflected ODE studied in `z2` is not yet identified as the
-classical Dai fluid limit of the CTMC under standard queue-length scaling. See
-[07_ctmc_scaling_gap.md](./07_ctmc_scaling_gap.md) and
-[09_review_of_suggestions.md](./09_review_of_suggestions.md).
+**Correction fact I.**
+The smooth reflected ODE analyzed in `z2` is not automatically identified with
+the classical fixed-parameter CTMC fluid limit under standard queue-length
+scaling.
 
-## 3. Why `x5.md` Was Too Strong
+**Correction fact J.**
+For the potential \(H\), the exact CTMC generator contains a genuine boundary
+mismatch relative to the reflected-ODE Lyapunov picture.
 
-The note `docs/notes/x1/x5.md` moved too quickly from a numerical attractor to a
-global theorem. The specific overclaims were:
+These results mean that the older shortcut from deterministic convergence to
+stochastic stability was too strong.
 
-- it treated the equilibrium as if it lived in the strictly positive orthant
-- it ignored the reflection/complementarity terms at the boundary
-- it started with an M-matrix Jacobian route that collapses once the row-sum
-  structure is computed
-- it transformed the dynamics to \(w\)-coordinates without closing the boundary
-  argument for the reflected system
-- it implicitly treated the smooth reflected ODE as if it were already the
-  standard queueing fluid limit of the CTMC
+These correction results are carried by files `07`, `08`, and `09`.
 
-Those are not small details. They are the difference between a correct theorem
-and an incorrect one.
+## 3. Conditional Stochastic Route
 
-## 4. The Correct Next Theorem To Target
+The package contains a direct fixed-parameter CTMC certification route in files
+`10` and `11`.
 
-The mathematically correct next target is now:
+Its status is:
 
-**Candidate theorem.**
-For fixed \(\alpha>0\), \(\beta>0\), \(\gamma \in \mathbb R\), \(c \ge 0\), and
-\(\lambda < \Lambda\), the Calibrated-UAS CTMC is positive Harris recurrent,
-with proof based on a correctly scaled stochastic limit or on a direct
-Foster-Lyapunov argument.
+**Conditional fact K.**
+The weighted-quadratic Foster-Lyapunov route for the fixed-parameter
+Calibrated-UAS CTMC has passed internal audit and targeted numerical
+validation, and it is a viable candidate route to positive Harris recurrence
+under the natural load condition \(\lambda<\Lambda\).
 
-## 5. What A Correct Proof Program Must Do
+At the current package level, this route should be treated as:
 
-Any end-to-end theorem proof now has to handle four tasks explicitly.
+- **audited certification material**, or
+- **promotion-sensitive theorem material**
 
-### Task 1. Identify the correct large-scale stochastic regime
+unless and until explicit theorem-level sign-off is recorded.
 
-One must decide whether the right theorem should use standard fluid scaling,
-parameter-rescaled fluid scaling, or a direct stochastic Lyapunov route.
+This note therefore does **not** automatically elevate file `10` to the same
+status as the deterministic theorem core.
 
-### Task 2. Preserve the queueing policy under that regime
+## 4. What Is Not A Main-Line Theorem Claim
 
-Because the softmax exponent contains the raw queue lengths, ordinary fluid
-scaling changes the effective routing map. That issue must be handled honestly.
+The following may appear elsewhere in the repo, but they are not theorem-core
+claims for `z2`:
 
-### Task 3. Build the stochastic stability argument
+- exploratory policy directions such as SMVR
+- failed or superseded certification routes such as the older SCUAS line
+- neural-policy performance narratives
+- broad claims that the whole calibrated family is already beyond theorem risk
 
-If the route is fluid-limit based, the scaled limit must be characterized
-correctly. If the route is direct, a new Foster-Lyapunov function must be found.
+Those items may still exist as archive, empirical context, or applicability
+material, but they are not the foundation of this package.
 
-### Task 4. Lift the deterministic insight without overclaiming
+## 5. Supporting Applicability Claim
 
-The convex potential \(H\) and the unique deterministic attractor are valuable
-guides, but they do not automatically prove CTMC stability.
+The package also supports one limited applicability claim:
 
-## 6. Practical Research Conclusion
+**Supporting fact L.**
+Because Calibrated UAS is softmax-based and continuous, it provides a
+differentiable routing law that is compatible with gradient-based policy
+learning in a way that hard dispatch rules such as JSQ and JSSQ are not.
 
-The project should now stop running architecture searches and focus on the
-stochastic theorem gap.
+This is useful supporting material, but it is not the main hero of the thesis
+and must not be used as a substitute for the theorem core.
 
-The current state of knowledge is:
+## 6. Practical Reading Rule
 
-- empirically, Calibrated UAS remains the best closed-form policy found in the
-  repo
-- mathematically, the deterministic reflected ODE is now clean and globally
-  convergent
-- the exact CTMC generator obstruction has been written down explicitly
-- the professor review correctly validated that obstruction but did **not**
-  close the CTMC theorem
-- the only missing high-value result is a correct bridge from that deterministic
-  picture to the original CTMC
+When writing from `z2`, use the following discipline:
 
-That is the next direction.
+- files `01`, `02`, `05`, `06`: theorem core
+- files `07`, `08`, `09`: correction / obstruction core
+- files `10`, `11`: conditional stochastic route
+- files `12`, `13`: claim-control layer
+- file `suggestions.md`: archive only
+
+That separation is what keeps the thesis mathematically honest.
