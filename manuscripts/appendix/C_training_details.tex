@@ -3,7 +3,7 @@
 
 \subsection{Phase~1: Behavior Cloning and Phase~2: REINFORCE}
 
-The Neural GibbsQ pipeline depends on two sequential phases. The preliminary BC phase initializes the neural policy by supervised imitation of an analytical teacher~\cite{ross2011reduction}. The network is uniquely trained to minimize the cross-entropy between its modeled softmax output and the teacher's action distribution. At convergence, the network broadly reproduces the teacher's routing distribution, providing a distributionally stable initialization. Starting from the BC-pretrained weights, we apply the \reinforce{} policy gradient algorithm~\cite{williams1992simple} to directly optimize the steady-state mean total queue length over an ensemble of 5 seeds to smooth short-horizon trajectory randomness. Table~\ref{tab:unified_training_config} provides the consolidated configuration and ablation parameters.
+The Neural GibbsQ pipeline has two sequential phases. The initial BC phase trains the neural policy by supervised imitation of an analytical teacher~\cite{ross2011reduction}, minimizing cross-entropy between the network output and the teacher's routing distribution. Starting from the BC-pretrained weights, we then apply \reinforce{}~\cite{williams1992simple} to optimize steady-state mean total queue length. Table~\ref{tab:unified_training_config} summarizes the configuration and ablation variants.
 
 \begin{table}[htbp]
 \centering
@@ -45,7 +45,7 @@ Zero-Init Final       & Zero-initializes final layer weights before BC training.
 \end{tabular}
 \end{table}
 
-The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the calibrated-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, gradient clipping (global norm 0.5) and a small entropy regularization bonus ($0.01$) are applied during training for stability; the BC initialization provides the primary safeguard against catastrophic divergence. Convergence is typically observed by epoch 6--8 under the ablation budget, verifying 8 epochs as sufficient for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
+The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the calibrated-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, gradient clipping (global norm 0.5) and a small entropy regularization bonus ($0.01$) are applied during training for stability; the BC initialization provides the primary safeguard against unstable updates. Convergence is typically observed by epoch 6--8 under the ablation budget, verifying 8 epochs as sufficient for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
 
 \begin{figure}[htbp!]
 \centering
@@ -55,10 +55,10 @@ The exact same network architecture, preprocessing, learning rate, and optimizer
 \label{fig:reinforce_training}
 \end{figure}
 
-The key finding is that teacher choice ($1.32$-unit improvement) dominates all architectural modifications ($< 0.2$-unit effects), while training from scratch without BC diverges catastrophically (mean queue $> 5{,}000$).
+The main ablation result is that teacher choice ($1.32$ units) has a much larger effect than the tested architectural modifications (all below $0.2$ units), while training from scratch without BC performs very poorly (mean queue $> 5{,}000$).
 
 \paragraph{Training--evaluation horizon mismatch}
-The ablation training episodes use a horizon of 750 time units, while the evaluation protocol (Protocol~B) uses 20{,}000 time units. This 26$\times$ disparity may introduce a distributional mismatch between the training and evaluation regimes. However, we note that effective transient recovery---rapidly clearing queue buildups---is precisely the behavior that determines steady-state quality in stable systems. The empirical consistency between short-horizon training scores and long-horizon evaluation metrics (Section~\ref{sec:experiments}) suggests the mismatch does not systematically degrade performance in this setting.
+The ablation training episodes use a horizon of 750 time units, while the evaluation protocol (Protocol~B) uses 20{,}000 time units. This 26.7$\times$ disparity may introduce a distributional mismatch between the training and evaluation regimes. However, we note that effective transient recovery---rapidly clearing queue buildups---is precisely the behavior that determines steady-state quality in stable systems. The empirical consistency between short-horizon training scores and long-horizon evaluation metrics (Section~\ref{sec:experiments}) suggests the mismatch does not systematically degrade performance in this setting.
 
 \paragraph{Compute budget}
 Wall-clock training times were not systematically logged; the total compute budget for the full experimental campaign is approximately 200 CPU-hours on Intel Xeon E5-2680 v4 (2.4\,GHz, 28 cores). Approximate wall-clock times per experiment: drift verification $\sim$2\,min, policy benchmark $\sim$4\,hr, ablation $\sim$12\,hr, generalization $\sim$8\,hr.
@@ -66,10 +66,12 @@ Wall-clock training times were not systematically logged; the total compute budg
 \section{Piecewise Lyapunov Candidate Search}
 \label{sec:appendix_piecewise_search}
 
-The mathematically formulated piecewise Lyapunov candidate presented in Section~\ref{sec:caluas_piecewise_candidate} (Equation 67) was numerically discovered using an automated post-validation search procedure. The configuration evaluates a heavily parameterized convex combination scalarizing various structural components bounding the state space:
-1. Base heterogeneous quadratic bound ($\frac{1}{2} \sum_i \Qlen{i}^2 / \mu_i$)
-2. Unweighted state limits $(\sum_i \Qlen{i})^2$
-3. Smoothed polynomial queue bounds ($\sum_i \Qlen{i}^3 / \mu_i$)
-4. Maximum-queue polynomial bounds ($\max_i \Qlen{i}^2$)
+The piecewise Lyapunov candidate presented in Section~\ref{sec:caluas_piecewise_candidate} and \cref{eq:piecewise_candidate} was numerically discovered using an automated post-validation search procedure. The search space consisted of convex combinations of four template components:
+\begin{enumerate}
+\item a heterogeneous quadratic term $\frac{1}{2}\sum_i \Qlen{i}^2 / \mu_i$,
+\item an unweighted global-load term $(\sum_i \Qlen{i})^2$,
+\item a cubic heterogeneous term $\sum_i \Qlen{i}^3 / \mu_i$, and
+\item a maximum-queue term $\max_i \Qlen{i}^2$.
+\end{enumerate}
 
-The scalar numerical coefficients were jointly optimized using L-BFGS-B minimization to strictly minimize the supremum of the CTMC generator $\gen \lyap_{\mathrm{PW}}(\Qstate)$ evaluated exactly across the state space shells structurally bounding normal-load stationarity ($|\Qstate|_1 \in \{12, \dots, 20\}$). Counter-example tail limit states that repeatedly violated negative boundary drift bounds during concurrent random-check loop verifications were dynamically prioritized in the search weight evaluation matrix. The final convergence weights determining the precise mixture were extracted and locked to 6 decimal precision points explicitly for robust empirical capsule testing.
+The scalar coefficients were optimized with L-BFGS-B to reduce the largest observed value of the exact generator $\gen \lyap_{\mathrm{PW}}(\Qstate)$ over the shell family $|\Qstate|_1 \in \{12, \dots, 20\}$. States that repeatedly appeared as positive-drift counterexamples in auxiliary random-shell checks were up-weighted in later search rounds. The final coefficient vector was then fixed at six-decimal precision for the verification capsule reported in Appendix~\ref{sec:appendix_piecewise}.

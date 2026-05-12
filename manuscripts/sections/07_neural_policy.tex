@@ -15,18 +15,18 @@ A feedforward network with two hidden layers of width 128 each and ReLU activati
 \rprob{i}(\Qstate, \srvrate; \theta) = \softmax\!\bigl(f_\theta(\Qstate, \srvrate)\bigr)_i,
 \end{equation}
 a valid probability distribution on $\Simplex$ by construction.
-This architecture balances expressiveness (sufficient to represent non-trivial routing distributions) with trainability (small enough for stable BC convergence from 1,000 training steps). We do not claim this architecture is optimal; it serves as a fixed testbed for isolating the teacher-choice effect.
+We do not claim this architecture is optimal; it serves as a fixed testbed for isolating the teacher-choice effect.
 
 \subsection{Two-Phase Training Pipeline}
 
 \paragraph{Phase~1: Behavior Cloning}
 The network is trained via cross-entropy loss against an analytical teacher policy (UAS with $\temp = 10$ by default; the ablation in \cref{sec:exp:ablation} also evaluates Calibrated UAS).
-Training runs for 1{,}000 steps, minimizing cross-entropy to faithfully capture the full routing distribution structure across the simplex. At convergence, this objective provides a stable initialization for Phase~2, yielding an exact top-1 action matching accuracy of 99.2\% (best seed, with an inter-seed range of 97--99\%) and a terminal KL divergence of $1.16 \times 10^{-3}$ across sampled validation state points, ensuring high-fidelity empirical correlation in the distribution tails.
+Training runs for 1{,}000 steps, minimizing cross-entropy to faithfully capture the routing distribution across the simplex. At convergence, this objective provides a stable initialization for Phase~2, with best-seed top-1 action-matching accuracy of 99.2\% (97--99\% across seeds) and a terminal KL divergence of $1.16 \times 10^{-3}$ on sampled validation states.
 
 \paragraph{Phase~2: REINFORCE Fine-Tuning}
 Starting from BC-pretrained weights, policy gradient optimization proceeds via \reinforce{} with a running-average baseline~\cite{williams1992simple}, using 8-episode batches over 8 epochs (each episode simulates 750 time units under the ablation training budget).
-We intentionally employ vanilla \reinforce{} rather than modern alternatives such as PPO (with its surrogate clipped objective) or SAC (a maximum-entropy off-policy architecture). This deliberate experimental design strictly isolates the impact of the starting distribution, demonstrating that guided initialization via behavior cloning---rather than advanced trust-region mechanics---is what fundamentally resolves routing instability. This means the reported neural results represent a lower bound on achievable performance; more sophisticated RL methods would likely yield further gains.
-The marginal improvement from REINFORCE fine-tuning ($\Delta \approx -0.08$ over the BC initialization) indicates that the BC policy is already near-optimal within the policy class, and that the primary value of the REINFORCE phase is validation rather than optimization.
+We intentionally employ vanilla \reinforce{} rather than a more elaborate RL algorithm so that the experiments isolate the effect of initialization quality.
+The marginal improvement from \reinforce{} fine-tuning ($\Delta \approx -0.08$ relative to the BC initialization in the strongest evaluated variant) suggests that under the present training budget the BC policy already places the learner in a strong region of the policy class, and that fine-tuning yields only modest additional gains.
 Offline BC suffers from covariate shift: the learner's induced state distribution may differ from the expert's training distribution. DAgger~\cite{ross2011reduction} addresses this by iteratively querying the expert under the learner's distribution. We do not apply DAgger here because (a) the analytical teacher is cheap to query, making DAgger feasible in principle, but (b) the REINFORCE fine-tuning phase already exposes the policy to its own induced distribution, partially mitigating covariate shift.
 The gradient estimator achieves directional agreement with the finite-difference gradient at the tested parameterization (cosine similarity $1.0$; \cref{sec:appendix_gradient}).
 Full hyperparameters are given in \cref{sec:appendix_training}.

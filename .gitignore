@@ -42,12 +42,12 @@ docs/logs
 # OS
 .DS_Store
 
-manuscripts/dev
+manuscripts
 
 manuscripts/data
 Thumbs.db
 outputs
-docs
+tests
 outputs_legacy
 ledger
 new_test
@@ -55,6 +55,8 @@ docs/PROPOSED
 UAS_FINAL_AUDIT_REPORT.md
 logs.md
 logs
+docs/notes
+experiments/verification
 logsz.md
 development_tests
 outputs

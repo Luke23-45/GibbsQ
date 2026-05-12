@@ -4,13 +4,13 @@
 
 \subsection{The Teacher-Choice Effect}
 
-The ablation study showcases a clear rank ordering (where $\succ$ denotes strictly lower mean total queue length): Calibrated UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$; diverged).
+The ablation study showcases a clear rank ordering under Protocol~B (where $\succ$ denotes strictly lower mean total queue length): Calibrated UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$; diverged).
 The $1.32$-unit gap between the Calibrated UAS teacher and the UAS teacher exceeds the impact of the three tested architectural modifications (log-normalization, zero-init, scratch initialization), which identifies teacher quality as a primary design factor in this empirical setting.
 
 This observation has a natural interpretation.
-Essentially, behavior cloning positions the neural policy's parameters in a region from which \reinforce{} fine-tuning makes local improvements.
+Essentially, behavior cloning positions the neural policy's parameters in a region from which \reinforce{} fine-tuning can make only modest improvements under the tested budget.
 A competent teacher provides a better initialization, from which \reinforce{} then attempts to drive further improvement, whereas a weaker initialization forces fine-tuning to expend its efforts on overcoming the deficit.
-The developed policy in this study can be characterized as local fine-tuning within the initialization region, rather than global policy search.
+Within the tested optimization budget, the learned policy behaves more like local refinement of the initialization than like global policy search.
 The offline BC phase does not address the distributional shift~\cite{ross2011reduction}.
 On-policy data collection during pretraining could further improve initialization quality.
 
@@ -23,16 +23,16 @@ Calibrated UAS alters three key components of UAS:
 \item \textbf{Reduced look-ahead} ($\caloffset = 0.5$): the energy function's additive constant is decreased from $1$ (UAS: $\Qlen{i}+1$) to $0.5$, shifting routing slightly toward current-state responsiveness.
 \end{itemize}
 These mechanisms are consistent with the empirical improvement---the tempered normalization and softened prior jointly reduce over-routing to fast servers (Gini $0.174$ vs.
-UAS's $0.328$), while the diminished offset increases responsiveness to current state---but a formal attribution of the $1.45$-unit improvement ($10.04$ vs.
+UAS's $0.328$), while the diminished offset increases responsiveness to current state---but a formal attribution of the $1.45$-unit improvement ($10.042$ vs.
 $11.495$) to individual parameters remains open.
 
 \subsection{Limitations}
 
 \begin{enumerate}[label=\textbf{L\arabic*.}, leftmargin=2.2em]
 \item \textbf{Full Calibrated UAS family remains open:}
-Section~\ref{sec:calibrated_uas} identifies the stability-certified subclass SCUAS under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
+Section~\ref{sec:calibrated_uas} identifies a theorem-backed certified subset within the calibrated family under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
 However, our audit in Table~\ref{tab:scuas_audit} finds that the benchmark default point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ yields $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor configuration.
-While we provide \textbf{numerical evidence} for negative drift through a JAX-based verification loop (reported in Table~\ref{tab:piecewise_candidate}), a formal symbolic proof for the unrestricted family remains an open theoretical question. This establishes a definitive split in our results: the benchmark-default policy is a competitive empirical baseline, but it is not yet theorem-certified.
+While we provide \textbf{numerical evidence} that a benchmark-specific piecewise candidate has negative drift on the verified boundary shells (Table~\ref{tab:piecewise_candidate}), a formal symbolic proof for the unrestricted family remains an open theoretical question. This establishes a definitive split in our results: the benchmark-default policy is a competitive empirical baseline, but it is not yet theorem-certified.
 
 \item \textbf{Default learned configuration is not the strongest:}
 The standard $\ngibbsq$ model (trained with a UAS teacher) achieves $11.68$ in the anchor benchmark, underperforming JSSQ ($11.02$) and Calibrated UAS ($10.04$).
@@ -42,7 +42,7 @@ Crucially, absolute values from Protocol A and the ablation study (Protocol B) r
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
 The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$. The primary constraint is training stability and computational cost: the \reinforce{} policy gradient estimates become increasingly noisy as the action space and state dimension grow with $\Nservers$, and the behavior-cloning phase requires more teacher samples. Investigating architecture choices (e.g., attention over server states, equivariance) that scale to larger $\Nservers$ is an important open problem.
-We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline demonstrates superior optimality at small bounds, no scaling guarantee is claimed for $\ngibbsq$ or Calibrated UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately verified to scale natively to massive capacities such as $\Nservers = 1{,}024$ without the overhead of neural retraining.
+We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline performs strongly at the benchmark scale, no scaling guarantee is claimed for $\ngibbsq$ or Calibrated UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately stress-tested up to $\Nservers = 1{,}024$ without neural retraining.
 
 \item \textbf{Coarse parameter grid for Calibrated UAS:}
 The benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ were selected from a grid of 64 configurations evaluated on a held-out validation set.
@@ -57,7 +57,7 @@ Variance reduction techniques such as generalized advantage estimation (GAE) or 
 \item \textbf{Best-of-5 seed selection bias:}
 The strongest neural result ($9.82$ under Protocol B) is the best of 5 random initialization seeds selected on a held-out validation set.
 This selection introduces optimistic bias whose magnitude cannot be quantified without per-seed logs (which were not preserved).
-A Bonferroni-adjusted 95\% CI (Table~\ref{tab:stats}) still excludes zero, but the unbiased ensemble mean remains unknown.
+The unbiased ensemble mean remains unknown.
 
 \item \textbf{Near-critical load experiments underpowered:}
 The near-critical load comparison (Table~\ref{tab:critical}) uses only $n{=}2$ replications per load factor, which is insufficient for statistically reliable confidence intervals.
@@ -85,8 +85,8 @@ Entropy-regularized routing may degrade when: (a)~servers are near-homogeneous, 
 \subsection{Future Directions}
 
 \begin{enumerate}[label=\textbf{F\arabic*.}, leftmargin=2.2em]
-\item \textbf{Beyond the certified subclass:}
-Extending the SCUAS Lyapunov argument to cover the full three-parameter family $(\calbeta, \calgamma, \caloffset)$ would close the remaining gap between the analytical and empirical layers.
+\item \textbf{Beyond the certified subset:}
+Extending the certified-subset Lyapunov argument to cover the full three-parameter family $(\calbeta, \calgamma, \caloffset)$ would close the remaining gap between the analytical and empirical layers.
 The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity, ideally far enough to certify practically competitive calibrated points under the anchor benchmark.
 The piecewise candidate in \cref{eq:piecewise_candidate} suggests that a boundary-refined Foster--Lyapunov construction based on quadratic, cubic, and imbalance terms is a concrete route for that extension.
 
@@ -96,14 +96,17 @@ Competitive policy comparisons at $\Nservers \in \{32, 64, 128\}$---which connec
 \item \textbf{Advanced RL training:}
 Variance reduction via GAE or actor-critic baselines would address the \reinforce{} magnitude error identified in L5.
 However, trust-region methods (PPO, natural policy gradient) could additionally improve step-size stability and accelerate convergence.
-The teacher-choice principle parallels the pretraining-finetuning paradigm in foundation models: a strong analytical prior (Calibrated UAS) provides a high-quality initialization, and task-specific fine-tuning (REINFORCE) extracts marginal gains. This analogy suggests that the quality of the analytical prior may be more important than the fine-tuning algorithm, a hypothesis consistent with recent findings in large language model alignment.
+An immediate empirical question is whether stronger RL optimizers preserve the same teacher-choice ordering observed here, or materially reduce the gap between UAS-teacher and calibrated-teacher initialization.
 
 \item \textbf{Non-stationarity:}
 Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings. A practical online adaptation layer---e.g., lightweight continual fine-tuning of the $\ngibbsq$ network as statistics shift---would bridge the gap to deployed adaptive routing, though such adaptation must be balanced against stability risk during the adaptation transient.
 
-\item \textbf{Geometric ergodicity:}
-While \cref{thm:uas} establishes positive Harris recurrence, the Foster--Lyapunov framework admits extensions to geometric ergodicity given standard geometric drift and minorization conditions~\cite[Chapter~15]{meyn2012markov}. Under the mild additional requirement of petite sets on compact state spaces, the bounded transition structure of the queue-length process suggests that exponential mixing rates may hold. Establishing this formally---particularly with explicit convergence rate constants---would strengthen the deployment argument and is an important open direction.
+\item \textbf{Sharper mixing-rate results:}
+For UAS, the current manuscript establishes positive Harris recurrence with explicit drift constants, but not a geometric-drift theorem. A useful next step would be to derive sharper convergence-rate bounds, and to determine whether geometric ergodicity can be proved for UAS or extended to broader calibrated-policy classes.
 
 \item \textbf{Heavy-traffic and diffusion limits:}
 A heavy-traffic diffusion-limit analysis (e.g., Halfin--Whitt scaling) would substantially strengthen the theoretical contribution by characterizing asymptotic performance as $\rho \to 1$, but is outside the current scope.
+
+\item \textbf{Critical validation experiments:}
+Three experiments would materially strengthen the evidence stack: (a)~a PPO-from-scratch training run, which would determine whether the observed scratch-divergence behavior is REINFORCE-specific or more fundamental; (b)~a non-Markovian robustness test (e.g., Erlang-2 arrivals), which would test whether the policy ranking is preserved under mild departures from Poisson/exponential assumptions; and (c)~an independent seed block (e.g., seeds 1000--1031) for the primary comparison, which would rule out seed-range dependence.
 \end{enumerate}

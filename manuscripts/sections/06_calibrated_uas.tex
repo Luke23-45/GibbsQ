@@ -1,21 +1,21 @@
-\section{Calibrated UAS: Certified Subclass and Empirical Extension}
+\section{Calibrated UAS: Empirical Extension with a Certified Subset}
 \label{sec:calibrated_uas}
 
 The UAS routing law (\cref{thm:uas}) is provably stable, but its fixed parameterization was designed for analytical tractability rather than empirical optimality.
-This section separates two layers that were previously conflated:
-the full Calibrated UAS family, which remains an empirical three-parameter extension, and a named theorem-backed subclass, SCUAS, for which a self-contained Foster--Lyapunov argument is available under an explicit sufficient condition.
+This section therefore presents the calibrated family in the order it is used in the paper:
+first the full Calibrated UAS empirical extension, and then the theorem-backed certified subset within that family.
 
 \begin{remark}[Theorem status]
 \label{rem:caluas_status}
 The full Calibrated UAS family does \textbf{not} receive a blanket formal stability guarantee in this manuscript.
-Instead, \cref{thm:scuas} isolates a stability-certified subclass, denoted SCUAS, whose routing law is analyzed with a matched weighted Lyapunov function.
+Instead, \cref{thm:scuas} isolates a stability-certified subset whose routing law is analyzed with a matched weighted Lyapunov function. We use ``SCUAS'' below only as a local shorthand for those theorem statements.
 The unrestricted family \eqref{eq:caluas_law} remains empirical outside the parameter settings that satisfy the theorem's explicit sufficient condition.
 Importantly, no competitive configuration evaluated in this paper is SCUAS-certified; the formally certified region and the empirically performant region appear disjoint under our anchor benchmark.
 \end{remark}
 
 \begin{definition}[Calibrated UAS family]
 \label{def:caluas_family}
-The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,\infty)$, where $\calbeta \le 1$ ensures the Lyapunov weight $\srvrate_i^{-\calbeta}$ remains bounded and the drift decomposition in \cref{sec:scuas_theorem} tractable:
+The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset) \in (0,1] \times [0,1] \times [0,\infty)$, where $\calbeta \le 1$ ensures the departure term $\srvrate_i^{1-\calbeta}$ in the drift decomposition (\cref{sec:scuas_theorem}) remains non-vanishing and the arrival-term bound (\cref{lem:scuas_arrival}) tractable:
 \begin{equation}
 \label{eq:caluas_law}
 \rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}\right).
@@ -23,7 +23,7 @@ The Calibrated UAS family is parameterized by $(\calbeta, \calgamma, \caloffset)
 Setting $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$ recovers UAS~\eqref{eq:uas_law} exactly.
 \end{definition}
 
-\begin{definition}[Stability-Certified Calibrated UAS (SCUAS)]
+\begin{definition}[Certified subset of Calibrated UAS]
 \label{def:scuas_family}
 For fixed parameters $(\calbeta, \calgamma, \caloffset)$, define the SCUAS routing law by
 \begin{equation}
@@ -36,7 +36,7 @@ For fixed parameters $(\calbeta, \calgamma, \caloffset)$, define the SCUAS routi
 This is the same closed form as \eqref{eq:caluas_law}, but the theorem statements below apply only when the associated drift constant $\varepsilon_{\calbeta,\calgamma,\caloffset}$ is strictly positive.
 \end{definition}
 
-\subsection{SCUAS Theorem Path}
+\subsection{Certified-Subset Theorem Path}
 \label{sec:scuas_theorem}
 
 The proof rewrites \eqref{eq:scuas_law} in Gibbs form with a calibrated prior.
@@ -71,7 +71,7 @@ Then \eqref{eq:scuas_law} can be written as
 {\sum_{j=1}^{\Nservers} r_j^{\scuas} \exp\!\bigl(-\temp x_j^{\scuas}(\Qstate,\srvrate)\bigr)}.
 \end{equation}
 
-\begin{proposition}[SCUAS weighted variational form]
+\begin{proposition}[Certified-subset weighted variational form]
 \label{prop:scuas_variational}
 For fixed $(\calbeta,\calgamma,\caloffset)$, define
 \begin{equation}
@@ -120,7 +120,7 @@ and normalization yields \eqref{eq:scuas_law}.
 Substituting the minimizer back into the objective gives \eqref{eq:scuas_min_value}.
 \end{proof}
 
-\begin{lemma}[SCUAS drift identity]
+\begin{lemma}[Certified-subset drift identity]
 \label{lem:scuas_drift}
 For the weighted Lyapunov function
 \begin{equation}
@@ -167,7 +167,7 @@ Multiplying the departure increment by $\srvrate_i\Ind_{\Qlen{i}>0}$ gives
 which yields \eqref{eq:scuas_drift_identity} after summing over all servers.
 \end{proof}
 
-\begin{lemma}[SCUAS arrival-term bound]
+\begin{lemma}[Certified-subset arrival-term bound]
 \label{lem:scuas_arrival}
 Define
 \begin{equation}
@@ -233,7 +233,7 @@ Finally,
 and the last sum is bounded by $\max_i \srvrate_i^{-\calbeta}$.
 \end{proof}
 
-\begin{theorem}[SCUAS positive Harris recurrence]
+\begin{theorem}[Certified-subset positive Harris recurrence]
 \label{thm:scuas}
 Fix $(\calbeta,\calgamma,\caloffset)\in(0,1]\times[0,1]\times[0,\infty)$ and define
 \begin{equation}
@@ -255,8 +255,8 @@ Unlike UAS which provides concentration-parameter-independent drift constants, S
 \end{remark}
 
 \begin{proof}
-Non-explosion follows from Lemma~\ref{lem:non_explosion}. Irreducibility follows because all routing probabilities remain strictly positive.
-The Lyapunov function \eqref{eq:scuas_lyapunov} is norm-like on $\Nats^\Nservers$ because each $\srvrate_i^{-\calbeta}$ is a finite positive constant.
+Non-explosion follows from Lemma~\ref{lem:non_explosion}. Irreducibility follows because all routing probabilities remain strictly positive. Since the routing law assigns positive probability to every server at every state, the chain is a T-chain, ensuring that compact sets are petite~\cite[Theorem~4.6]{meyn2009markov}.
+The Lyapunov function \eqref{eq:scuas_lyapunov} is norm-like on $\Nats^\Nservers$ because $\sum_i Q_i^2/\mu_i^\beta \geq |Q|_1^2 / (N \max_i \mu_i^\beta)$ and each $\srvrate_i^{-\calbeta}$ is a finite positive constant.
 
 Combining \cref{lem:scuas_drift} with \cref{lem:scuas_arrival},
 \begin{align}
@@ -312,11 +312,11 @@ C_{\mathrm{SCUAS}}
 {\varepsilon_{\calbeta,\calgamma,\caloffset}}
 \right\},
 \end{equation}
-The continuous-time Foster--Lyapunov criterion therefore implies positive Harris recurrence.
+the continuous-time Foster--Lyapunov criterion implies positive Harris recurrence.
 \end{proof}
 
-\begin{remark}[Structural contribution of the SCUAS theorem]
-The SCUAS theorem establishes the proof architecture---a matched weighted Lyapunov function with calibrated prior decomposition---that any future certification effort must follow. Its failure condition $\varepsilon_{\calbeta,\calgamma,\caloffset}<0$ identifies the exact structural mechanism blocking certification: fast servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$, causing the drift bound to fail. This mechanism reveals that fast-server overload under competitive parameters is the certification bottleneck. The theorem also certifies non-competitive parameter regions (e.g., $(\calbeta,\calgamma,\caloffset)=(0.2,0.0,1.30)$ at $\temp=5$ with $\varepsilon=0.255$), proving the framework is not trivially satisfied.
+\begin{remark}[Structural contribution of the certified-subset theorem]
+The certified-subset theorem establishes the proof architecture---a matched weighted Lyapunov function with calibrated prior decomposition---that any future certification effort must follow. Its failure condition $\varepsilon_{\calbeta,\calgamma,\caloffset}<0$ identifies the exact structural mechanism blocking certification: fast servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$, causing the drift bound to fail. This mechanism reveals that fast-server overload under competitive parameters is the certification bottleneck. The theorem also certifies non-competitive parameter regions (e.g., $(\calbeta,\calgamma,\caloffset)=(0.2,0.0,1.30)$ at $\temp=5$ with $\varepsilon=0.255$), proving the framework is not trivially satisfied.
 \end{remark}
 
 \begin{remark}[Geometric intuition for drift failure]
@@ -328,12 +328,11 @@ The sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ structu
 When $(\calbeta,\calgamma,\caloffset)=(1,1,1)$, the routing law \eqref{eq:scuas_law} coincides algebraically with UAS.
 However, \cref{thm:scuas} is a separate sufficient-condition theorem; it does not replace the stronger UAS result \cref{thm:uas}. 
 
-\begin{remark}[Why SCUAS bounds fail for UAS parameters]
+\paragraph{Why the certified-subset bounds fail for UAS parameters.}
 The two proof paths diverge materially. \cref{thm:uas} tightly evaluates the exact UAS parameterization using a prior-weighted KL variational identity avoiding the entropy ceiling. In contrast, \cref{thm:scuas} requires a calibrated prior decomposition forcing the condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, which relies on a looser, conservative Jensen bound (\cref{lem:scuas_arrival}). Concretely, $\varepsilon_{1,1,1}$ is also negative under the anchor benchmark by the SCUAS bounding path, yet UAS remains formally certified by the separate and tighter argument in \cref{thm:uas}. The failure of $\varepsilon_{1,1,1} > 0$ under SCUAS does not contradict the formal stability of UAS; it is merely an artifact of this looser analytical bounding path.
-\end{remark}
 
 Accordingly, the manuscript's formal claims are split as follows:
-UAS is covered by \cref{thm:uas}, SCUAS is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical. The SCUAS proof follows the same template as the UAS proof, differing only in the prior and energy definitions; a unified theorem covering the full calibrated family with a single sufficient condition remains an open problem.
+UAS is covered by \cref{thm:uas}, the certified subset is covered by \cref{thm:scuas} when $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$, and the unrestricted calibrated family remains empirical. The proof here follows the same template as the UAS proof, differing only in the prior and energy definitions; a unified theorem covering the full calibrated family with a single sufficient condition remains an open problem.
 \end{remark}
 
 \subsection{Parameter Semantics}
@@ -374,7 +373,7 @@ Table~\ref{tab:scuas_audit} reports the resulting values.
 \begin{table}[htbp]
 \centering
 \small
-\caption{SCUAS theorem audit under the anchor benchmark configuration. The benchmark default and competitive candidate points yield $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$, so they are not certified by Theorem~\ref{thm:scuas} under this setup. A certified example (evaluated at $\temp=5$) is included to verify the positive threshold.}
+\caption{Audit of the certified-subset sufficient condition under the anchor benchmark configuration. The benchmark default and competitive candidate points yield $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$, so they are not certified by Theorem~\ref{thm:scuas} under this setup. A certified example (evaluated at $\temp=5$) is included to verify the positive threshold.}
 \label{tab:scuas_audit}
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{@{}lccc r c@{}}
@@ -392,9 +391,30 @@ Certified example ($\temp{=}5$) & 0.20 & 0.00 & 1.30 & $0.255$ & Yes \\
 \end{table}
 
 This audit has two implications.
-First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region. The theorem's contribution is therefore architectural---it establishes the correct proof template for the calibrated family---rather than certifying any practical policy instance.
+First, \cref{thm:scuas} remains a mathematically valid sufficient-condition theorem for the calibrated routing law, but the audited benchmark points considered here do not instantiate its certified region. The theorem's primary contribution is not the certification of competitive parameterizations (which it does not provide), but the precise identification of the structural mechanism that blocks certification: fast-server overload under the Jensen bound, whereby the fastest servers receive disproportionate arrival mass $\arrate \cdot a_i$ that exceeds their departure term $\srvrate_i^{1-\calbeta}$. This negative result is informative because it tells future researchers exactly what must be overcome---a tighter arrival-term bound that preserves temperature dependence.
 Second, all calibrated results reported in the empirical sections of this paper should be interpreted as empirical performance results rather than theorem-certified calibrated guarantees.
 We emphasize that $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ means the \emph{sufficient condition} fails, not that instability is implied: the SCUAS condition is conservative (it uses a Jensen bound that discards all $\temp$-dependence), and the piecewise Lyapunov candidate in \cref{sec:caluas_piecewise_candidate} provides numerical evidence that the benchmark-default policy may still be stable under a tighter analysis.
+
+\paragraph{Practical verification workflow}
+The manuscript therefore uses a two-layer verification workflow. First, the theorem-backed layer evaluates the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ exactly for any proposed parameter point, as in Table~\ref{tab:scuas_audit}. Second, when that conservative sufficient condition fails at an empirically relevant point, we report numerical drift verification separately rather than upgrading the claim to a theorem: Appendix~\ref{sec:appendix_piecewise} gives the benchmark-specific piecewise candidate, the exact generator evaluation protocol, and the exhaustive shell checks used to assess whether a stronger Lyapunov route appears viable. This workflow is evidentiary rather than formal, but it makes the analytical--computational interface explicit and reproducible.
+If one had an analytic tail drift bound outside some radius $M$ together with an exact finite-state verification on all states inside that radius, then the same Foster--Lyapunov criterion would convert that combined argument into a formal parameter-specific certificate. We do not claim such a result here because our calibrated audit is shell-based rather than exhaustive over a full finite sublevel set.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Drift-constant comparison across the three stability theorems under the anchor benchmark ($\Nservers{=}10$, $\rho{=}0.80$). The bound tightness column shows the ratio of the steady-state bound $R/\varepsilon$ to the empirical mean queue length.}
+\label{tab:drift_comparison}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}l c c c c c@{}}
+\toprule
+\textbf{Theorem} & $\varepsilon$ & $R$ & $R/\varepsilon$ & \textbf{Empirical} $\E[\abs{\Qstate}_1]$ & \textbf{Bound tightness} \\
+\midrule
+Raw Softmax (Thm.~\ref{thm:softmax}) & 0.28 & 38.39 & 137 & ${\sim}11.8$ & ${\sim}12\times$ \\
+UAS (Thm.~\ref{thm:uas}) & 0.20 & 13.0 & 65 & ${\sim}11.5$ & ${\sim}5.6\times$ \\
+SCUAS (Thm.~\ref{thm:scuas}) & \multicolumn{4}{c}{Parameter-conditional; no competitive point certified} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Computationally Verified Piecewise Drift Candidate}
 \label{sec:caluas_piecewise_candidate}

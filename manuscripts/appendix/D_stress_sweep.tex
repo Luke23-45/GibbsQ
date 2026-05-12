@@ -6,14 +6,14 @@ This appendix provides extended tables for the stress test and alpha stability s
 
 \subsection{Stress Test: Scalability}
 
-The stress test evaluates UAS under extreme operating conditions to characterize its behavioral envelope~\cite{meyn2012markov}.
+The stress test evaluates UAS under extreme operating conditions to characterize its empirical operating envelope.
 
 \subsubsection{Massive-$\Nservers$ Scaling}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Massive-$\Nservers$ stress test: UAS queue length scales linearly with server count; Gini remains stable at ${\sim}0.031$.}
+\caption{Massive-$\Nservers$ stress test: UAS exhibits approximately linear growth in total queue length with server count, while the Gini coefficient remains near ${\sim}0.031$.}
 \label{tab:stress_massive}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{\hspace{6pt}}r @{\hspace{18pt}} r @{\hspace{18pt}} r @{\hspace{18pt}} r@{\hspace{6pt}}}
@@ -29,7 +29,7 @@ $\Nservers$ & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{Gini} & \textbf{Per-serve
 \end{tabular}
 \end{table}
 
-Per-server queue length saturates at approximately $1.60$ for $\Nservers \geq 128$, confirming linear scaling.
+Per-server queue length stabilizes at approximately $1.60$ for $\Nservers \geq 128$, consistent with approximately linear scaling in the total queue length.
 The Gini coefficient remains below $0.032$ at all tested scales, indicating highly uniform load distribution.
 
 \subsubsection{Critical-Load Stress}
@@ -53,12 +53,12 @@ $\rho$ & \textbf{Mean $\sum_i\Qlen{i}$} & \textbf{Stationarity} \\
 \end{tabular}
 \end{table}
 
-Stationarity remains ${\geq}95\%$ even at $\rho = 0.99$, supporting the practical robustness of UAS near the stability boundary.
+Stationarity remains ${\geq}95\%$ even at $\rho = 0.99$, which is consistent with stable empirical behavior near the boundary in this stress test.
 \begin{remark}
 The ADF test assumes an AR($p$) process; queue-length samples from a CTMC have more complex autocorrelation structures. The reported stationarity rates should be interpreted as indicative rather than definitive.
 \end{remark}
 
 \subsection{Alpha Stability Sweep}
 
-The sweep evaluates UAS across a grid of temperatures $\temp \in \{0.01, \ldots, 100\}$ and load factors $\rho \in \{0.5, 0.7\}$, confirming stable empirical behavior for all $\temp > 0$ consistent with Theorem~\ref{thm:uas}.
+The sweep evaluates UAS across a grid of temperatures $\temp \in \{0.01, \ldots, 100\}$ and load factors $\rho \in \{0.5, 0.7\}$, showing stable empirical behavior for all tested $\temp > 0$, consistent with Theorem~\ref{thm:uas}.
 The main-text visualization (Figure~\ref{fig:alpha_main}) shows performance saturation around $\temp = 20$--$50$.

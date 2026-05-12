@@ -35,7 +35,9 @@ __all__ = [
     "PowerOfDRouting",
     "JSSQRouting",
     "UASRouting",
+    "StateDependentUASRouting",
     "CalibratedUASRouting",
+    "QuadraticSMVRRouting",
     "RefinedUASRouting",
     "make_policy",
 ]
@@ -330,6 +332,61 @@ class UASRouting:
     def __repr__(self) -> str:
         return f"UASRouting(α={self._alpha}, N={len(self._mu)})"
 
+class StateDependentUASRouting:
+    """
+    UAS routing with a positive state-dependent inverse temperature.
+
+    This keeps the theorem-facing UAS structure
+
+        p_i(Q) proportional to mu_i * exp(-alpha(Q) * (Q_i + 1) / mu_i)
+
+    while allowing experiments to replace the scalar inverse temperature by a
+    deterministic function of the current queue state.
+    """
+
+    __slots__ = ("_mu", "_alpha_fn", "_label")
+
+    def __init__(self, mu: np.ndarray, alpha_fn, *, label: str = "state_dependent_uas") -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if not callable(alpha_fn):
+            raise TypeError("alpha_fn must be callable")
+        self._mu = mu
+        self._alpha_fn = alpha_fn
+        self._label = str(label)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    def alpha(self, Q: np.ndarray) -> float:
+        alpha = float(self._alpha_fn(np.asarray(Q, dtype=np.float64), self._mu))
+        if not np.isfinite(alpha) or alpha <= 0.0:
+            raise ValueError(
+                f"alpha_fn must return a finite value > 0 for every state; got {alpha!r}"
+            )
+        return alpha
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        alpha = self.alpha(Q)
+        potential = (Q.astype(np.float64) + 1.0) / self._mu
+        logits = -alpha * potential + np.log(self._mu)
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return f"StateDependentUASRouting(label={self._label!r}, N={len(self._mu)})"
+
 @ComponentRegistry.register_policy("refined_uas")
 @ComponentRegistry.register_policy("calibrated_uas")
 class CalibratedUASRouting:
@@ -406,6 +463,138 @@ class CalibratedUASRouting:
         return (
             f"CalibratedUASRouting(alpha={self._alpha}, beta={self._beta}, "
             f"gamma={self._gamma}, c={self._c}, N={len(self._mu)})"
+        )
+
+
+@ComponentRegistry.register_policy("quadratic_smvr")
+class QuadraticSMVRRouting:
+    """
+    Value-based Gibbs routing with a calibrated lower-bound advantage.
+
+    This is a minimal proof-facing instantiation of the SMVR idea from the
+    research notes. The routing logits use a value-gradient surrogate
+
+        A_i(Q) = E_i(Q) + Δ_i W_local(Q) + Δ_i W_total(Q)
+
+    where
+
+        E_i(Q) = (Q_i + c) / μ_i**β
+
+    is exactly the calibrated-UAS energy and the additional terms are discrete
+    gradients of non-negative convex quadratic potentials over the scaled queue
+    coordinates. Hence `A_i(Q) >= E_i(Q)` whenever the correction strengths are
+    non-negative.
+
+    With `local_strength = total_strength = 0`, this policy reduces exactly to
+    `CalibratedUASRouting`.
+    """
+
+    __slots__ = (
+        "_mu",
+        "_alpha",
+        "_beta",
+        "_gamma",
+        "_c",
+        "_local_strength",
+        "_total_strength",
+    )
+
+    def __init__(
+        self,
+        mu: np.ndarray,
+        alpha: float = 20.0,
+        *,
+        beta: float = 0.85,
+        gamma: float = 0.5,
+        c: float = 0.5,
+        local_strength: float = 0.0,
+        total_strength: float = 0.0,
+    ) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        if beta <= 0:
+            raise ValueError(f"beta must be > 0, got {beta}")
+        if c < 0:
+            raise ValueError(f"c must be >= 0, got {c}")
+        if local_strength < 0:
+            raise ValueError(f"local_strength must be >= 0, got {local_strength}")
+        if total_strength < 0:
+            raise ValueError(f"total_strength must be >= 0, got {total_strength}")
+
+        self._mu = mu
+        self._alpha = float(alpha)
+        self._beta = float(beta)
+        self._gamma = float(gamma)
+        self._c = float(c)
+        self._local_strength = float(local_strength)
+        self._total_strength = float(total_strength)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    @property
+    def beta(self) -> float:
+        return self._beta
+
+    @property
+    def gamma(self) -> float:
+        return self._gamma
+
+    @property
+    def c(self) -> float:
+        return self._c
+
+    @property
+    def local_strength(self) -> float:
+        return self._local_strength
+
+    @property
+    def total_strength(self) -> float:
+        return self._total_strength
+
+    def advantage(self, Q: np.ndarray) -> np.ndarray:
+        q = Q.astype(np.float64)
+        step = 1.0 / (self._mu ** self._beta)
+        scaled = (q + self._c) * step
+        advantage = scaled.copy()
+
+        if self._local_strength > 0.0:
+            advantage = advantage + self._local_strength * (
+                scaled * step + 0.5 * (step ** 2)
+            )
+
+        if self._total_strength > 0.0:
+            scaled_sum = float(np.sum(scaled))
+            advantage = advantage + self._total_strength * (
+                scaled_sum * step + 0.5 * (step ** 2)
+            )
+
+        return advantage
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        logits = self._gamma * np.log(self._mu) - self._alpha * self.advantage(Q)
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return (
+            "QuadraticSMVRRouting("
+            f"alpha={self._alpha}, beta={self._beta}, gamma={self._gamma}, c={self._c}, "
+            f"local_strength={self._local_strength}, total_strength={self._total_strength}, "
+            f"N={len(self._mu)})"
         )
 
 

@@ -2,61 +2,60 @@
 \section{Introduction}
 \label{sec:introduction}
 
-The dispatching of tasks to heterogeneous parallel servers is a core challenge in operations research, prevalent in server farms, cloud platforms, and communication networks.
+Dispatching tasks to heterogeneous parallel servers is a core problem in operations research, with applications in server farms, cloud platforms, and communication networks.
 The classical Join the Shortest Queue (JSQ) policy is optimal under homogeneous servers but ignores service rates.
-Its extension JSSQ, which accounts for server speed, remains a deterministic rule with no natural entropy-regularized generalization providing formal stability bounds.
-RL approaches offer adaptability for complex queueing systems, but gradient-based RL methods applied without guided initialization often suffer from catastrophic instability when deployed without theoretical guarantees.
-We close this gap by designing routing laws that depend on the current state, are aware of capacity, enjoy provable stability, and are structured to support neural policy architectures. Our formal analysis focuses on standard Markovian conditions (Poisson arrivals, exponential service); evaluating robustness to general non-Markovian model misspecification remains an important future extension. All logarithms in this manuscript denote the natural logarithm unless otherwise specified.
+Its extension JSSQ accounts for server speed but remains a deterministic rule without an entropy-regularized formulation equipped with formal stability bounds.
+Reinforcement-learning approaches offer greater flexibility, but without guided initialization they can behave poorly in queueing systems and typically come with no stability guarantees.
+We address this gap by designing routing laws that are state-aware, capacity-aware, provably stable, and compatible with neural policy architectures. Our analysis is carried out under standard Markovian assumptions (Poisson arrivals and exponential service); robustness to non-Markovian misspecification is left for future work. All logarithms in this manuscript are natural unless noted otherwise.
 
 \subsection{Entropy-Regularized Routing}
-We follow the Gibbs-measure perspective: incoming tasks are assigned to servers using a softmax distribution over server scores, where the concentration parameter $\temp > 0$ balances between uniform (exploratory) and greedy (exploitative) routing.
-The softmax function is regularized using a penalty based on Shannon entropy.
-The UAS policy is regularized via KL divergence relative to a capacity-rate prior.
-The log-sum-exp normalizer for each formulation serves as the convex conjugate of its respective regularizer~\cite{boyd2004convex}, linking queue routing to convex duality, which allows for precise Lyapunov drift bounds through variational identities while naturally delivering the smooth, differentiable outputs needed for neural policy gradients.
-While entropy-regularized control---structurally analogous to the soft policies of maximum-entropy reinforcement learning and the Soft Actor-Critic (SAC) formulation~\cite{haarnoja2018soft}---is established in reinforcement learning, to the best of our knowledge, we provide explicit Foster--Lyapunov stability proofs for heterogeneous queueing that leverage these convex duality principles.
+We adopt a Gibbs-measure viewpoint: each arrival is routed by a softmax distribution over server scores, with concentration parameter $\temp > 0$ controlling the trade-off between exploratory and greedy routing.
+For raw softmax, the regularizer is Shannon entropy; for UAS, it is KL divergence relative to a capacity-weighted prior.
+In both cases, the log-sum-exp normalizer is the convex conjugate of the regularizer~\cite{boyd2004convex}. This variational structure yields explicit Lyapunov drift bounds while preserving the smooth outputs needed for neural policy gradients.
+Entropy-regularized control is well established in reinforcement learning, including maximum-entropy methods such as Soft Actor-Critic~\cite{haarnoja2018soft}. Our contribution is to use the same variational machinery to derive explicit Foster--Lyapunov stability proofs for heterogeneous queue routing.
 
 \subsection{Contributions}
-GibbsQ demonstrates that entropy regularization enables stability proofs for heterogeneous queue routing, and that the resulting analytical policies serve as effective teachers for learned policies. This connection unifies three findings:
+GibbsQ yields three main findings:
 
 \begin{enumerate}
 \item \textbf{Stability proofs:}
-We prove positive Harris recurrence~\cite{meyn2012markov} for two routing laws under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
-Raw softmax (Theorem~\ref{thm:softmax}) and the Unified Capacity-Aware Softmax (UAS, Theorem~\ref{thm:uas})---so named because its potential unifies queue state and service capacity into a single energy variable---are established via self-contained Foster--Lyapunov arguments with explicit drift constants.
-We further identify a stability-certified calibrated subclass, SCUAS, and prove positive Harris recurrence for it under an explicit parameter-conditional drift condition (Theorem~\ref{thm:scuas}).
-The UAS drift constants are independent of $\temp$, ensuring stability at all concentrations.
-Under the anchor benchmark, no competitive routing configuration satisfies the SCUAS sufficient condition; the certified and performant regions are disjoint (Section~\ref{sec:scuas_audit}).
+We prove positive Harris recurrence~\cite{meyn2009markov} for two routing laws under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
+Raw softmax (Theorem~\ref{thm:softmax}) and Unified Capacity-Aware Softmax (UAS, Theorem~\ref{thm:uas}) are established via self-contained Foster--Lyapunov arguments with explicit drift constants.
+We further identify a theorem-backed certified subset within the calibrated family and prove positive Harris recurrence for that subset under an explicit parameter-conditional drift condition.
+The UAS drift constants are independent of $\temp$.
+Under the anchor benchmark, no competitive routing configuration satisfies that sufficient condition; the certified and performant regions are disjoint (Section~\ref{sec:scuas_audit}).
 
 \item \textbf{Calibrated closed-form policy:}
 Base UAS ($\temp{=}10$ at $11.50$) underperforms JSSQ ($11.02$), indicating that the provably stable parameterization sacrifices empirical performance for analytical tractability.
-Calibrated UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, reducing steady-state queue length by $0.98$ units (8.84\%) relative to JSSQ.
+Calibrated UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, reducing steady-state queue length by $0.97$ units (8.84\%) relative to JSSQ.
 The benchmark-default parameters are not certified by Theorem~\ref{thm:scuas} (post-validation audit yields $\varepsilon < 0$); a numerically verified piecewise Lyapunov candidate provides evidence for a future certification route.
 
 \item \textbf{Teacher-choice effect in learned policies:}
-The default neural policy ($\ngibbsq$), trained from UAS via behavior cloning and \reinforce{}, underperforms JSSQ ($11.68$ vs.\ $11.02$)---a direct consequence of the teacher-quality bottleneck, since UAS itself underperforms JSSQ.
-Switching the BC teacher to Calibrated UAS resolves this bottleneck, yielding the lowest point estimate among all evaluated policies ($9.82$ under Protocol B, best-of-5 seed selection; matches Calibrated UAS at $\approx 10.04$ under Protocol A).
-This directional advantage persists across 16 generalization configurations and into near-critical loads up to $\rho = 0.98$.
-Training from scratch diverges catastrophically ($5{,}451$), confirming that the analytical teacher---not the RL algorithm---is the dominant factor among the tested training design choices.
+The default neural policy ($\ngibbsq$), trained from UAS via behavior cloning and \reinforce{}, underperforms JSSQ ($11.68$ vs.\ $11.02$), consistent with a teacher-quality bottleneck because UAS itself underperforms JSSQ.
+Switching the BC teacher to Calibrated UAS substantially improves this bottleneck, yielding the lowest point estimate among all evaluated policies ($9.82$ under Protocol B, best-of-5 seed selection; matches Calibrated UAS at $\approx 10.04$ under Protocol A).
+This directional advantage persists across 16 generalization configurations and near-critical loads up to $\rho = 0.98$.
+Training from scratch performs extremely poorly ($5{,}451$), reinforcing that initialization quality is central among the tested training design choices.
 \end{enumerate}
 
-The teacher-choice principle is this paper's most impactful finding for practitioners; the stability theorems provide its theoretical foundation.
+The main practical story is therefore layered: UAS is the principal certified policy, Calibrated UAS is the stronger empirical closed-form extension, and the certified subset marks the portion of that extension currently covered by theory.
 
 To clarify the hierarchical relationship between these routing policies, Table~\ref{tab:claims_map} provides a rigorous map of the terminology used throughout the manuscript.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Claims map: strict separation of provable stability, certified subclasses, and empirical evaluation.}
+\caption{Claims map: strict separation of provable stability, certified subsets, and empirical evaluation.}
 \label{tab:claims_map}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{} l l p{80mm} @{}}
 \toprule
 \textbf{Term} & \textbf{Status} & \textbf{Definition and Scope} \\
 \midrule
-\textbf{UAS} & Universally certified & Analytical policy with temperature-independent drift constants (Thm.~\ref{thm:uas}). \\
+\textbf{UAS} & Theorem-certified & Analytical policy with temperature-independent drift constants (Thm.~\ref{thm:uas}). \\
 \addlinespace[3pt]
 \textbf{Calibrated UAS} & Empirical & Full three-parameter heuristic family $(\calbeta,\calgamma,\caloffset)$ evaluated via simulations. No unified theorem applies to this family at the benchmark setting. \\
 \addlinespace[3pt]
-\textbf{SCUAS} & Conditionally certified & Subset of Calibrated UAS covered by the calibrated Lyapunov drift condition (\cref{thm:scuas}). SCUAS $\subset$ Calibrated UAS family. \\
+\textbf{Certified subset} & Conditionally certified & Subset of Calibrated UAS covered by the calibrated Lyapunov drift condition (\cref{thm:scuas}). \\
 \addlinespace[3pt]
 \textbf{Benchmark default} & Empirical point & The actively evaluated $(0.85, 0.5, 0.5)$ configuration, lacking theorem certification. \\
 \textbf{$\ngibbsq$} & Learned sequence & Neural policy optimized via RL; strictly empirical, directional improvement. \\
@@ -66,4 +65,4 @@ To clarify the hierarchical relationship between these routing policies, Table~\
 
 \subsection{Paper Organization}
 Sections~\ref{sec:related_work}--\ref{sec:model} survey related work and define the model; Sections~\ref{sec:softmax_theorem} and~\ref{sec:uas_theorem} prove the raw softmax and UAS stability theorems.
-Section~\ref{sec:calibrated_uas} introduces SCUAS and the broader Calibrated UAS family; Section~\ref{sec:neural_policy} presents $\ngibbsq$; Section~\ref{sec:experiments} reports experiments; Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss and conclude.
+Section~\ref{sec:calibrated_uas} develops the broader Calibrated UAS family and then isolates its certified subset; Section~\ref{sec:neural_policy} presents $\ngibbsq$; Section~\ref{sec:experiments} reports experiments; Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss and conclude.

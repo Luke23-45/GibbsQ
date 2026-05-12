@@ -34,13 +34,14 @@ The proof proceeds in five steps.
 \medskip
 \noindent\textbf{Step~1: CTMC regularity and generator.}
 
-The state space $\mathcal{X} = \Nats^\Nservers$ is countable. The total departure rate satisfies $\sum_{i=1}^\Nservers \srvrate_i \Ind_{\Qlen{i}>0} \le \sum_{i=1}^\Nservers \srvrate_i = \totcap$, so the global jump rate from any state is uniformly bounded by $\arrate + \totcap < \infty$, confirming non-explosion~\cite[Proposition~2.2.1]{meyn2012markov}. Because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$, every state communicates with every other state through a sequence of arrivals and departures, establishing irreducibility.
+The state space $\mathcal{X} = \Nats^\Nservers$ is countable. The total departure rate satisfies $\sum_{i=1}^\Nservers \srvrate_i \Ind_{\Qlen{i}>0} \le \sum_{i=1}^\Nservers \srvrate_i = \totcap$, so the global jump rate from any state is uniformly bounded by $\arrate + \totcap < \infty$, confirming non-explosion~\cite[Theorem~2.7.1]{norris1997markov}. Because $\arrate > 0$ and $\srvrate_i > 0$ for all~$i$, every state communicates with every other state through a sequence of arrivals and departures, establishing $\psi$-irreducibility. Moreover, since all routing probabilities remain strictly positive, the chain is a T-chain (its transition kernel has a component with a density with respect to counting measure on the jump directions), which ensures that compact sets are petite~\cite[Theorem~4.6]{meyn2009markov}.
 
 Define the Lyapunov function
 \begin{equation}
 \label{eq:softmax_lyapunov}
 \lyap(\Qstate) = \frac{1}{2} \sum_{i=1}^{\Nservers} \Qlen{i}^2.
 \end{equation}
+This function is norm-like on $\Nats^\Nservers$ because $\sum_i Q_i^2 \geq |Q|_1^2 / \Nservers$.
 
 The generator drift is
 \begin{align}
@@ -141,6 +142,9 @@ The proof reveals several structural features of entropy-regularized routing.
 \paragraph{Role of entropy regularization}
 The bound~\eqref{eq:softmax_arrival_bound} shows that the softmax routing law routes each arrival to a server whose queue length is at most $\Qmin + (\log \Nservers)/\temp$. The additive penalty $(\log \Nservers)/\temp$ quantifies the cost of entropy regularization: at finite temperature the policy explores suboptimal servers, but this cost is controllable through~$\temp$. However, as $\temp \to 0$, this penalty diverges, which analytically renders the compact set bound $R/\varepsilon$ vacuous; for example, beneath $\temp \approx 0.05$ under the anchor benchmark, the bounded region's radius easily exceeds $10^3$.
 
+This penalty comes from the global entropy ceiling $\entropy(p)\le \log \Nservers$ used in Step~2. That choice keeps the proof fully closed form and uniform over all states, but it is conservative whenever the softmax mass is already concentrated on a small effective subset of servers. Accordingly, \cref{thm:softmax} should be interpreted as a deliberately simple worst-case certificate rather than a sharp characterization of the arrival term.
+Sharper state-dependent refinements are possible in principle by tracking how much softmax mass lies near the minimizing set, but we do not use such refinements here because the simple ceiling $\entropy(p)\le \log \Nservers$ yields a transparent theorem with explicit constants and no additional side conditions.
+
 \paragraph{Homogeneous limitation}
 Raw softmax ignores service-rate heterogeneity: the routing probabilities in~\eqref{eq:softmax_law} depend only on queue lengths, not on service rates. This limitation motivates the UAS extension (\cref{sec:uas_theorem}), which incorporates service rates into both the energy function and the prior.
 
@@ -149,5 +153,3 @@ The drift rate~$\varepsilon$ and the compact-set bound $R/\varepsilon$ depend on
 
 \paragraph{Stability-efficiency tradeoff}
 Entropy regularization ensures stability but incurs an efficiency cost: as $\temp \to 0$, the softmax policy approaches the greedy JSQ rule, which is optimal for homogeneous servers. The temperature parameter thus trades off stability (guaranteed for all $\temp > 0$) against efficiency (improved as $\temp \to 0$ for near-homogeneous systems). For heterogeneous servers, UAS provides a better stability-efficiency balance by incorporating service-rate information.
-
-
