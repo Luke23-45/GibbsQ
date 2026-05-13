@@ -149,7 +149,7 @@ Without that event, H4 stays conditional.
 
 - fixed benchmark system definition
 - fixed protocol definition
-- direct comparison of Calibrated UAS, UAS, and JSSQ
+- direct comparison of Reflected UAS, UAS, and JSSQ
 - no statement stronger than the benchmark actually supports
 
 **Current source files and artifacts.**
@@ -183,7 +183,7 @@ Keep out of the thesis core except as brief scope justification.
 
 **Required evidence.**
 
-- a clear statement that softmax-based Calibrated UAS is continuous and
+- a clear statement that softmax-based Reflected UAS is continuous and
   differentiable, unlike hard arg-min dispatch rules such as JSQ and JSSQ
 - limited but concrete evidence that this enables policy-learning workflows
   such as behavior cloning and policy-gradient fine-tuning
@@ -208,7 +208,7 @@ The thesis must not claim any of the following unless new evidence is added.
 
 ### Forbidden claim A
 
-"The full calibrated family is completely certified with no remaining theorem
+"The full reflected family is completely certified with no remaining theorem
 risk."
 
 Reason:
@@ -224,7 +224,7 @@ program, not the neural layer.
 
 ### Forbidden claim B1
 
-"Because Calibrated UAS is differentiable and trainable, that is by itself the
+"Because Reflected UAS is differentiable and trainable, that is by itself the
 main reason the policy matters."
 
 Reason:
@@ -285,7 +285,7 @@ When drafting the thesis, use these exact levels.
 
 ### Core theorem hypothesis
 
-Calibrated UAS admits a corrected deterministic reflected-ODE theory with a
+Reflected UAS admits a corrected deterministic reflected-ODE theory with a
 unique boundary equilibrium and global convergence.
 
 ### Core correction hypothesis
@@ -301,12 +301,12 @@ validation.
 
 ### Validation hypothesis
 
-The benchmark-default Calibrated UAS point is both mathematically central and
+The benchmark-default Reflected UAS point is both mathematically central and
 empirically competitive relative to UAS and JSSQ.
 
 ### Applicability hypothesis
 
-Because Calibrated UAS is softmax-based and continuous, it is compatible with
+Because Reflected UAS is softmax-based and continuous, it is compatible with
 differentiable policy-learning workflows in a way that hard dispatch rules such
 as JSQ and JSSQ are not.
 

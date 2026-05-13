@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from gibbsq.core.config import (
+from gibbsq.qroute.core.config import (
     ExperimentConfig,
     PolicyConfig,
     PolicyName,

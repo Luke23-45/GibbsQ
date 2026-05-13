@@ -1,6 +1,6 @@
 # Hidden Convex Structure Of The Reflected ODE
 
-This note shows that the reflected calibrated-UAS ODE is a projected gradient
+This note shows that the reflected reflected-UAS ODE is a projected gradient
 system for an explicit convex potential. That observation is the key step that
 turns the equilibrium formula into a genuine deterministic convergence theorem.
 

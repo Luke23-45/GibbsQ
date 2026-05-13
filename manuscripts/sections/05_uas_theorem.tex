@@ -95,7 +95,7 @@ Rearranging yields the crossover boundary at which routing mass transfers betwee
 The right-hand side is a constant (for fixed $\temp$ and service rates), so the crossover condition defines a hyperplane in the normalized queue-length space $\Qlen{i}/\srvrate_i$.
 For JSQ, the analogous crossover is $\Qlen{f} = \Qlen{s}$; for JSSQ, it is $\Qlen{f}/\srvrate_f = \Qlen{s}/\srvrate_s$.
 UAS interpolates between these extremes through the $\log$-ratio term, which vanishes only in the strict limit as $\temp \to \infty$ (recovering exact JSSQ behavior in the limit, though no finite $\temp$ achieves exact deterministic JSSQ assignments) and dominates as $\temp \to 0$ (favoring the faster server regardless of queue imbalance).
-This provides structural intuition for why Calibrated UAS with $\calbeta < 1$ may improve performance: tempering the normalization $\srvrate_i^{\calbeta}$ shifts the crossover boundary toward the faster server.
+This provides structural intuition for why Reflected UAS with $\calbeta < 1$ may improve performance: tempering the normalization $\srvrate_i^{\calbeta}$ shifts the crossover boundary toward the faster server.
 
 \subsection{Lyapunov Argument}
 \label{sec:uas:lyapunov}
@@ -255,7 +255,7 @@ More specifically, the loss of $\temp$-dependence occurs exactly at the Jensen s
 Equivalently, one may regard the proof as discarding a nonnegative state-dependent remainder after the variational identity and before Jensen. Retaining that remainder would preserve explicit $\temp$-dependence in the drift algebra, but establishing a uniform positive lower bound from it is outside the scope of the present theorem.
 
 \paragraph{Motivation for empirical extensions}
-Although UAS is provably stable, its parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance, motivating the broader Calibrated UAS family and the certified subset developed within that family in \cref{sec:calibrated_uas}.
+Although UAS is provably stable, its parameterization $(\Qlen{i}+1)/\srvrate_i$ is not necessarily optimal for empirical performance, motivating the broader Reflected UAS family and the certified subset developed within that family in \cref{sec:reflected_uas}.
 
 \paragraph{Ergodicity scope}
 The proof above establishes positive Harris recurrence together with an explicit Foster--Lyapunov drift inequality in the $\ell_1$ norm. That is sufficient for existence and uniqueness of the stationary distribution and for steady-state moment control of the form used in this manuscript. It does \emph{not} by itself establish a geometric-drift inequality of the form $\gen \lyap \leq -c\lyap + b\,\Ind_C$, so we do not claim geometric ergodicity here. Deriving sharper mixing-rate bounds for UAS remains an open problem.

@@ -1,6 +1,6 @@
 # Unified Archimedean Softmax (UAS)
 
-This note is a proof-facing derivation for the UAS policy used in the GibbsQ manuscript. It records the exact routing formula, its weighted variational interpretation, the Archimedean drift identity, and the Foster-Lyapunov closure that yields positive Harris recurrence. It also records the Calibrated UAS empirical extension used in the codebase for policy comparison, while keeping the theorem-backed and empirical layers explicitly separated.
+This note is a proof-facing derivation for the UAS policy used in the GibbsQ manuscript. It records the exact routing formula, its weighted variational interpretation, the Archimedean drift identity, and the Foster-Lyapunov closure that yields positive Harris recurrence. It also records the Reflected UAS empirical extension used in the codebase for policy comparison, while keeping the theorem-backed and empirical layers explicitly separated.
 
 ## 1. Definition
 
@@ -334,7 +334,7 @@ With \((\beta,\gamma,c)=(1,1,1)\), this reduces exactly to UAS. The current benc
 (\beta,\gamma,c)=(0.85,0.5,0.5).
 \]
 
-Calibrated UAS changes three structural ingredients:
+Reflected UAS changes three structural ingredients:
 
 - it tempers the service-rate normalization through \(\mu_i^{\beta}\)
 - it allows a softer service prior through \(\mu_i^{\gamma}\)
@@ -343,6 +343,6 @@ Calibrated UAS changes three structural ingredients:
 The important manuscript rule is:
 
 - UAS remains the theorem-backed heterogeneous routing law
-- Calibrated UAS is currently an empirical closed-form refinement, not a proved theorem path
+- Reflected UAS is currently an empirical closed-form refinement, not a proved theorem path
 
 That separation keeps the paper mathematically honest while still allowing the empirical layer to search for stronger closed-form baselines.

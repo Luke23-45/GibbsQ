@@ -20,7 +20,7 @@
 \maketitle
 
 \begin{abstract}
-We study a system of \(N\) parallel heterogeneous queues with Poisson arrivals and exponential service. We present two entropy-regularized routing laws within the GibbsQ framework. The first is the raw queue softmax policy, for which we give a Foster-Lyapunov proof of positive Harris recurrence under the load condition \(\lambda < \sum_i \mu_i\). The second is the Unified Archimedean Softmax (UAS) policy, a heterogeneous extension derived from a prior-weighted entropy-regularized variational objective and analyzed with a weighted Lyapunov function. For UAS, we prove the routing formula, the weighted variational identity, the exact generator identity, and a Foster-Lyapunov drift inequality yielding positive Harris recurrence under the same load condition. We then record an empirical closed-form family, denoted Calibrated UAS, which contains UAS as a special case and is used as a stronger benchmark candidate in the experimental layer. The learned policy N-GibbsQ is treated as an empirical neural extension benchmarked against these analytical baselines and calibrated closed-form variants.
+We study a system of \(N\) parallel heterogeneous queues with Poisson arrivals and exponential service. We present two entropy-regularized routing laws within the GibbsQ framework. The first is the raw queue softmax policy, for which we give a Foster-Lyapunov proof of positive Harris recurrence under the load condition \(\lambda < \sum_i \mu_i\). The second is the Unified Archimedean Softmax (UAS) policy, a heterogeneous extension derived from a prior-weighted entropy-regularized variational objective and analyzed with a weighted Lyapunov function. For UAS, we prove the routing formula, the weighted variational identity, the exact generator identity, and a Foster-Lyapunov drift inequality yielding positive Harris recurrence under the same load condition. We then record an empirical closed-form family, denoted Reflected UAS, which contains UAS as a special case and is used as a stronger benchmark candidate in the experimental layer. The learned policy N-GibbsQ is treated as an empirical neural extension benchmarked against these analytical baselines and calibrated closed-form variants.
 \end{abstract}
 
 \section{Framework And Main Theorem Layers}
@@ -30,11 +30,11 @@ The GibbsQ framework is an entropy-regularized queue-routing framework with four
 \begin{enumerate}
 \item the raw softmax routing baseline,
 \item the heterogeneous UAS routing extension,
-\item the empirical closed-form Calibrated UAS extension,
+\item the empirical closed-form Reflected UAS extension,
 \item the learned neural policy N-GibbsQ.
 \end{enumerate}
 
-The theorem statements in this manuscript concern only the first two analytical routing laws. Calibrated UAS and the neural policy are treated separately as empirical benchmark layers.
+The theorem statements in this manuscript concern only the first two analytical routing laws. Reflected UAS and the neural policy are treated separately as empirical benchmark layers.
 
 \section{Raw Softmax Model And Theorem}
 
@@ -366,18 +366,18 @@ This is the simplest theorem-backed entropy-regularized routing law and the clea
 \textbf{2. UAS heterogeneous extension.}
 This is the theorem-backed heterogeneous analytical extension used when queue pressure and service heterogeneity must both enter the routing law. Its proof uses the prior-weighted variational identity and the weighted drift inequality \eqref{eq:uas_arrival_term_bound}.
 
-\textbf{3. Calibrated UAS empirical extension.}
+\textbf{3. Reflected UAS empirical extension.}
 For policy-comparison purposes we also consider the empirical closed-form family
 \[
 p_i^{\mathrm{cal}}(Q,\mu)
 \propto
 \mu_i^{\gamma}\exp\!\left(-\alpha \frac{Q_i+c}{\mu_i^{\beta}}\right),
 \]
-with default benchmark parameters \((\beta,\gamma,c)=(0.85,0.5,0.5)\). This family contains UAS as the special case \((\beta,\gamma,c)=(1,1,1)\). In the present manuscript Calibrated UAS is used as an empirical closed-form benchmark candidate rather than a theorem-backed routing law.
+with default benchmark parameters \((\beta,\gamma,c)=(0.85,0.5,0.5)\). This family contains UAS as the special case \((\beta,\gamma,c)=(1,1,1)\). In the present manuscript Reflected UAS is used as an empirical closed-form benchmark candidate rather than a theorem-backed routing law.
 
 \textbf{4. N-GibbsQ.}
 This is the learned neural policy trained by behavior cloning and REINFORCE against the theorem-backed analytical routing baselines and calibrated closed-form baselines. It is an empirical approximation layer rather than part of the theorem statements.
 
-In this sense, `GibbsQ` denotes the framework, while raw softmax and UAS are the theorem-backed analytical policies, Calibrated UAS is an empirical closed-form extension, and `N-GibbsQ` is the learned policy.
+In this sense, `GibbsQ` denotes the framework, while raw softmax and UAS are the theorem-backed analytical policies, Reflected UAS is an empirical closed-form extension, and `N-GibbsQ` is the learned policy.
 
 \end{document}

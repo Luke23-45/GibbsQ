@@ -65,7 +65,7 @@ Files heavily dependent on theorem/proof/math presentation:
 - `sections/04_softmax_theorem.tex`
 - `sections/05_uas_theorem.tex`
 - `sections/03_model.tex`
-- `sections/06_calibrated_uas.tex`
+- `sections/06_reflected_uas.tex`
 
 Files with many paragraph heads that depend on heading polish:
 

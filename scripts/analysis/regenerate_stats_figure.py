@@ -2,9 +2,9 @@
 Regenerate the stats comparison figure from verified ablation data.
 
 This script produces a publication-quality raincloud plot comparing
-the best-seed calibrated-teacher N-GibbsQ variant against the
-Calibrated UAS baseline, using data from the ablation experiment
-(which correctly uses alpha=20.0 for Calibrated UAS).
+the best-seed reflected-teacher N-GibbsQ variant against the
+Reflected UAS baseline, using data from the ablation experiment
+(which correctly uses alpha=20.0 for Reflected UAS).
 
 It generates surrogate Gaussian samples matched to the exact summary
 statistics from ablation_ssa_summary.json, avoiding the need to
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
-from gibbsq.analysis.plot_profiles import ExperimentPlotContext
-from gibbsq.analysis.plotting import plot_raincloud
+from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from gibbsq.qroute.analysis.plotting import plot_raincloud
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -39,12 +39,12 @@ ABLATION_METRICS = (
 MANUSCRIPT_FIGURE_DIR = PROJECT_ROOT / "manuscripts" / "data" / "stats" / "figures"
 
 # --- Variant names (must match ablation_ssa_summary.json) ---
-BASELINE_VARIANT = "Calibrated UAS"
-NEURAL_VARIANT = "BC from Calibrated UAS -> REINFORCE"
+BASELINE_VARIANT = "Reflected UAS"
+NEURAL_VARIANT = "BC from Reflected UAS -> REINFORCE"
 
 # --- Labels for the plot ---
-BASELINE_LABEL = "Calibrated UAS (Baseline)"
-NEURAL_LABEL = "N-GibbsQ Cal-Teacher (Best Seed)"
+BASELINE_LABEL = "Reflected UAS (Baseline)"
+NEURAL_LABEL = "N-GibbsQ Ref-Teacher (Best Seed)"
 
 
 def load_ablation_summary(path: Path) -> dict:
@@ -145,7 +145,7 @@ def regenerate_stats_figure(
             experiment_id="stats",
             chart_name="plot_raincloud",
             semantic_overrides={
-                "figure_title": "Calibrated UAS vs N-GibbsQ (Cal-Teacher): Distribution Comparison",
+                "figure_title": "Reflected UAS vs N-GibbsQ (Ref-Teacher): Distribution Comparison",
             },
         ),
     )

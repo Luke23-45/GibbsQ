@@ -38,7 +38,7 @@ weighted-quadratic direct CTMC route in files `10` and `11`?
 
 ### Objective D. Focused empirical benchmark support
 
-Does the benchmark-default Calibrated UAS point remain both:
+Does the benchmark-default Reflected UAS point remain both:
 
 - mathematically central to the `z2` story, and
 - empirically competitive against UAS and JSSQ under the declared benchmark?
@@ -52,23 +52,23 @@ The current relevant experiment files are:
 
 ### Verification directory
 
-- `experiments/verification/direct_ctmc_validation.py`
-- `experiments/verification/scuas_validation.py`
-- `experiments/verification/drift_verification.py`
-- `experiments/verification/engine_parity.py`
-- `experiments/verification/calibrated_uas_proof_search.py`
+- `gibbsq/experiments/verification/direct_ctmc_validation.py`
+- `gibbsq/experiments/legacy/sruas_validation.py`
+- `gibbsq/experiments/verification/drift_verification.py`
+- `gibbsq/experiments/verification/engine_parity.py`
+- `gibbsq/experiments/verification/reflected_uas_proof_search.py`
 
 ### Testing directory
 
-- `experiments/testing/direction12_probe.py`
-- `experiments/testing/state_dependent_uas_probe.py`
-- `experiments/testing/smvr_probe.py`
-- `experiments/testing/reconciliation_proof.py`
-- `experiments/testing/check_configs.py`
-- `experiments/testing/compare_softmax_variants.py`
-- `experiments/testing/compare_rl_variants.py`
-- `experiments/testing/reinforce_gradient_check.py`
-- `experiments/testing/stress_test.py`
+- `gibbsq/experiments/legacy/direction12_probe.py`
+- `gibbsq/experiments/legacy/state_dependent_uas_probe.py`
+- `gibbsq/experiments/legacy/smvr_probe.py`
+- `gibbsq/experiments/legacy/reconciliation_proof.py`
+- `gibbsq/experiments/testing/check_configs.py`
+- `gibbsq/experiments/legacy/compare_softmax_variants.py`
+- `gibbsq/experiments/legacy/compare_rl_variants.py`
+- `gibbsq/experiments/legacy/reinforce_gradient_check.py`
+- `gibbsq/experiments/legacy/stress_test.py`
 
 ### Existing z2-relevant tests
 
@@ -87,7 +87,7 @@ experimental backbone.
 #### 1. Direct CTMC validation capsule
 
 Current file:
-- `experiments/verification/direct_ctmc_validation.py`
+- `gibbsq/experiments/verification/direct_ctmc_validation.py`
 
 Why it stays:
 - it is the main computational support for files `10` and `11`
@@ -107,7 +107,7 @@ Required outputs:
 #### 2. Reflected-ODE diagnostic capsule
 
 Current source:
-- `experiments/testing/direction12_probe.py`
+- `gibbsq/experiments/legacy/direction12_probe.py`
 
 Decision:
 - keep the **Direction 1** reflected-ODE diagnostic logic
@@ -130,7 +130,7 @@ Required outputs:
 #### 3. Proof-search helper utilities
 
 Current file:
-- `experiments/verification/calibrated_uas_proof_search.py`
+- `gibbsq/experiments/verification/reflected_uas_proof_search.py`
 
 Why it stays:
 - the direct CTMC validation capsule depends on it for state-bank generation and
@@ -143,8 +143,8 @@ Required role:
 #### 4. Configuration sanity and engine parity
 
 Current files:
-- `experiments/testing/check_configs.py`
-- `experiments/verification/engine_parity.py`
+- `gibbsq/experiments/testing/check_configs.py`
+- `gibbsq/experiments/verification/engine_parity.py`
 
 Why they stay:
 - they protect reproducibility
@@ -159,17 +159,17 @@ Required role:
 These should not be deleted, but they should no longer be treated as active
 `z2` experiments.
 
-#### 1. SCUAS validation
+#### 1. SRUAS validation
 
 Current file:
-- `experiments/verification/scuas_validation.py`
+- `gibbsq/experiments/legacy/sruas_validation.py`
 
 Decision:
 - demote from active `z2` experiment
 - keep only as legacy certification-route record
 
 Reason:
-- the thesis no longer centers on the SCUAS sufficient-condition route
+- the thesis no longer centers on the SRUAS sufficient-condition route
 - the direct CTMC route supersedes it as the active stochastic program
 
 Action:
@@ -178,20 +178,20 @@ Action:
 #### 2. State-dependent UAS probe
 
 Current file:
-- `experiments/testing/state_dependent_uas_probe.py`
+- `gibbsq/experiments/legacy/state_dependent_uas_probe.py`
 
 Decision:
 - archive from the active `z2` line
 
 Reason:
 - it is an exploratory adaptive-policy search
-- it did not beat the benchmark-default Calibrated UAS point
+- it did not beat the benchmark-default Reflected UAS point
 - it does not strengthen the formal `z2` theorem story
 
 #### 3. SMVR probe
 
 Current file:
-- `experiments/testing/smvr_probe.py`
+- `gibbsq/experiments/legacy/smvr_probe.py`
 
 Decision:
 - archive from the active `z2` line
@@ -204,10 +204,10 @@ Reason:
 #### 4. RL- and policy-search experiments not tied to `z2`
 
 Current files:
-- `experiments/testing/compare_softmax_variants.py`
-- `experiments/testing/compare_rl_variants.py`
-- `experiments/testing/reinforce_gradient_check.py`
-- `experiments/testing/stress_test.py`
+- `gibbsq/experiments/legacy/compare_softmax_variants.py`
+- `gibbsq/experiments/legacy/compare_rl_variants.py`
+- `gibbsq/experiments/legacy/reinforce_gradient_check.py`
+- `gibbsq/experiments/legacy/stress_test.py`
 
 Decision:
 - keep in the repo
@@ -281,12 +281,12 @@ Purpose:
 - strengthen the benchmark layer for the conditional CTMC route
 
 What it must do:
-- rerun UAS, benchmark-default Calibrated UAS, and JSSQ on an independent seed
+- rerun UAS, benchmark-default Reflected UAS, and JSSQ on an independent seed
   block not shared with the original anchor benchmark
 - report:
   - mean total queue
   - standard error
-  - paired deltas versus Calibrated UAS where appropriate
+  - paired deltas versus Reflected UAS where appropriate
 
 Why it is needed:
 - it reduces the risk that the benchmark story depends too heavily on one seed
@@ -307,7 +307,7 @@ What it must do:
 - highlight where the benchmark-default point sits in that grid
 
 Why it is needed:
-- it replaces the old SCUAS certified-subset storyline with the active direct
+- it replaces the old SRUAS certified-subset storyline with the active direct
   CTMC classification picture
 
 ## 4. Required Experiment Reorganization
@@ -329,14 +329,14 @@ These should live under `experiments/verification`:
 
 These should no longer be treated as active `z2` experiments:
 
-- SCUAS validation
+- SRUAS validation
 - state-dependent UAS probe
 - SMVR probe
 - sparsemax / Direction 2 search
 - other policy-search experiments not tied to the final theorem program
 
 If moved later, they should go to a clearly labeled archive path such as
-`experiments/archive` or `experiments/exploratory_legacy`.
+`gibbsq/experiments/archive` or `gibbsq/experiments/exploratory_legacy`.
 
 ## 5. Detailed Implementation Sequence
 
@@ -351,12 +351,12 @@ Implement in this order.
    - small-grid exhaustive CTMC drift audit
    - independent-seed benchmark rerun
    - candidate-grid theorem-constant sweep
-2. Mark SCUAS, SMVR, and state-dependent UAS as non-active for `z2`.
+2. Mark SRUAS, SMVR, and state-dependent UAS as non-active for `z2`.
 
 ### Phase 2. Reorganize current experiments
 
 1. Promote Direction 1 logic out of `direction12_probe.py` into a deterministic
-   verification experiment in `experiments/verification`.
+   verification experiment in `gibbsq/experiments/verification`.
 2. Leave `direct_ctmc_validation.py` as the central stochastic validation
    capsule.
 3. Keep proof-search helpers internal to verification support.
@@ -410,7 +410,7 @@ true.
 
 - Direction 1 deterministic diagnostics are treated as verification, not
   broad exploratory testing
-- SCUAS, SMVR, and state-dependent-UAS experiments are no longer part of the
+- SRUAS, SMVR, and state-dependent-UAS experiments are no longer part of the
   active `z2` line
 
 ### Coverage criteria
@@ -438,7 +438,7 @@ From this point onward, the `z2` implementation line should answer:
 It should **not** answer:
 
 - can we find a more exotic policy family?
-- can a neural or value-corrected extension beat Calibrated UAS?
+- can a neural or value-corrected extension beat Reflected UAS?
 - can an exploratory adaptive variant become the new main line?
 
 Those are no longer `z2` implementation questions.

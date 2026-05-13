@@ -1,7 +1,7 @@
 """Workspace-local Python startup customization.
 
-Ensures this repository's ``src`` tree is importable before any sibling
-workspace package with the same top-level name.
+Ensures this repository's root is importable so that ``gibbsq``
+(containing ``qroute`` and ``experiments``) can be imported directly.
 """
 
 from __future__ import annotations
@@ -11,12 +11,7 @@ from pathlib import Path
 
 
 _ROOT = Path(__file__).resolve().parent
-_SRC = _ROOT / "src"
 
-if _SRC.is_dir():
-    src_str = str(_SRC)
-    try:
-        sys.path.remove(src_str)
-    except ValueError:
-        pass
-    sys.path.insert(0, src_str)
+root_str = str(_ROOT)
+if root_str not in sys.path:
+    sys.path.insert(0, root_str)

@@ -20,7 +20,7 @@ We do not claim this architecture is optimal; it serves as a fixed testbed for i
 \subsection{Two-Phase Training Pipeline}
 
 \paragraph{Phase~1: Behavior Cloning}
-The network is trained via cross-entropy loss against an analytical teacher policy (UAS with $\temp = 10$ by default; the ablation in \cref{sec:exp:ablation} also evaluates Calibrated UAS).
+The network is trained via cross-entropy loss against an analytical teacher policy (UAS with $\temp = 10$ by default; the ablation in \cref{sec:exp:ablation} also evaluates Reflected UAS).
 Training runs for 1{,}000 steps, minimizing cross-entropy to faithfully capture the routing distribution across the simplex. At convergence, this objective provides a stable initialization for Phase~2, with best-seed top-1 action-matching accuracy of 99.2\% (97--99\% across seeds) and a terminal KL divergence of $1.16 \times 10^{-3}$ on sampled validation states.
 
 \paragraph{Phase~2: REINFORCE Fine-Tuning}

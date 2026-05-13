@@ -1,4 +1,4 @@
-# Calibrated UAS: Formal Math Overview
+# Reflected UAS: Formal Math Overview
 
 This note gives the high-level mathematical map for the `z2` package.
 
@@ -77,7 +77,7 @@ theorem status.
 
 For service rates \(\mu_i>0\), queue state \(q\in\mathbb R_+^N\), and
 parameters \(\alpha>0\), \(\beta>0\), \(\gamma\in\mathbb R\), \(c\ge 0\), the
-Calibrated-UAS routing probabilities are
+Reflected-UAS routing probabilities are
 
 \[
 p_i(q)

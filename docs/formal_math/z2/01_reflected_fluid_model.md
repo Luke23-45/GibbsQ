@@ -1,6 +1,6 @@
 # Reflected Fluid Model
 
-This note records the corrected reflected deterministic model for Calibrated UAS
+This note records the corrected reflected deterministic model for Reflected UAS
 and proves the first structural fact needed for any stability theorem: the
 equilibrium cannot be an interior fixed point when \(\lambda < \Lambda\).
 

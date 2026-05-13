@@ -1,7 +1,7 @@
 # Thesis Hypotheses For The `z2` Program
 
 This note defines the **defensible thesis hypotheses** for the current
-Calibrated-UAS project.
+Reflected-UAS project.
 
 It is written to prevent a repeat of the earlier failure mode:
 
@@ -21,7 +21,7 @@ already in the repo, or if the missing step is named explicitly and narrowly.**
 The thesis should be built around the following scientific question:
 
 **Main thesis question.**
-What is the correct deterministic stability structure of Calibrated UAS, and
+What is the correct deterministic stability structure of Reflected UAS, and
 how far can that structure be lifted to the original queueing CTMC without
 overclaiming?
 
@@ -50,7 +50,7 @@ The thesis should use a layered hypothesis structure.
 For fixed parameters
 \(\alpha>0\), \(\beta>0\), \(\gamma\in\mathbb R\), \(c\ge 0\), service rates
 \(\mu_i>0\), and load \(\lambda < \Lambda := \sum_i \mu_i\), the correct
-deterministic object associated with Calibrated UAS is a **reflected ODE** on
+deterministic object associated with Reflected UAS is a **reflected ODE** on
 \(\mathbb R_+^N\), not the unconstrained drift equation
 \(\dot q = \lambda p(q)-\mu\).
 
@@ -124,10 +124,10 @@ It is a limitation result, but it is a mathematically valuable one.
 ### H4. Direct CTMC certification-route hypothesis
 
 **Hypothesis H4.**
-A direct Foster-Lyapunov proof for the fixed-parameter Calibrated-UAS CTMC can
+A direct Foster-Lyapunov proof for the fixed-parameter Reflected-UAS CTMC can
 be built using a weighted quadratic Lyapunov function together with an exact
 softmax-minimum bound, and this route certifies the benchmark-default
-Calibrated-UAS point under the natural load condition \(\lambda < \Lambda\).
+Reflected-UAS point under the natural load condition \(\lambda < \Lambda\).
 
 **What H4 asserts.**
 
@@ -166,7 +166,7 @@ The thesis must be written so that it remains defensible under either mode.
 
 **Hypothesis H5.**
 Under the anchor benchmark already used in the repo, the benchmark-default
-Calibrated UAS policy outperforms the baseline UAS and JSSQ policies in mean
+Reflected UAS policy outperforms the baseline UAS and JSSQ policies in mean
 steady-state total queue length.
 
 **What H5 asserts.**
@@ -190,7 +190,7 @@ Safe as a validation hypothesis, but secondary to H1-H4.
 **Hypothesis H6.**
 Within the exploratory directions already tested in this repository, there is
 no evidence that SMVR, adaptive-temperature UAS, or other recent probes provide
-a stronger thesis direction than Calibrated UAS plus the `z2` theorem program.
+a stronger thesis direction than Reflected UAS plus the `z2` theorem program.
 
 **What H6 asserts.**
 
@@ -212,7 +212,7 @@ claim.
 ### H7. Differentiable-policy applicability hypothesis
 
 **Hypothesis H7.**
-Calibrated UAS is not only competitive with classical routing baselines such as
+Reflected UAS is not only competitive with classical routing baselines such as
 JSQ and JSSQ, but also defines a **continuous and differentiable** routing map
 that is compatible with gradient-based policy learning in a way that those hard
 dispatch rules are not.
@@ -275,13 +275,13 @@ This is why H4 must remain conditional until formally promoted.
 
 ### For H5
 
-H5 fails if a properly reproduced benchmark shows that Calibrated UAS no longer
+H5 fails if a properly reproduced benchmark shows that Reflected UAS no longer
 beats UAS and JSSQ under the declared protocol.
 
 ### For H6
 
 H6 fails if one of the exploratory directions is later shown, under a properly
-powered and reproducible study, to dominate Calibrated UAS in a way that is
+powered and reproducible study, to dominate Reflected UAS in a way that is
 both practically meaningful and thesis-relevant.
 
 ### For H7
@@ -325,7 +325,7 @@ Without that sign-off, H4 must be labeled as:
 
 These can be reported as benchmark facts, not universal laws.
 
-- H5 benchmark performance of Calibrated UAS
+- H5 benchmark performance of Reflected UAS
 - H7 differentiable-policy applicability of the softmax-based routing family
 
 ### Tier 4. Exploratory negative results
@@ -341,7 +341,7 @@ These can justify scope decisions, but should not dominate the thesis.
 If the thesis must have one central hypothesis statement, it should be:
 
 **Master hypothesis.**
-Calibrated UAS admits a corrected reflected-ODE stability theory with a unique
+Reflected UAS admits a corrected reflected-ODE stability theory with a unique
 boundary equilibrium and global convergence, and this deterministic structure
 provides the right backbone for a stochastic certification program whose
 benchmark-default policy is already supported by targeted CTMC validation.
@@ -349,7 +349,7 @@ benchmark-default policy is already supported by targeted CTMC validation.
 This is deliberately narrower than saying:
 
 - "the full project is finished,"
-- "all of Calibrated UAS is fully certified,"
+- "all of Reflected UAS is fully certified,"
 - "the neural policy is the main theorem-backed contribution."
 
 The master hypothesis is strong enough for a thesis and narrow enough to defend.

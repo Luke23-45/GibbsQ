@@ -138,7 +138,7 @@ verification:
 
 engine_parity:
   mode: quick
-  policies: [jsq, jssq, uas, calibrated_uas]
+  policies: [jsq, jssq, uas, reflected_uas]
   include_policy_contract: true
   include_stats_contract: true
   include_generalize_contract: true

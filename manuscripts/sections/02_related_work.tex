@@ -26,7 +26,7 @@ Despite these relationships to the RL and optimization literatures, to our knowl
 \paragraph{Foster--Lyapunov and fluid-limit methods for queueing stability}
 An alternative stability paradigm uses fluid-limit arguments~\cite{dai1995fluid} commonly adopted in broader queueing networks. GibbsQ adopts the direct Foster--Lyapunov route because it yields explicit, computable drift constants characterizing bounds directly, whereas fluid-limit arguments typically establish stability without constructive bounds. The continuous-time Foster--Lyapunov framework for positive Harris recurrence is the standard direct stability tool for CTMCs~\cite{meyn2009markov}.
 Quadratic Lyapunov functions are commonly used in homogeneous settings~\cite{neely2010stochastic}. In heterogeneous settings, weighted analogues are a natural extension because they can encode service asymmetry directly in the drift calculation.
-Our UAS proof uses a capacity-weighted Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ together with a prior-weighted KL variational identity, while the calibrated-family certification route studied in Section~\ref{sec:calibrated_uas} uses a matched weighted Lyapunov function $\frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i^{\calbeta}$ and a calibrated prior decomposition. To our knowledge, this combination of proof templates has not appeared in the queueing literature.
+Our UAS proof uses a capacity-weighted Lyapunov function $\lyap_{\mathrm{UAS}} = \frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i$ together with a prior-weighted KL variational identity, while the calibrated-family certification route studied in Section~\ref{sec:reflected_uas} uses a matched weighted Lyapunov function $\frac{1}{2}\sum_i \Qlen{i}^2/\srvrate_i^{\calbeta}$ and a calibrated prior decomposition. To our knowledge, this combination of proof templates has not appeared in the queueing literature.
 
 \paragraph{Imitation learning and behavior cloning}
 Behavior cloning trains a policy through supervised imitation of an expert~\cite{osa2018algorithmic}.
@@ -37,7 +37,7 @@ The ablation study uses this setup to isolate the effect of teacher quality.
 \paragraph{RL for queueing and resource allocation}
 RL has been applied, e.g., to queueing control, scheduling, and routing~\cite{dai2022queueing}.
 These approaches generally learn policies end-to-end without analytical stability guarantees.
-GibbsQ addresses this gap by offering proven stable analytical policies together with a parameter-conditional certified subset of the calibrated family in theory, while the calibrated baselines and BC teachers used in the experiments remain empirical unless separately certified.
+GibbsQ addresses this gap by offering proven stable analytical policies together with a parameter-conditional certified subset of the reflected family in theory, while the reflected baselines and BC teachers used in the experiments remain empirical unless separately certified.
 
 \paragraph{Mean-field approximations}
 For large server pools ($\Nservers \to \infty$), mean-field models provide tractable approximations to queueing dynamics; the supermarket-model literature is a standard example~\cite{vvedenskaya1996queueing,mitzenmacher2001power}.

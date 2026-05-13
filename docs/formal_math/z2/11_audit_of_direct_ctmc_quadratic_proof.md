@@ -144,21 +144,21 @@ does indeed imply
 
 So the final linear drift bound is algebraically correct.
 
-## 6. Relation To The Old SCUAS Failure
+## 6. Relation To The Old SRUAS Failure
 
-The earlier SCUAS theorem used a prior-weighted Jensen route that transformed
+The earlier SRUAS theorem used a prior-weighted Jensen route that transformed
 the arrival term into a coefficientwise condition. That was sufficient but too
 coarse at the benchmark.
 
 The new proof does something different:
 
-- it rewrites Calibrated UAS as an ordinary softmax over the shifted energies
+- it rewrites Reflected UAS as an ordinary softmax over the shifted energies
   \(Q_i/\mu_i^\beta+\kappa_i\),
 - it uses a direct minimum-type softmax bound,
 - it matches that bound with the weighted quadratic decomposition
   \(Q_i=\mu_i^\beta m+\Delta_i\).
 
-So this is not a rephrasing of the failed SCUAS argument. It is a different
+So this is not a rephrasing of the failed SRUAS argument. It is a different
 proof structure.
 
 ## 7. Current Audit Conclusion
@@ -167,7 +167,7 @@ I do not see an algebraic gap in
 [10_direct_ctmc_quadratic_proof_attempt.md](./10_direct_ctmc_quadratic_proof_attempt.md).
 
 If this audit survives the level of scrutiny required for theorem promotion,
-then the fixed-parameter Calibrated-UAS CTMC would be certified under the
+then the fixed-parameter Reflected-UAS CTMC would be certified under the
 natural load condition \(\lambda<\sum_i \mu_i\).
 
 Until that promotion step is explicitly recorded, the correct package-level

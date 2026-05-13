@@ -45,20 +45,21 @@ python scripts/execution/reproduction_pipeline.py --config-name debug
 ```
 GibbsQ/
 ├── configs/                  # Hydra YAML configurations
-├── src/gibbsq/                 # Core library package
-│   ├── core/
-│   ├── engines/
-│   │   └── deprecated/       # Quarantine for differentiable_engine.py
-│   ├── analysis/
-│   └── utils/
-├── experiments/              # Hydra-driven research drivers
-│   ├── training/             # Learning routines (REINFORCE, DR)
-│   ├── evaluation/           # Master benchmarks
-│   │   ├── baselines_comparison.py
-│   │   └── n_gibbsq_evals/   # Track-specific deep dives (ablation, etc.)
-│   ├── sweeps/               # Parameter explorations
-│   ├── testing/              # Code & Gradient validations
-│   └── verification/         # Theoretical drift checks
+├── gibbsq/                   # Repository package root
+│   ├── qroute/               # Core library package
+│   │   ├── core/
+│   │   ├── engines/
+│   │   │   └── deprecated/   # Quarantine for differentiable_engine.py
+│   │   ├── analysis/
+│   │   ├── studies/
+│   │   └── utils/
+│   └── experiments/          # Experiment capsules
+│       ├── benchmark/        # Benchmark reruns
+│       ├── evaluation/       # Neural and publication evaluations
+│       ├── legacy/           # Archived exploratory experiments
+│       ├── testing/          # Config and smoke validation helpers
+│       ├── training/         # Learning routines
+│       └── verification/     # Theorem-support and drift checks
 └── scripts/                  # Professional execution suite
     ├── execution/
     │   ├── experiment_runner.py     # Unified task engine

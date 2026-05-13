@@ -1,7 +1,7 @@
 # Global Convergence Of The Reflected ODE
 
 This note completes the deterministic part of the theory. It proves that the
-reflected calibrated-UAS ODE converges globally to the unique boundary
+reflected reflected-UAS ODE converges globally to the unique boundary
 equilibrium characterized earlier.
 
 ## 1. Projected Drift Form
@@ -219,7 +219,7 @@ Because the trajectory is precompact and all of its accumulation points equal
 **Theorem 2 (proved deterministic convergence theorem).**
 Fix \(\alpha>0\), \(\beta>0\), \(\gamma\in\mathbb R\), \(c\ge 0\), service rates
 \(\mu_i>0\), and \(\lambda<\Lambda=\sum_i\mu_i\). Then the reflected
-calibrated-UAS ODE on \(\mathbb R_+^N\) has a unique equilibrium \(q^*\), and
+reflected-UAS ODE on \(\mathbb R_+^N\) has a unique equilibrium \(q^*\), and
 every reflected trajectory satisfies
 
 \[
@@ -235,7 +235,7 @@ convergence of the reflected ODE surrogate that we have analyzed throughout
 `z2`.
 
 It does **not** by itself imply positive Harris recurrence of the original
-Calibrated-UAS CTMC. That extra step requires identifying the same ODE as the
+Reflected-UAS CTMC. That extra step requires identifying the same ODE as the
 correct large-scale fluid limit of the stochastic queueing process under an
 appropriate scaling regime. The scaling issue is discussed separately in
 [07_ctmc_scaling_gap.md](./07_ctmc_scaling_gap.md).

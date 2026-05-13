@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.execution.experiment_runner import default_hydra_overrides_for_experiment
-from gibbsq.utils.progress import create_progress
+from gibbsq.qroute.utils.progress import create_progress
 
 
 def _current_timestamp() -> datetime:

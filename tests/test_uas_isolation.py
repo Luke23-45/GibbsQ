@@ -1,9 +1,9 @@
 import numpy as np
 
-from gibbsq.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.core.builders import build_policy_by_name
-from gibbsq.core.policies import JSSQRouting, UASRouting
-from gibbsq.engines.numpy_engine import run_replications
+from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
+from gibbsq.qroute.core.builders import build_policy_by_name
+from gibbsq.qroute.core.policies import JSSQRouting, UASRouting
+from gibbsq.qroute.engines.numpy_engine import run_replications
 
 
 def test_uas_routing_matches_documented_probability_formula():

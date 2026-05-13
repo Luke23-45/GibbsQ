@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from gibbsq.analysis.generalize_regeneration import regenerate_generalize_figure
+from gibbsq.qroute.analysis.generalize_regeneration import regenerate_generalize_figure
 
 
 def parse_args() -> argparse.Namespace:

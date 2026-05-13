@@ -18,7 +18,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from gibbsq.utils.progress import create_progress
+from gibbsq.qroute.utils.progress import create_progress
 from scripts.execution.experiment_runner import default_hydra_overrides_for_experiment
 from scripts.execution.reproduction_pipeline import (
     _current_timestamp,

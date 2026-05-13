@@ -1,7 +1,7 @@
 # `z2` Formal Math Package
 
 This directory is the canonical formal-math package for the current
-Calibrated-UAS thesis direction.
+Reflected-UAS thesis direction.
 
 It is no longer organized as an open-ended research dump. Its files now fall
 into clear roles:
@@ -129,7 +129,7 @@ recorded.
 
 ### Supporting applicability result
 
-Because Calibrated UAS is softmax-based and smooth, it is compatible with
+Because Reflected UAS is softmax-based and smooth, it is compatible with
 differentiable policy-learning workflows in a way that hard dispatch rules such
 as JSQ and JSSQ are not. This is a supporting applicability result, not the
 main hero of the package.
@@ -167,7 +167,7 @@ Audit summary:
 Key audit outcomes:
 
 - `uas_special_case`: `epsilon = 0.200000000000`, sampled bound passed
-- `calibrated_default`: `epsilon = 0.212805842869`, sampled bound passed
+- `reflected_default`: `epsilon = 0.212805842869`, sampled bound passed
 - `grid_b0p5_g0p25_c0p25`: `epsilon = 0.242337433796`, sampled bound passed
 - `grid_b0p5_g0p5_c0p25`: `epsilon = 0.242337433796`, sampled bound passed
 - `grid_b0p7_g0p25_c0p25`: `epsilon = 0.225592288568`, sampled bound passed
@@ -183,10 +183,10 @@ Quick rerun summary:
 Key short-run comparison:
 
 - `UAS`: `11.489221`
-- `Calibrated UAS (empirical default)`: `10.039646`
+- `Reflected UAS (empirical default)`: `10.039646`
 - candidate `(0.5, 0.25, 0.25)`: `10.341040`
 - candidate `(0.5, 0.5, 0.25)`: `10.307986`
 - candidate `(0.7, 0.25, 0.25)`: `10.223725`
 
-This rerun supports the benchmark relevance of the default calibrated point, but
+This rerun supports the benchmark relevance of the default reflected point, but
 it is still an empirical benchmark fact rather than a theorem statement.

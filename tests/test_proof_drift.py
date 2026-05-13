@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from gibbsq.core.drift import evaluate_grid, generator_drift, simplified_bound, upper_bound
+from gibbsq.qroute.core.drift import evaluate_grid, generator_drift, simplified_bound, upper_bound
 
 
 def test_raw_upper_bound_formula():

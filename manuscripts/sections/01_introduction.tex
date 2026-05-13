@@ -21,23 +21,23 @@ GibbsQ yields three main findings:
 \item \textbf{Stability proofs:}
 We prove positive Harris recurrence~\cite{meyn2009markov} for two routing laws under the strict load condition $\totcap = \sum_i \srvrate_i > \arrate$.
 Raw softmax (Theorem~\ref{thm:softmax}) and Unified Capacity-Aware Softmax (UAS, Theorem~\ref{thm:uas}) are established via self-contained Foster--Lyapunov arguments with explicit drift constants.
-We further identify a theorem-backed certified subset within the calibrated family and prove positive Harris recurrence for that subset under an explicit parameter-conditional drift condition.
+We further identify a theorem-backed certified subset within the reflected family and prove positive Harris recurrence for that subset under an explicit parameter-conditional drift condition.
 The UAS drift constants are independent of $\temp$.
-Under the anchor benchmark, no competitive routing configuration satisfies that sufficient condition; the certified and performant regions are disjoint (Section~\ref{sec:scuas_audit}).
+Under the anchor benchmark, no competitive routing configuration satisfies that sufficient condition; the certified and performant regions are disjoint (Section~\ref{sec:sruas_audit}).
 
 \item \textbf{Calibrated closed-form policy:}
 Base UAS ($\temp{=}10$ at $11.50$) underperforms JSSQ ($11.02$), indicating that the provably stable parameterization sacrifices empirical performance for analytical tractability.
-Calibrated UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, reducing steady-state queue length by $0.97$ units (8.84\%) relative to JSSQ.
-The benchmark-default parameters are not certified by Theorem~\ref{thm:scuas} (post-validation audit yields $\varepsilon < 0$); a numerically verified piecewise Lyapunov candidate provides evidence for a future certification route.
+Reflected UAS, a three-parameter extension, achieves $\E[\sum_i \Qlen{i}] = 10.04$ under the standard benchmark, reducing steady-state queue length by $0.97$ units (8.84\%) relative to JSSQ.
+The benchmark-default parameters are not certified by Theorem~\ref{thm:sruas} (post-validation audit yields $\varepsilon < 0$); a numerically verified piecewise Lyapunov candidate provides evidence for a future certification route.
 
 \item \textbf{Teacher-choice effect in learned policies:}
 The default neural policy ($\ngibbsq$), trained from UAS via behavior cloning and \reinforce{}, underperforms JSSQ ($11.68$ vs.\ $11.02$), consistent with a teacher-quality bottleneck because UAS itself underperforms JSSQ.
-Switching the BC teacher to Calibrated UAS substantially improves this bottleneck, yielding the lowest point estimate among all evaluated policies ($9.82$ under Protocol B, best-of-5 seed selection; matches Calibrated UAS at $\approx 10.04$ under Protocol A).
+Switching the BC teacher to Reflected UAS substantially improves this bottleneck, yielding the lowest point estimate among all evaluated policies ($9.82$ under Protocol B, best-of-5 seed selection; matches Reflected UAS at $\approx 10.04$ under Protocol A).
 This directional advantage persists across 16 generalization configurations and near-critical loads up to $\rho = 0.98$.
 Training from scratch performs extremely poorly ($5{,}451$), reinforcing that initialization quality is central among the tested training design choices.
 \end{enumerate}
 
-The main practical story is therefore layered: UAS is the principal certified policy, Calibrated UAS is the stronger empirical closed-form extension, and the certified subset marks the portion of that extension currently covered by theory.
+The main practical story is therefore layered: UAS is the principal certified policy, Reflected UAS is the stronger empirical closed-form extension, and the certified subset marks the portion of that extension currently covered by theory.
 
 To clarify the hierarchical relationship between these routing policies, Table~\ref{tab:claims_map} provides a rigorous map of the terminology used throughout the manuscript.
 
@@ -53,9 +53,9 @@ To clarify the hierarchical relationship between these routing policies, Table~\
 \midrule
 \textbf{UAS} & Theorem-certified & Analytical policy with temperature-independent drift constants (Thm.~\ref{thm:uas}). \\
 \addlinespace[3pt]
-\textbf{Calibrated UAS} & Empirical & Full three-parameter heuristic family $(\calbeta,\calgamma,\caloffset)$ evaluated via simulations. No unified theorem applies to this family at the benchmark setting. \\
+\textbf{Reflected UAS} & Empirical & Full three-parameter heuristic family $(\calbeta,\calgamma,\caloffset)$ evaluated via simulations. No unified theorem applies to this family at the benchmark setting. \\
 \addlinespace[3pt]
-\textbf{Certified subset} & Conditionally certified & Subset of Calibrated UAS covered by the calibrated Lyapunov drift condition (\cref{thm:scuas}). \\
+\textbf{Certified subset} & Conditionally certified & Subset of Reflected UAS covered by the calibrated Lyapunov drift condition (\cref{thm:sruas}). \\
 \addlinespace[3pt]
 \textbf{Benchmark default} & Empirical point & The actively evaluated $(0.85, 0.5, 0.5)$ configuration, lacking theorem certification. \\
 \textbf{$\ngibbsq$} & Learned sequence & Neural policy optimized via RL; strictly empirical, directional improvement. \\
@@ -65,4 +65,4 @@ To clarify the hierarchical relationship between these routing policies, Table~\
 
 \subsection{Paper Organization}
 Sections~\ref{sec:related_work}--\ref{sec:model} survey related work and define the model; Sections~\ref{sec:softmax_theorem} and~\ref{sec:uas_theorem} prove the raw softmax and UAS stability theorems.
-Section~\ref{sec:calibrated_uas} develops the broader Calibrated UAS family and then isolates its certified subset; Section~\ref{sec:neural_policy} presents $\ngibbsq$; Section~\ref{sec:experiments} reports experiments; Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss and conclude.
+Section~\ref{sec:reflected_uas} develops the broader Reflected UAS family and then isolates its certified subset; Section~\ref{sec:neural_policy} presents $\ngibbsq$; Section~\ref{sec:experiments} reports experiments; Sections~\ref{sec:discussion} and~\ref{sec:conclusion} discuss and conclude.

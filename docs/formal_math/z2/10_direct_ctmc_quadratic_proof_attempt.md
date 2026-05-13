@@ -1,7 +1,7 @@
 # Direct CTMC Stability Proof Attempt Via A Weighted Quadratic Lyapunov Function
 
 This note gives a direct Foster-Lyapunov proof attempt for the fixed-parameter
-Calibrated-UAS CTMC. Unlike the `H`-based route, this argument uses a weighted
+Reflected-UAS CTMC. Unlike the `H`-based route, this argument uses a weighted
 quadratic Lyapunov function and an exact softmax minimum bound.
 
 The note is intentionally separated from the deterministic theorem core.
@@ -136,7 +136,7 @@ p_i(Q)
 \frac{e^{-\alpha s_i(Q)}}{\sum_{j=1}^N e^{-\alpha s_j(Q)}}.
 \]
 
-So Calibrated UAS is exactly an ordinary softmax over the energies \(s_i(Q)\).
+So Reflected UAS is exactly an ordinary softmax over the energies \(s_i(Q)\).
 
 ## 5. Softmax Minimum Bound
 
@@ -306,7 +306,7 @@ This is the required Foster-Lyapunov inequality.
 
 ## 8. Conditional Theorem Statement
 
-**Theorem 3 (direct CTMC stability for Calibrated UAS).**
+**Theorem 3 (direct CTMC stability for Reflected UAS).**
 Fix
 
 \[
@@ -317,7 +317,7 @@ Fix
 \lambda<\Lambda:=\sum_{i=1}^N \mu_i.
 \]
 
-Then the Calibrated-UAS queue-length CTMC is non-explosive, irreducible, and
+Then the Reflected-UAS queue-length CTMC is non-explosive, irreducible, and
 positive Harris recurrent.
 
 **Proof.**
@@ -352,11 +352,11 @@ the promotion-sensitive status note in
 
 This proof does **not** use:
 
-- the Jensen bound that led to the old SCUAS sufficient condition,
+- the Jensen bound that led to the old SRUAS sufficient condition,
 - the deterministic reflected-ODE Lyapunov function \(H\),
 - any fluid-limit scaling argument.
 
-Instead, it uses the fact that Calibrated UAS is exactly a softmax over the
+Instead, it uses the fact that Reflected UAS is exactly a softmax over the
 shifted energies \(Q_i/\mu_i^\beta+\kappa_i\). That gives a direct minimum-type
 bound on the arrival term, and that bound matches the weighted quadratic drift
 structure well enough to close the CTMC theorem under the natural load

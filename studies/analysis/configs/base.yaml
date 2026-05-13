@@ -1,0 +1,93 @@
+# ═══════════════════════════════════════════════════════════════════════
+# GibbsQ Analysis Framework — Base Configuration
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Single source of truth for ALL data paths, experiment metadata,
+# and analysis settings.
+#
+# Path resolution:
+#   ${paths.data_root} resolves to the absolute path of outputs/data/
+#   All study paths are relative to ${paths.data_root}.
+#
+# Override any value via OmegaConf CLI:
+#   python -m analysis.scripts.generate_all paths.data_root=/custom/path
+#
+
+# ── Path configuration ──────────────────────────────────────────────
+# These are the ONLY place where directory layouts are defined.
+# All modules load paths from here — no hardcoding elsewhere.
+
+paths:
+  # Root of the GibbsQ project directory (auto-resolved at load time)
+  project_root: null   # set programmatically
+
+  # Root of the outputs/data/ directory
+  data_root: null       # set programmatically
+
+  # Analysis output directory (relative to project_root)
+  output_root: "outputs"
+
+# ── Global settings ──────────────────────────────────────────────────
+
+seeds: [42, 43, 44]
+
+# ── Study experiment metadata ────────────────────────────────────────
+
+studies:
+  convergence:
+    hypothesis: "H1/H2"
+    description: "Reflected-ODE multi-start convergence"
+    csv_prefix: "reflected_ode_convergence_summary"
+
+  equilibrium:
+    hypothesis: "H2"
+    description: "Boundary equilibrium verification"
+    csv_prefix: "boundary_equilibrium_verification"
+
+  boundary_mismatch:
+    hypothesis: "H3"
+    description: "CTMC generator boundary mismatch"
+    csv_prefix: "ctmc_boundary_mismatch_summary"
+
+  drift_audit:
+    hypothesis: "H4"
+    description: "Exhaustive CTMC drift audit"
+    csv_prefix: "exhaustive_drift_summary"
+
+  theorem_sweep:
+    hypothesis: "H4"
+    description: "Theorem-constant parameter sweep"
+    csv_prefix: "theorem_constant_sweep"
+
+  benchmarks:
+    hypothesis: "H5"
+    description: "Performance benchmarks"
+
+# ── Output settings ──────────────────────────────────────────────────
+
+outputs:
+  dir: "${paths.output_root}"
+  figures: "${outputs.dir}/figures"
+  tables: "${outputs.dir}/tables"
+  reports: "${outputs.dir}/reports"
+  stats: "${outputs.dir}/stats"
+
+# ── Export settings ──────────────────────────────────────────────────
+
+export:
+  figure_formats: ["pdf", "png"]
+  dpi: 300
+  latex_standalone: false     # if true, .tex files are self-compilable
+
+# ── Table settings ───────────────────────────────────────────────────
+
+tables:
+  precision: 4
+  bold_best: true
+  error_type: "std"        # "std" or "sem"
+
+# ── Figure settings ──────────────────────────────────────────────────
+
+figures:
+  style: "thesis"
+  dpi: 300

@@ -77,14 +77,14 @@ This is the heterogeneous extension of raw softmax that incorporates service rat
 \end{definition}
 
 
-\begin{definition}[Calibrated UAS]
-\label{def:calibrated_uas}
-The Calibrated UAS family generalizes UAS through three free parameters $(\calbeta, \calgamma, \caloffset)$:
+\begin{definition}[Reflected UAS]
+\label{def:reflected_uas}
+The Reflected UAS family generalizes UAS through three free parameters $(\calbeta, \calgamma, \caloffset)$:
 \begin{equation}
-\label{eq:calibrated_uas}
+\label{eq:reflected_uas}
 \rprob{i}^{\caluas}(\Qstate, \srvrate) \propto \srvrate_i^{\calgamma} \exp\!\left(-\temp \frac{\Qlen{i}+\caloffset}{\srvrate_i^{\calbeta}}\right),
 \end{equation}
-with benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$. This family contains UAS as the special case $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$. Calibrated UAS is the full \emph{empirical} three-parameter family; Section~\ref{sec:calibrated_uas} later isolates a certified subset of this same closed form under an explicit sufficient drift condition.
+with benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$. This family contains UAS as the special case $(\calbeta, \calgamma, \caloffset) = (1, 1, 1)$. Reflected UAS is the full \emph{empirical} three-parameter family; Section~\ref{sec:reflected_uas} later isolates a certified subset of this same closed form under an explicit sufficient drift condition.
 \end{definition}
 
 
@@ -117,7 +117,7 @@ Let $\Qstate(t)$ be a continuous-time Markov chain (CTMC) on $\Nats^\Nservers$ w
 Under the standard irreducibility and petite-set conditions used later in the theorem proofs, this drift condition implies positive Harris recurrence.
 \end{definition}
 
-The raw softmax theorem (\cref{sec:softmax_theorem}), the UAS theorem (\cref{sec:uas_theorem}), and the certified-subset calibrated theorem in Section~\ref{sec:calibrated_uas} each verify \cref{eq:foster_lyapunov} with explicit Lyapunov functions and closed-form constants~$\varepsilon$ and~$R$.
+The raw softmax theorem (\cref{sec:softmax_theorem}), the UAS theorem (\cref{sec:uas_theorem}), and the certified-subset calibrated theorem in Section~\ref{sec:reflected_uas} each verify \cref{eq:foster_lyapunov} with explicit Lyapunov functions and closed-form constants~$\varepsilon$ and~$R$.
 
 \subsection{Notation Summary}
 \label{sec:model:notation}
@@ -127,7 +127,7 @@ The raw softmax theorem (\cref{sec:softmax_theorem}), the UAS theorem (\cref{sec
 \begin{table}[htbp]
 \centering
 \small
-\caption{Summary of principal notation. Symbols in the final block are introduced in Sections~\ref{sec:uas_theorem} and~\ref{sec:calibrated_uas} and appear here for reference.}
+\caption{Summary of principal notation. Symbols in the final block are introduced in Sections~\ref{sec:uas_theorem} and~\ref{sec:reflected_uas} and appear here for reference.}
 \label{tab:notation}
 \renewcommand{\arraystretch}{1.30}
 \begin{tabularx}{\linewidth}{@{\hspace{6pt}}l @{\hspace{14pt}} >{\raggedright\arraybackslash}X@{\hspace{6pt}}}

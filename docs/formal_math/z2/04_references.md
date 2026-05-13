@@ -61,7 +61,7 @@ The references now split into two active groups:
    gradient processes.*
    SIAM Journal on Control and Optimization 18(4), 368-400.
 
-   This is a classical reference for viewing the deterministic calibrated-UAS
+   This is a classical reference for viewing the deterministic reflected-UAS
    surrogate as a projected gradient flow.
 
 ## Convex Gradient-Flow References

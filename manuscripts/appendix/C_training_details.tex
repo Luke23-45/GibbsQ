@@ -15,7 +15,7 @@ The Neural GibbsQ pipeline has two sequential phases. The initial BC phase train
 \toprule
 \textbf{Phase 1: Behavior Cloning} & \textbf{Value / Description} \\
 \midrule
-Expert policy         & UAS ($\temp = 10.0$); Calibrated UAS for calibrated-teacher \\
+Expert policy         & UAS ($\temp = 10.0$); Reflected UAS for reflected-teacher \\
 Preprocessing         & $\log(1 + (\Qlen{i}+1)/\srvrate_i)$ (look-ahead potential) \\
 Training steps        & 1{,}000 \\
 Final accuracy        & 99.2\% (best seed, 97--99\% inter-seed range) \\
@@ -45,7 +45,7 @@ Zero-Init Final       & Zero-initializes final layer weights before BC training.
 \end{tabular}
 \end{table}
 
-The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the calibrated-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, gradient clipping (global norm 0.5) and a small entropy regularization bonus ($0.01$) are applied during training for stability; the BC initialization provides the primary safeguard against unstable updates. Convergence is typically observed by epoch 6--8 under the ablation budget, verifying 8 epochs as sufficient for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
+The exact same network architecture, preprocessing, learning rate, and optimizer settings are applied to the reflected-teacher ablation variant, yielding comparable target fidelity. For \reinforce{}, gradient clipping (global norm 0.5) and a small entropy regularization bonus ($0.01$) are applied during training for stability; the BC initialization provides the primary safeguard against unstable updates. Convergence is typically observed by epoch 6--8 under the ablation budget, verifying 8 epochs as sufficient for this architecture. The 32.6\% magnitude error relative to finite-difference gradients (Appendix~\ref{sec:appendix_gradient}) effectively reduces the learning rate but does not affect the optimization direction.
 
 \begin{figure}[htbp!]
 \centering

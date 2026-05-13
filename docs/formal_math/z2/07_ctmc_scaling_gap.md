@@ -36,9 +36,9 @@ For many queueing networks, the scaled drift depends on a routing or service map
 that remains nontrivial under that scaling, and then one can study the limit ODE
 and lift its stability back to the CTMC.
 
-## 3. Why Calibrated UAS Is Delicate
+## 3. Why Reflected UAS Is Delicate
 
-For Calibrated UAS, the routing probabilities are
+For Reflected UAS, the routing probabilities are
 
 \[
 p_i(q)
@@ -69,13 +69,13 @@ classical fluid limit of the CTMC under standard queue-length scaling.
 At the moment, the project supports the following clean statement:
 
 **Proved statement.**
-The deterministic reflected ODE built from the smooth calibrated-UAS routing map
+The deterministic reflected ODE built from the smooth reflected-UAS routing map
 is globally asymptotically stable.
 
 But the following stronger statement is still open:
 
 **Open stochastic statement.**
-The original Calibrated-UAS CTMC is positive Harris recurrent for every
+The original Reflected-UAS CTMC is positive Harris recurrent for every
 \(\lambda<\Lambda\).
 
 The gap between those statements is not cosmetic. It is a genuine scaling issue.
@@ -99,7 +99,7 @@ itself certify the benchmark model. See
 
 One can try to prove CTMC stability directly, without routing through the
 classical fluid-limit theorem. That would require a new Foster-Lyapunov
-construction that is sharp enough for Calibrated UAS.
+construction that is sharp enough for Reflected UAS.
 
 ### Path C. Hybrid comparison theory
 

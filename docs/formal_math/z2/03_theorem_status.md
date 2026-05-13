@@ -14,7 +14,7 @@ Its job is to state, without sales language, which parts of the project are:
 The following statements are established within `z2`.
 
 **Proved fact A.**
-The correct deterministic object associated with Calibrated UAS is a reflected
+The correct deterministic object associated with Reflected UAS is a reflected
 ODE on \(\mathbb R_+^N\), not the unconstrained equation
 \(\dot q=\lambda p(q)-\mu\).
 
@@ -107,7 +107,7 @@ Its status is:
 
 **Conditional fact K.**
 The weighted-quadratic Foster-Lyapunov route for the fixed-parameter
-Calibrated-UAS CTMC has passed internal audit and targeted numerical
+Reflected-UAS CTMC has passed internal audit and targeted numerical
 validation, and it is a viable candidate route to positive Harris recurrence
 under the natural load condition \(\lambda<\Lambda\).
 
@@ -127,9 +127,9 @@ The following may appear elsewhere in the repo, but they are not theorem-core
 claims for `z2`:
 
 - exploratory policy directions such as SMVR
-- failed or superseded certification routes such as the older SCUAS line
+- failed or superseded certification routes such as the older SRUAS line
 - neural-policy performance narratives
-- broad claims that the whole calibrated family is already beyond theorem risk
+- broad claims that the whole reflected family is already beyond theorem risk
 
 Those items may still exist as archive, empirical context, or applicability
 material, but they are not the foundation of this package.
@@ -139,7 +139,7 @@ material, but they are not the foundation of this package.
 The package also supports one limited applicability claim:
 
 **Supporting fact L.**
-Because Calibrated UAS is softmax-based and continuous, it provides a
+Because Reflected UAS is softmax-based and continuous, it provides a
 differentiable routing law that is compatible with gradient-based policy
 learning in a way that hard dispatch rules such as JSQ and JSSQ are not.
 

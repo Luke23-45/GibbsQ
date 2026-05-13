@@ -7,7 +7,7 @@ pictures diverge.
 
 ## 1. The Queueing Generator
 
-Let \(Q\in\mathbb Z_+^N\). Under Calibrated UAS, the continuous-time Markov
+Let \(Q\in\mathbb Z_+^N\). Under Reflected UAS, the continuous-time Markov
 chain has generator
 
 \[

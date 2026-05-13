@@ -4,8 +4,8 @@
 
 \subsection{The Teacher-Choice Effect}
 
-The ablation study showcases a clear rank ordering under Protocol~B (where $\succ$ denotes strictly lower mean total queue length): Calibrated UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$; diverged).
-The $1.32$-unit gap between the Calibrated UAS teacher and the UAS teacher exceeds the impact of the three tested architectural modifications (log-normalization, zero-init, scratch initialization), which identifies teacher quality as a primary design factor in this empirical setting.
+The ablation study showcases a clear rank ordering under Protocol~B (where $\succ$ denotes strictly lower mean total queue length): Reflected UAS teacher ($9.82$) $\succ$ UAS teacher ($11.14$) $\succ$ scratch ($5{,}451$; diverged).
+The $1.32$-unit gap between the Reflected UAS teacher and the UAS teacher exceeds the impact of the three tested architectural modifications (log-normalization, zero-init, scratch initialization), which identifies teacher quality as a primary design factor in this empirical setting.
 
 This observation has a natural interpretation.
 Essentially, behavior cloning positions the neural policy's parameters in a region from which \reinforce{} fine-tuning can make only modest improvements under the tested budget.
@@ -14,9 +14,9 @@ Within the tested optimization budget, the learned policy behaves more like loca
 The offline BC phase does not address the distributional shift~\cite{ross2011reduction}.
 On-policy data collection during pretraining could further improve initialization quality.
 
-\subsection{Why Calibrated UAS Outperforms UAS}
+\subsection{Why Reflected UAS Outperforms UAS}
 
-Calibrated UAS alters three key components of UAS:
+Reflected UAS alters three key components of UAS:
 \begin{itemize}
 \item \textbf{Tempered normalization} ($\calbeta = 0.85$): the denominator $\srvrate_i^{\calbeta}$ increases more slowly than $\srvrate_i$, reducing the routing-mass differential between fast and slow servers.
 \item \textbf{Softened prior} ($\calgamma = 0.5$): the pre-exponential factor $\srvrate_i^{\calgamma}$ reduces the routing bias toward fast servers relative to UAS's proportional-to-$\srvrate_i$ prior.
@@ -29,22 +29,22 @@ $11.495$) to individual parameters remains open.
 \subsection{Limitations}
 
 \begin{enumerate}[label=\textbf{L\arabic*.}, leftmargin=2.2em]
-\item \textbf{Full Calibrated UAS family remains open:}
-Section~\ref{sec:calibrated_uas} identifies a theorem-backed certified subset within the calibrated family under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
-However, our audit in Table~\ref{tab:scuas_audit} finds that the benchmark default point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ yields $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor configuration.
+\item \textbf{Full Reflected UAS family remains open:}
+Section~\ref{sec:reflected_uas} identifies a theorem-backed certified subset within the reflected family under the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$.
+However, our audit in Table~\ref{tab:sruas_audit} finds that the benchmark default point $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ yields $\varepsilon_{\calbeta,\calgamma,\caloffset} < 0$ under the anchor configuration.
 While we provide \textbf{numerical evidence} that a benchmark-specific piecewise candidate has negative drift on the verified boundary shells (Table~\ref{tab:piecewise_candidate}), a formal symbolic proof for the unrestricted family remains an open theoretical question. This establishes a definitive split in our results: the benchmark-default policy is a competitive empirical baseline, but it is not yet theorem-certified.
 
 \item \textbf{Default learned configuration is not the strongest:}
-The standard $\ngibbsq$ model (trained with a UAS teacher) achieves $11.68$ in the anchor benchmark, underperforming JSSQ ($11.02$) and Calibrated UAS ($10.04$).
-The configuration with the calibrated teacher ($9.82$) was identified through ablation.
-These findings confirm that the choice of teacher policy is the dominant factor in policy-gradient performance, but they also clarify that our reported neural "best" refers specifically to this calibrated-teacher variant, which requires separate behavior-cloning initialization. Additionally, interaction effects between ablation factors were not exhaustively tested; for instance, the combination of the Calibrated UAS teacher with architectural modifications (e.g., removing Log-Normalization) may yield further improvement.
+The standard $\ngibbsq$ model (trained with a UAS teacher) achieves $11.68$ in the anchor benchmark, underperforming JSSQ ($11.02$) and Reflected UAS ($10.04$).
+The configuration with the reflected teacher ($9.82$) was identified through ablation.
+These findings confirm that the choice of teacher policy is the dominant factor in policy-gradient performance, but they also clarify that our reported neural "best" refers specifically to this reflected-teacher variant, which requires separate behavior-cloning initialization. Additionally, interaction effects between ablation factors were not exhaustively tested; for instance, the combination of the Reflected UAS teacher with architectural modifications (e.g., removing Log-Normalization) may yield further improvement.
 Crucially, absolute values from Protocol A and the ablation study (Protocol B) reflect different simulation horizons ($15{,}000$ vs.\ $20{,}000$ units) and are not directly comparable.
 
 \item \textbf{Competitive comparisons limited to $\Nservers = 10$:}
-The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Calibrated UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$. The primary constraint is training stability and computational cost: the \reinforce{} policy gradient estimates become increasingly noisy as the action space and state dimension grow with $\Nservers$, and the behavior-cloning phase requires more teacher samples. Investigating architecture choices (e.g., attention over server states, equivariance) that scale to larger $\Nservers$ is an important open problem.
-We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline performs strongly at the benchmark scale, no scaling guarantee is claimed for $\ngibbsq$ or Calibrated UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately stress-tested up to $\Nservers = 1{,}024$ without neural retraining.
+The stress test (Appendix~\ref{sec:appendix_stress}) validates UAS scalability up to $\Nservers = 1{,}024$, however neither Reflected UAS nor $\ngibbsq$ are evaluated competitively at $\Nservers > 10$. The primary constraint is training stability and computational cost: the \reinforce{} policy gradient estimates become increasingly noisy as the action space and state dimension grow with $\Nservers$, and the behavior-cloning phase requires more teacher samples. Investigating architecture choices (e.g., attention over server states, equivariance) that scale to larger $\Nservers$ is an important open problem.
+We scope the comparative evaluation of the empirical routing pipeline to $\Nservers = 10$. This highlights a deliberate split in our evaluation: while the $\ngibbsq$ empirical pipeline performs strongly at the benchmark scale, no scaling guarantee is claimed for $\ngibbsq$ or Reflected UAS beyond the evaluated $\Nservers=10$. The analytical UAS policy, by contrast, is separately stress-tested up to $\Nservers = 1{,}024$ without neural retraining.
 
-\item \textbf{Coarse parameter grid for Calibrated UAS:}
+\item \textbf{Coarse parameter grid for Reflected UAS:}
 The benchmark parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ were selected from a grid of 64 configurations evaluated on a held-out validation set.
 The grid is coarse and the parameter surface may not be convex.
 Therefore, a more systematic search method (e.g., Bayesian optimization) could enhance the confidence in the improvements observed.
@@ -72,7 +72,7 @@ All stability proofs and empirical evaluations assume Poisson arrivals and expon
 \item \textbf{No comparison to standard RL algorithms:}
 The ablation study compares only within the REINFORCE family. Whether more sophisticated RL algorithms (e.g., PPO, SAC) could achieve stronger results from the same initialization remains an open question. Our design isolates the teacher-effect variable but does not establish that REINFORCE is the optimal RL algorithm for this setting.
 
-\item \textbf{Calibrated UAS parameters are benchmark-specific:}
+\item \textbf{Reflected UAS parameters are benchmark-specific:}
 The parameters $(\calbeta, \calgamma, \caloffset) = (0.85, 0.5, 0.5)$ were tuned on a single benchmark configuration. Transfer to other server configurations, load regimes, or arrival patterns is not guaranteed.
 
 \item \textbf{Neural policy lacks formal stability guarantee:}
@@ -87,7 +87,7 @@ Entropy-regularized routing may degrade when: (a)~servers are near-homogeneous, 
 \begin{enumerate}[label=\textbf{F\arabic*.}, leftmargin=2.2em]
 \item \textbf{Beyond the certified subset:}
 Extending the certified-subset Lyapunov argument to cover the full three-parameter family $(\calbeta, \calgamma, \caloffset)$ would close the remaining gap between the analytical and empirical layers.
-The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity, ideally far enough to certify practically competitive calibrated points under the anchor benchmark.
+The core challenge is to enlarge the theorem-backed region beyond the explicit sufficient condition $\varepsilon_{\calbeta,\calgamma,\caloffset}>0$ without sacrificing a tractable drift identity, ideally far enough to certify practically competitive reflected points under the anchor benchmark.
 The piecewise candidate in \cref{eq:piecewise_candidate} suggests that a boundary-refined Foster--Lyapunov construction based on quadratic, cubic, and imbalance terms is a concrete route for that extension.
 
 \item \textbf{Competitive comparisons at intermediate scale:}
@@ -96,13 +96,13 @@ Competitive policy comparisons at $\Nservers \in \{32, 64, 128\}$---which connec
 \item \textbf{Advanced RL training:}
 Variance reduction via GAE or actor-critic baselines would address the \reinforce{} magnitude error identified in L5.
 However, trust-region methods (PPO, natural policy gradient) could additionally improve step-size stability and accelerate convergence.
-An immediate empirical question is whether stronger RL optimizers preserve the same teacher-choice ordering observed here, or materially reduce the gap between UAS-teacher and calibrated-teacher initialization.
+An immediate empirical question is whether stronger RL optimizers preserve the same teacher-choice ordering observed here, or materially reduce the gap between UAS-teacher and reflected-teacher initialization.
 
 \item \textbf{Non-stationarity:}
 Fluctuating arrival rates and dynamic server availability would test whether the GibbsQ stability guarantees and routing policies extend to practical non-stationary settings. A practical online adaptation layer---e.g., lightweight continual fine-tuning of the $\ngibbsq$ network as statistics shift---would bridge the gap to deployed adaptive routing, though such adaptation must be balanced against stability risk during the adaptation transient.
 
 \item \textbf{Sharper mixing-rate results:}
-For UAS, the current manuscript establishes positive Harris recurrence with explicit drift constants, but not a geometric-drift theorem. A useful next step would be to derive sharper convergence-rate bounds, and to determine whether geometric ergodicity can be proved for UAS or extended to broader calibrated-policy classes.
+For UAS, the current manuscript establishes positive Harris recurrence with explicit drift constants, but not a geometric-drift theorem. A useful next step would be to derive sharper convergence-rate bounds, and to determine whether geometric ergodicity can be proved for UAS or extended to broader reflected-policy classes.
 
 \item \textbf{Heavy-traffic and diffusion limits:}
 A heavy-traffic diffusion-limit analysis (e.g., Halfin--Whitt scaling) would substantially strengthen the theoretical contribution by characterizing asymptotic performance as $\rho \to 1$, but is outside the current scope.

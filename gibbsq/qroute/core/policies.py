@@ -1,0 +1,638 @@
+"""
+Routing policies for the queueing network.
+
+Each policy implements the :class:`RoutingPolicy` protocol: a callable
+that maps a queue-length vector  Q ∈ Z₊^N  to a probability distribution
+p ∈ Δ_{N−1}  over the  N  servers.
+
+Design principles
+-----------------
+* **No mutable captured state.**  Every policy is an instance whose
+  ``__call__`` depends only on the current state  Q  and its *own*
+  deterministic parameters.  Stochastic policies (``PowerOfDRouting``)
+  accept an ``rng`` per-call rather than capturing one at construction,
+  so the simulator owns the sole ``Generator`` and reproducibility is
+  guaranteed.
+* **Numerical stability.**  ``SoftmaxRouting`` uses the log-sum-exp
+  trick with ``float64`` precision throughout.
+* **Vectorised where possible.**  The softmax computation is a single
+  chain of numpy operations — no Python loops.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+from typing import Protocol, runtime_checkable
+
+from gibbsq.qroute.core.registry import ComponentRegistry
+
+__all__ = [
+    "RoutingPolicy",
+    "SoftmaxRouting",
+    "UniformRouting",
+    "ProportionalRouting",
+    "JSQRouting",
+    "PowerOfDRouting",
+    "JSSQRouting",
+    "UASRouting",
+    "StateDependentUASRouting",
+    "ReflectedUASRouting",
+    "QuadraticSMVRRouting",
+    "RefinedUASRouting",
+    "make_policy",
+]
+
+@runtime_checkable
+class RoutingPolicy(Protocol):
+    """
+    Structural interface for any routing policy.
+
+    Implementations must be callable with signature::
+
+        (Q: np.ndarray, rng: np.random.Generator) -> np.ndarray
+
+    where *Q* has shape ``(N,)`` and the return value is a
+    probability vector of shape ``(N,)`` summing to 1.
+
+    The *rng* argument is provided so that stochastic policies
+    can draw randomness from the simulator's generator, ensuring
+    a single source of entropy and perfect reproducibility.
+    Deterministic policies simply ignore *rng*.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray: ...
+
+@ComponentRegistry.register_policy("softmax")
+class SoftmaxRouting:
+    """
+    Boltzmann (softmax) routing.
+
+    .. math::
+
+        p_i(Q) = \\frac{\\exp(-\\alpha Q_i)}{\\sum_{j=1}^N \\exp(-\\alpha Q_j)}
+
+    Uses the **log-sum-exp trick**:  shift logits by their maximum before
+    exponentiating to avoid overflow / underflow at extreme  α·Q  values.
+
+    Parameters
+    ----------
+    alpha : float
+        Inverse temperature.  Must be  > 0.
+    """
+
+    __slots__ = ("_alpha",)
+
+    def __init__(self, alpha: float) -> None:
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        self._alpha = float(alpha)
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,                       # unused
+    ) -> np.ndarray:
+        logits = -self._alpha * Q.astype(np.float64)     # −αQ_i
+        logits -= logits.max()                           # shift for stability
+        w = np.exp(logits)
+        return w / w.sum()
+
+    def __repr__(self) -> str:
+        return f"SoftmaxRouting(α={self._alpha})"
+
+@ComponentRegistry.register_policy("uniform")
+class UniformRouting:
+    """
+    State-independent uniform routing:  p_i = 1/N  for all  i.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        N = len(Q)
+        return np.full(N, 1.0 / N, dtype=np.float64)
+
+    def __repr__(self) -> str:
+        return "UniformRouting()"
+
+@ComponentRegistry.register_policy("proportional")
+class ProportionalRouting:
+    """
+    Proportional-to-capacity routing:  p_i = μ_i / Λ.
+
+    State-independent. Under the strict capacity condition, this routing rule
+    matches service capacity fractions across heterogeneous servers.
+
+    Parameters
+    ----------
+    mu : array_like, shape (N,)
+        Service rates  μ_i > 0.
+    """
+
+    __slots__ = ("_probs",)
+
+    def __init__(self, mu: np.ndarray) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        self._probs = mu / mu.sum()
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        return self._probs                               # immutable view
+
+    def __repr__(self) -> str:
+        return f"ProportionalRouting(N={len(self._probs)})"
+
+@ComponentRegistry.register_policy("jsq")
+class JSQRouting:
+    """
+    Join-Shortest-Queue:  deterministically route to the server with
+    the smallest queue length.
+
+    **Tie-breaking.**  If  k  servers share the minimum, each receives
+    probability  1/k.
+    """
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        mask = (Q == Q.min()).astype(np.float64)
+        return mask / mask.sum()
+
+    def __repr__(self) -> str:
+        return "JSQRouting()"
+
+@ComponentRegistry.register_policy("power_of_d")
+class PowerOfDRouting:
+    """
+    Power-of-*d*-choices:  sample  *d*  servers uniformly at random,
+    then route to the one with the shortest queue among them.
+
+    The ``rng`` argument in ``__call__`` is used for the random
+    sample, so the policy is *stochastic* but fully reproducible
+    given the simulator's seed.
+
+    Parameters
+    ----------
+    d : int
+        Number of servers to sample.   1 ≤ d ≤ N.
+    """
+
+    __slots__ = ("_d",)
+
+    def __init__(self, d: int = 2) -> None:
+        if d < 1:
+            raise ValueError(f"d must be ≥ 1, got {d}")
+        self._d = d
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        N = len(Q)
+        d = min(self._d, N)
+        candidates = rng.choice(N, size=d, replace=False)
+        winner = candidates[Q[candidates].argmin()]
+
+        probs = np.zeros(N, dtype=np.float64)
+        probs[winner] = 1.0
+        return probs
+
+    def __repr__(self) -> str:
+        return f"PowerOfDRouting(d={self._d})"
+
+@ComponentRegistry.register_policy("jssq")
+class JSSQRouting:
+    """
+    Join-Shortest-Potential-Queue: route to server with minimum expected look-ahead potential.
+    
+    For heterogeneous servers, the correct routing metric is **look-ahead potential**:
+    
+        s_i = (Q_i + 1) / μ_i
+    
+    This represents the expected time a newly arriving job would spend at server i
+    (waiting + service), assuming FCFS discipline.
+    
+    Heavy-traffic motivation follows the heterogeneous-server results cited in
+    the project notes for the Halfin-Whitt regime.
+    
+    Parameters
+    ----------
+    mu : array_like
+        Service rates μ_i for each server.
+    
+    References
+    ----------
+    .. [1] Halfin, S., & Whitt, W. (1981). Heavy-traffic limits for queues
+           with many exponential servers.
+    """
+    
+    __slots__ = ("_mu",)
+    
+    def __init__(self, mu: np.ndarray) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        self._mu = mu
+    
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+    
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        potential = (Q.astype(np.float64) + 1.0) / self._mu
+        mask = (potential == potential.min()).astype(np.float64)
+        return mask / mask.sum()
+    
+    def __repr__(self) -> str:
+        return f"JSSQRouting(N={len(self._mu)})"
+
+@ComponentRegistry.register_policy("uas")
+class UASRouting:
+    """
+    Unified Archimedean Softmax (UAS) routing.
+    
+    This is the heterogeneous entropy-regularized GibbsQ routing law:
+    
+        p_i(Q) ∝ μ_i · exp(-α · s_i) = μ_i · exp(-α · (Q_i + 1) / μ_i)
+    
+    The μ_i weighting and the look-ahead potential together provide a
+    capacity-aware softmax law for heterogeneous servers. In the paper
+    narrative, this policy is treated as a theorem-backed extension with
+    its own prior-weighted variational derivation and weighted Lyapunov
+    argument.
+    
+    Parameters
+    ----------
+    mu : array_like
+        Service rates μ_i for each server.
+    alpha : float
+        Inverse temperature. Higher α = more aggressive routing to shortest server.
+    
+    References
+    ----------
+    .. [1] See `docs/softmax_uas.md` for the supporting derivation note.
+    """
+    
+    __slots__ = ("_mu", "_alpha")
+    
+    def __init__(self, mu: np.ndarray, alpha: float = 1.0) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        self._mu = mu
+        self._alpha = float(alpha)
+    
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+    
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+    
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        potential = (Q.astype(np.float64) + 1.0) / self._mu
+        logits = -self._alpha * potential
+        
+
+        logits = logits + np.log(self._mu)
+        
+        logits = logits - logits.max()  
+        weights = np.exp(logits)
+        return weights / weights.sum()
+    
+    def __repr__(self) -> str:
+        return f"UASRouting(α={self._alpha}, N={len(self._mu)})"
+
+class StateDependentUASRouting:
+    """
+    UAS routing with a positive state-dependent inverse temperature.
+
+    This keeps the theorem-facing UAS structure
+
+        p_i(Q) proportional to mu_i * exp(-alpha(Q) * (Q_i + 1) / mu_i)
+
+    while allowing experiments to replace the scalar inverse temperature by a
+    deterministic function of the current queue state.
+    """
+
+    __slots__ = ("_mu", "_alpha_fn", "_label")
+
+    def __init__(self, mu: np.ndarray, alpha_fn, *, label: str = "state_dependent_uas") -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if not callable(alpha_fn):
+            raise TypeError("alpha_fn must be callable")
+        self._mu = mu
+        self._alpha_fn = alpha_fn
+        self._label = str(label)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def label(self) -> str:
+        return self._label
+
+    def alpha(self, Q: np.ndarray) -> float:
+        alpha = float(self._alpha_fn(np.asarray(Q, dtype=np.float64), self._mu))
+        if not np.isfinite(alpha) or alpha <= 0.0:
+            raise ValueError(
+                f"alpha_fn must return a finite value > 0 for every state; got {alpha!r}"
+            )
+        return alpha
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        alpha = self.alpha(Q)
+        potential = (Q.astype(np.float64) + 1.0) / self._mu
+        logits = -alpha * potential + np.log(self._mu)
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return f"StateDependentUASRouting(label={self._label!r}, N={len(self._mu)})"
+
+@ComponentRegistry.register_policy("refined_uas")
+@ComponentRegistry.register_policy("reflected_uas")
+class ReflectedUASRouting:
+    """
+    Reflected Archimedean softmax routing.
+
+    This policy extends the current UAS rule to the score family
+
+        score_i = gamma * log(mu_i) - alpha * (Q_i + c) / mu_i**beta
+
+    with benchmark-tuned defaults beta=0.85, gamma=0.5, c=0.5.
+    The current UAS rule is recovered by beta=1, gamma=1, c=1.
+    """
+
+    __slots__ = ("_mu", "_alpha", "_beta", "_gamma", "_c")
+
+    def __init__(
+        self,
+        mu: np.ndarray,
+        alpha: float = 20.0,
+        *,
+        beta: float = 0.85,
+        gamma: float = 0.5,
+        c: float = 0.5,
+    ) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        if beta <= 0:
+            raise ValueError(f"beta must be > 0, got {beta}")
+        if c < 0:
+            raise ValueError(f"c must be >= 0, got {c}")
+        self._mu = mu
+        self._alpha = float(alpha)
+        self._beta = float(beta)
+        self._gamma = float(gamma)
+        self._c = float(c)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    @property
+    def beta(self) -> float:
+        return self._beta
+
+    @property
+    def gamma(self) -> float:
+        return self._gamma
+
+    @property
+    def c(self) -> float:
+        return self._c
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        q = Q.astype(np.float64)
+        logits = self._gamma * np.log(self._mu)
+        logits = logits - self._alpha * ((q + self._c) / (self._mu ** self._beta))
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return (
+            f"ReflectedUASRouting(alpha={self._alpha}, beta={self._beta}, "
+            f"gamma={self._gamma}, c={self._c}, N={len(self._mu)})"
+        )
+
+
+@ComponentRegistry.register_policy("quadratic_smvr")
+class QuadraticSMVRRouting:
+    """
+    Value-based Gibbs routing with a reflected lower-bound advantage.
+
+    This is a minimal proof-facing instantiation of the SMVR idea from the
+    research notes. The routing logits use a value-gradient surrogate
+
+        A_i(Q) = E_i(Q) + Δ_i W_local(Q) + Δ_i W_total(Q)
+
+    where
+
+        E_i(Q) = (Q_i + c) / μ_i**β
+
+    is exactly the reflected-UAS energy and the additional terms are discrete
+    gradients of non-negative convex quadratic potentials over the scaled queue
+    coordinates. Hence `A_i(Q) >= E_i(Q)` whenever the correction strengths are
+    non-negative.
+
+    With `local_strength = total_strength = 0`, this policy reduces exactly to
+    `ReflectedUASRouting`.
+    """
+
+    __slots__ = (
+        "_mu",
+        "_alpha",
+        "_beta",
+        "_gamma",
+        "_c",
+        "_local_strength",
+        "_total_strength",
+    )
+
+    def __init__(
+        self,
+        mu: np.ndarray,
+        alpha: float = 20.0,
+        *,
+        beta: float = 0.85,
+        gamma: float = 0.5,
+        c: float = 0.5,
+        local_strength: float = 0.0,
+        total_strength: float = 0.0,
+    ) -> None:
+        mu = np.asarray(mu, dtype=np.float64)
+        if np.any(mu <= 0):
+            raise ValueError("All service rates must be > 0")
+        if alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {alpha}")
+        if beta <= 0:
+            raise ValueError(f"beta must be > 0, got {beta}")
+        if c < 0:
+            raise ValueError(f"c must be >= 0, got {c}")
+        if local_strength < 0:
+            raise ValueError(f"local_strength must be >= 0, got {local_strength}")
+        if total_strength < 0:
+            raise ValueError(f"total_strength must be >= 0, got {total_strength}")
+
+        self._mu = mu
+        self._alpha = float(alpha)
+        self._beta = float(beta)
+        self._gamma = float(gamma)
+        self._c = float(c)
+        self._local_strength = float(local_strength)
+        self._total_strength = float(total_strength)
+
+    @property
+    def mu(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def alpha(self) -> float:
+        return self._alpha
+
+    @property
+    def beta(self) -> float:
+        return self._beta
+
+    @property
+    def gamma(self) -> float:
+        return self._gamma
+
+    @property
+    def c(self) -> float:
+        return self._c
+
+    @property
+    def local_strength(self) -> float:
+        return self._local_strength
+
+    @property
+    def total_strength(self) -> float:
+        return self._total_strength
+
+    def advantage(self, Q: np.ndarray) -> np.ndarray:
+        q = Q.astype(np.float64)
+        step = 1.0 / (self._mu ** self._beta)
+        scaled = (q + self._c) * step
+        advantage = scaled.copy()
+
+        if self._local_strength > 0.0:
+            advantage = advantage + self._local_strength * (
+                scaled * step + 0.5 * (step ** 2)
+            )
+
+        if self._total_strength > 0.0:
+            scaled_sum = float(np.sum(scaled))
+            advantage = advantage + self._total_strength * (
+                scaled_sum * step + 0.5 * (step ** 2)
+            )
+
+        return advantage
+
+    def __call__(
+        self,
+        Q: np.ndarray,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        logits = self._gamma * np.log(self._mu) - self._alpha * self.advantage(Q)
+        logits = logits - logits.max()
+        weights = np.exp(logits)
+        return weights / weights.sum()
+
+    def __repr__(self) -> str:
+        return (
+            "QuadraticSMVRRouting("
+            f"alpha={self._alpha}, beta={self._beta}, gamma={self._gamma}, c={self._c}, "
+            f"local_strength={self._local_strength}, total_strength={self._total_strength}, "
+            f"N={len(self._mu)})"
+        )
+
+
+# Backward-compatible alias for pre-publication experiment code.
+RefinedUASRouting = ReflectedUASRouting
+
+
+def make_policy(
+    name: str,
+    *,
+    alpha: float = 1.0,
+    mu: np.ndarray | None = None,
+    d: int = 2,
+) -> RoutingPolicy:
+    """
+    Construct a :class:`RoutingPolicy` from a string name and kwargs.
+
+    .. deprecated::
+        Use ``ComponentRegistry.build_policy()`` or
+        ``gibbsq.core.builders.build_policy()`` instead.
+        This function is kept for backward compatibility.
+
+    Parameters
+    ----------
+    name : str
+        One of  ``"softmax"``, ``"uniform"``, ``"proportional"``,
+        ``"jsq"``, ``"power_of_d"``, ``"jssq"``, ``"uas"``, ``"reflected_uas"``,
+        ``"refined_uas"``.
+    alpha : float
+        Inverse temperature (softmax and uas only).
+    mu : ndarray
+        Service rates (proportional, jssq, uas only).
+    d : int
+        Number of choices (power_of_d only).
+
+    Returns
+    -------
+    RoutingPolicy
+        A callable conforming to the :class:`RoutingPolicy` protocol.
+    """
+    return ComponentRegistry.build_policy(name, alpha=alpha, mu=mu, d=d)
