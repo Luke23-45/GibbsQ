@@ -17,10 +17,18 @@ def stable_softmax_numpy(logits: np.ndarray) -> np.ndarray:
 def stable_softmax_jax(logits: jnp.ndarray) -> jnp.ndarray:
     return jax.nn.softmax(logits, axis=-1)
 
-def compute_numpy_policy_probs(policy_net, Q, mu, rho, deterministic: bool = False) -> np.ndarray:
+def compute_numpy_policy_probs(
+    policy_net,
+    Q,
+    mu,
+    rho,
+    deterministic: bool = False,
+    np_params=None,
+) -> np.ndarray:
     """Compute the canonical NumPy policy distribution for a neural router."""
     if hasattr(policy_net, "get_numpy_params") and hasattr(policy_net, "numpy_forward") and hasattr(policy_net, "config"):
-        np_params = policy_net.get_numpy_params()
+        if np_params is None:
+            np_params = policy_net.get_numpy_params()
         logits = policy_net.numpy_forward(Q, np_params, policy_net.config, rho=rho, mu=mu)
     else:
         logits = np.asarray(policy_net(np.asarray(Q), rho=rho, mu=mu), dtype=np.float64)

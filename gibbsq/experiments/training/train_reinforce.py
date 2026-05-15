@@ -368,7 +368,11 @@ def collect_trajectory_ssa(
     step_counter = 0  # Global step counter for indexing
 
     rates = np.empty(2 * N, dtype=np.float64)
+    cumrates = np.empty(2 * N, dtype=np.float64)
     jsq_policy = JSQRouting() if use_jsq else None
+    numpy_policy_params = None
+    if not use_jsq and hasattr(policy_net, "get_numpy_params") and hasattr(policy_net, "numpy_forward"):
+        numpy_policy_params = policy_net.get_numpy_params()
 
     while t < sim_time:
         if use_jsq:
@@ -376,7 +380,14 @@ def collect_trajectory_ssa(
             # of the codebase (equal split across all shortest queues).
             probs = jsq_policy(Q, rng)
         else:
-            probs = compute_numpy_policy_probs(policy_net, Q, mu, rho, deterministic=deterministic)
+            probs = compute_numpy_policy_probs(
+                policy_net,
+                Q,
+                mu,
+                rho,
+                deterministic=deterministic,
+                np_params=numpy_policy_params,
+            )
 
         # [arrival_to_0, ..., arrival_to_{N-1}, departure_from_0, ..., departure_from_{N-1}]
         rates[:N] = lam * probs
@@ -392,7 +403,7 @@ def collect_trajectory_ssa(
             break
 
         u = rng.uniform(0.0, a0)
-        cumrates = np.cumsum(rates)
+        np.cumsum(rates, out=cumrates)
         event = int(np.searchsorted(cumrates, u, side='right'))
         event = min(event, 2 * N - 1)  # Safety clamp
 
