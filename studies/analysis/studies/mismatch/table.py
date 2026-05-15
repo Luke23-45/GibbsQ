@@ -37,8 +37,9 @@ def table_boundary_mismatch(data_dir: Path, table_dir: Path) -> List[Path]:
         r"    \midrule",
     ]
     for r in rows:
+        sys_id = r['system_id'].replace('_', r'\_')
         latex_lines.append(
-            f"    {r['system_id'].replace('_', r'\\_')} & "
+            f"    {sys_id} & "
             f"{r['N']} & "
             f"{r['boundary_states']} & "
             f"{r['positive_boundary_count']} & "

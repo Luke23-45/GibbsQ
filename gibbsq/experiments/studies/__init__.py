@@ -1,2 +1,0 @@
-"""Study/qualification entrypoints."""
-

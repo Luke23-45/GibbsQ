@@ -1,4 +1,4 @@
-"""
+﻿"""
 N-GibbsQ Phase VII: Statistical Benchmark
 
 Statistical comparison of N-GibbsQ vs Reflected UAS over multiple seeds.
@@ -18,8 +18,8 @@ from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 from scipy import stats
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.metrics import time_averaged_queue_lengths
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import load_experiment_config
 from gibbsq.qroute.core.neural_policies import NeuralRouter
@@ -50,7 +50,7 @@ def _publication_baseline_spec() -> tuple[str, int]:
 
 
 def _load_trained_model_or_fail(cfg, num_servers: int, service_rates, load_key, project_root: Path, output_root: Path):
-    model_path = resolve_model_pointer(project_root, output_root, allow_bc=False, allow_legacy=False)
+    model_path = resolve_model_pointer(project_root, output_root, allow_bc=True, allow_legacy=False)
     skeleton = NeuralRouter(num_servers=num_servers, config=cfg.neural, service_rates=service_rates, key=load_key)
     model = eqx.tree_deserialise_leaves(model_path, skeleton)
     return model, model_path
@@ -77,7 +77,7 @@ class StatsBenchmark:
         log.info(f"Initiating statistical comparison (n={self.num_samples} seeds).")
         log.info(f"Environment: N={self.num_servers}, rho={self.arrival_rate / jnp.sum(self.service_rates):.2f}")
 
-        project_root = Path(__file__).resolve().parents[3]
+        project_root = Path(__file__).resolve().parents[4]
         output_root = self.run_dir.parent.parent
 
         model, model_path = _load_trained_model_or_fail(
@@ -213,7 +213,7 @@ class StatsBenchmark:
         log.info(f"{int(self.cfg.verification.confidence_interval * 100)}% CI (Diff): [{ci_low:.4f}, {ci_high:.4f}]")
         log.info("=" * 60)
 
-        from gibbsq.qroute.analysis.plotting import plot_raincloud
+        from studies.analysis.common.visualization.plotting import plot_raincloud
 
         plot_path = figure_path(self.run_dir, "stats_boxplot")
         fig = plot_raincloud(
@@ -280,7 +280,7 @@ class StatsBenchmark:
                 pass
 
 
-@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "stats")
 
@@ -303,3 +303,5 @@ def main(raw_cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
+
+

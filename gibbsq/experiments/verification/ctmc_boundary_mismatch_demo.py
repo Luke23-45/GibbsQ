@@ -36,6 +36,10 @@ Outputs:
     - Summary CSV: total_boundary_states, positive_boundary_count,
       max_positive_boundary, max_gap.
 
+What it does not claim:
+    - global instability of the CTMC
+    - failure of all possible CTMC Lyapunov arguments
+
 References:
     - z2/08_ctmc_generator_analysis.md  (exact generator identity)
     - z2/07_ctmc_scaling_gap.md  (scaling gap)
@@ -436,6 +440,8 @@ def run_boundary_mismatch_demo(
         },
     )
 
+    summary_rows: list[dict[str, object]] = []
+
     for spec in systems:
         mu = np.asarray(spec.mu, dtype=np.float64)
         rho = spec.lam / spec.Lambda
@@ -499,7 +505,7 @@ def run_boundary_mismatch_demo(
             max_positive_boundary_term, max_gap, obstruction,
         )
 
-        summary_writer.write_row({
+        row = {
             "system_id": spec.system_id,
             "N": spec.N,
             "lambda": spec.lam,
@@ -516,10 +522,29 @@ def run_boundary_mismatch_demo(
             "max_gap": max_gap if max_gap > -math.inf else 0.0,
             "mean_gap_at_boundary": mean_gap,
             "obstruction_demonstrated": obstruction,
-        })
+        }
+        summary_writer.write_row(row)
+        summary_rows.append(row)
 
     state_path = state_writer.finalize()
     summary_path = summary_writer.finalize()
+    report_path = summary_path.with_name("ctmc_boundary_mismatch_summary.md")
+    lines = [
+        "# CTMC Boundary Mismatch Summary",
+        "",
+        "This report demonstrates the specific boundary obstruction in the old",
+        "deterministic-potential shortcut. It does not claim global CTMC",
+        "instability or rule out other Lyapunov routes.",
+        "",
+    ]
+    for row in summary_rows:
+        lines.append(
+            f"- {row['system_id']}: obstruction_demonstrated={row['obstruction_demonstrated']}, "
+            f"positive_boundary_count={row['positive_boundary_count']}, "
+            f"max_positive_boundary_term={row['max_positive_boundary_term']:.6e}, "
+            f"max_gap={row['max_gap']:.6e}"
+        )
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return state_path, summary_path
 
 

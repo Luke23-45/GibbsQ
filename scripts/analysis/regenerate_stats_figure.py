@@ -1,4 +1,4 @@
-"""
+﻿"""
 Regenerate the stats comparison figure from verified ablation data.
 
 This script produces a publication-quality raincloud plot comparing
@@ -18,8 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
-from gibbsq.qroute.analysis.plotting import plot_raincloud
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.visualization.plotting import plot_raincloud
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger(__name__)
@@ -187,3 +187,5 @@ if __name__ == "__main__":
     print(f"  Baseline mean: {result['baseline_mean']:.4f}")
     print(f"  Neural mean:   {result['neural_mean']:.4f}")
     print(f"  Improvement:   {result['improvement_pct']:.2f}%")
+
+

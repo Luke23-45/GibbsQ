@@ -7,6 +7,15 @@ It evaluates candidate Lyapunov/proof templates numerically against the
 exact generator under the reflected routing law and ranks them by how
 well they achieve negative drift on sampled state sets. A good score is
 evidence of a promising proof direction, not a formal theorem.
+
+Outputs:
+    - ranked candidate CSV artifacts
+    - metadata for the sampled-state evaluation run
+    - optional trajectory support metrics for selected candidates
+
+What it does not claim:
+    - proof of stochastic stability
+    - theorem status for any candidate template by itself
 """
 
 from __future__ import annotations

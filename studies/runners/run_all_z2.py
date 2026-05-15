@@ -155,6 +155,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR)
+    parser.add_argument("--config-name", default="final_experiment")
     parser.add_argument(
         "--skip-benchmarks",
         action="store_true",
@@ -169,8 +170,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    verification_exps = build_verification_experiments(args.output_dir)
-    benchmark_exps = build_benchmark_experiments(args.output_dir)
+    verification_exps = build_verification_experiments(args.output_dir, args.config_name)
+    benchmark_exps = build_benchmark_experiments(args.output_dir, args.config_name)
 
     if args.dry_run:
         log.info("DRY RUN — Pipeline would execute:")

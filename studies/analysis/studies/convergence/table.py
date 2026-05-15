@@ -37,8 +37,9 @@ def table_reflected_ode(data_dir: Path, table_dir: Path) -> List[Path]:
         r"    \midrule",
     ]
     for r in rows:
+        sys_id = r['system_id'].replace('_', r'\_')
         latex_lines.append(
-            f"    {r['system_id'].replace('_', r'\\_')} & "
+            f"    {sys_id} & "
             f"{r['N']} & "
             f"{r['num_trajectories']} & "
             f"{float(r['terminal_diameter']):.2e} & "

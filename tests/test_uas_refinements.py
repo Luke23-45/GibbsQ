@@ -1,6 +1,6 @@
-import numpy as np
+﻿import numpy as np
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
+from studies.analysis.common.metrics import time_averaged_queue_lengths
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.policies import ReflectedUASRouting, UASRouting
 from gibbsq.qroute.engines.numpy_engine import run_replications
@@ -64,3 +64,5 @@ def test_best_reflected_candidate_beats_jssq_in_short_isolated_reproduction():
     reflected_mean = _isolated_benchmark_mean(reflected)
 
     assert reflected_mean < jssq_mean
+
+

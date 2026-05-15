@@ -40,6 +40,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = "outputs/data"
 DEFAULT_REPORT_DIR = "outputs/reports"
+DEFAULT_CONFIG_NAME = "final_experiment"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -125,19 +126,19 @@ def _run_experiment(
 # Experiment definitions
 # ──────────────────────────────────────────────────────────────────────
 
-def _make_boundary_equilibrium(output_dir: str) -> Callable[[], list[Path]]:
+def _make_boundary_equilibrium(output_dir: str, config_name: str) -> Callable[[], list[Path]]:
     """Create a callable for the boundary-equilibrium experiment."""
     def run() -> list[Path]:
         from gibbsq.experiments.verification.boundary_equilibrium_verification import (
             benchmark_systems,
             run_verification,
         )
-        csv_path = run_verification(benchmark_systems(), output_dir)
+        csv_path = run_verification(benchmark_systems(config_name), output_dir)
         return [csv_path]
     return run
 
 
-def _make_reflected_ode_convergence(output_dir: str) -> Callable[[], list[Path]]:
+def _make_reflected_ode_convergence(output_dir: str, config_name: str) -> Callable[[], list[Path]]:
     """Create a callable for the reflected-ODE convergence experiment."""
     def run() -> list[Path]:
         from gibbsq.experiments.verification.reflected_ode_convergence import (
@@ -145,7 +146,7 @@ def _make_reflected_ode_convergence(output_dir: str) -> Callable[[], list[Path]]
             run_convergence_verification,
         )
         traj_path, summary_path = run_convergence_verification(
-            benchmark_systems(), output_dir,
+            benchmark_systems(config_name), output_dir,
         )
         return [traj_path, summary_path]
     return run
@@ -165,13 +166,13 @@ def _make_exhaustive_drift_audit(output_dir: str) -> Callable[[], list[Path]]:
     return run
 
 
-def _make_theorem_constant_sweep(output_dir: str) -> Callable[[], list[Path]]:
+def _make_theorem_constant_sweep(output_dir: str, config_name: str) -> Callable[[], list[Path]]:
     """Create a callable for the theorem-constant sweep experiment."""
     def run() -> list[Path]:
         from gibbsq.experiments.verification.theorem_constant_sweep import (
             run_theorem_constant_sweep,
         )
-        csv_path = run_theorem_constant_sweep(output_dir)
+        csv_path = run_theorem_constant_sweep(output_dir, config_name=config_name)
         return [csv_path]
     return run
 
@@ -187,6 +188,139 @@ def _make_boundary_mismatch_demo(output_dir: str) -> Callable[[], list[Path]]:
             demo_systems(), output_dir, max_norm=15,
         )
         return [state_path, summary_path]
+    return run
+
+
+def _make_direct_ctmc_validation(output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the direct CTMC validation capsule."""
+    def run() -> list[Path]:
+        from gibbsq.experiments.verification.direct_ctmc_validation import (
+            DEFAULT_CONFIG_NAME,
+            ValidationProtocol,
+            compute_system_summary,
+            default_candidate_catalog,
+            load_policy_experiment_config,
+            metadata_path,
+            render_summary_markdown,
+            run_audit,
+        )
+
+        run_dir = Path(output_dir) / "direct_ctmc_validation"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "metadata").mkdir(parents=True, exist_ok=True)
+        (run_dir / "metrics").mkdir(parents=True, exist_ok=True)
+
+        protocol = ValidationProtocol()
+        cfg, _ = load_policy_experiment_config(
+            config_name=DEFAULT_CONFIG_NAME,
+            overrides=(),
+            protocol=protocol,
+            output_dir=str(run_dir),
+        )
+        audit_rows = run_audit(
+            cfg=cfg,
+            run_dir=run_dir,
+            candidates=default_candidate_catalog(),
+            protocol=protocol,
+        )
+        metadata_path(run_dir, "direct_ctmc_validation_summary.md").write_text(
+            render_summary_markdown(
+                system_summary=compute_system_summary(cfg),
+                protocol=protocol,
+                audit_rows=audit_rows,
+                rerun_rows=[],
+            ),
+            encoding="utf-8",
+        )
+        return [
+            run_dir / "metrics" / "direct_ctmc_audit.jsonl",
+            run_dir / "metadata" / "direct_ctmc_audit_summary.json",
+            run_dir / "metadata" / "direct_ctmc_validation_summary.md",
+        ]
+    return run
+
+
+def _make_ctmc_support_summary(output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the consolidated CTMC support capsule."""
+    def run() -> list[Path]:
+        from gibbsq.experiments.verification.ctmc_support_summary import (
+            run_ctmc_support_summary,
+        )
+
+        csv_path, json_path = run_ctmc_support_summary(Path(output_dir) / "ctmc_support")
+        return [csv_path, json_path, csv_path.with_name("ctmc_support_summary.md")]
+    return run
+
+
+def _make_check_configs(config_name: str, output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the config testing sanity check."""
+    def run() -> list[Path]:
+        import subprocess
+        import sys
+        out_dir = Path(output_dir) / "logs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_file = out_dir / "check_configs.log"
+        with open(log_file, "w", encoding="utf-8") as f:
+            subprocess.run([
+                sys.executable, "-m", "gibbsq.experiments.testing.check_configs",
+                "--config-name", config_name,
+                f"++active_profile={config_name}",
+            ], check=True, stdout=f, stderr=subprocess.STDOUT)
+        return [log_file]
+    return run
+
+
+def _make_engine_parity(config_name: str, output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the engine parity verification."""
+    def run() -> list[Path]:
+        import subprocess
+        import sys
+        out_dir = Path(output_dir) / "logs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_file = out_dir / "engine_parity.log"
+        with open(log_file, "w", encoding="utf-8") as f:
+            subprocess.run([
+                sys.executable, "-m", "gibbsq.experiments.verification.engine_parity",
+                "--config-name", config_name,
+                f"++active_profile={config_name}",
+            ], check=True, stdout=f, stderr=subprocess.STDOUT)
+        return [log_file]
+    return run
+
+
+def _make_drift_verification(config_name: str, output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the raw drift verification."""
+    def run() -> list[Path]:
+        import subprocess
+        import sys
+        out_dir = Path(output_dir) / "logs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_file = out_dir / "drift_verification.log"
+        with open(log_file, "w", encoding="utf-8") as f:
+            subprocess.run([
+                sys.executable, "-m", "gibbsq.experiments.verification.drift_verification",
+                "--config-name", config_name,
+                f"++active_profile={config_name}",
+            ], check=True, stdout=f, stderr=subprocess.STDOUT)
+        return [log_file]
+    return run
+
+
+def _make_proof_search(config_name: str, output_dir: str) -> Callable[[], list[Path]]:
+    """Create a callable for the reflected UAS proof search."""
+    def run() -> list[Path]:
+        import subprocess
+        import sys
+        out_dir = Path(output_dir) / "logs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        log_file = out_dir / "reflected_uas_proof_search.log"
+        with open(log_file, "w", encoding="utf-8") as f:
+            subprocess.run([
+                sys.executable, "-m", "gibbsq.experiments.verification.reflected_uas_proof_search",
+                "--config-name", config_name,
+                f"++active_profile={config_name}",
+            ], check=True, stdout=f, stderr=subprocess.STDOUT)
+        return [log_file]
     return run
 
 
@@ -283,7 +417,7 @@ def _write_report(
 # Main
 # ──────────────────────────────────────────────────────────────────────
 
-def build_verification_experiments(output_dir: str) -> list[tuple[str, str, Callable]]:
+def build_verification_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
     """Build the ordered list of verification experiments.
 
     Returns
@@ -294,12 +428,22 @@ def build_verification_experiments(output_dir: str) -> list[tuple[str, str, Call
         (
             "Boundary Equilibrium Verification",
             "H2",
-            _make_boundary_equilibrium(output_dir),
+            _make_boundary_equilibrium(output_dir, config_name),
         ),
         (
             "Reflected-ODE Multi-Start Convergence",
             "H1, H2",
-            _make_reflected_ode_convergence(output_dir),
+            _make_reflected_ode_convergence(output_dir, config_name),
+        ),
+        (
+            "CTMC Generator Boundary-Mismatch Demo",
+            "H3",
+            _make_boundary_mismatch_demo(output_dir),
+        ),
+        (
+            "Direct CTMC Validation Capsule",
+            "H4",
+            _make_direct_ctmc_validation(output_dir),
         ),
         (
             "Exhaustive Small-Grid Drift Audit",
@@ -309,12 +453,32 @@ def build_verification_experiments(output_dir: str) -> list[tuple[str, str, Call
         (
             "Theorem-Constant Parameter Sweep",
             "H4",
-            _make_theorem_constant_sweep(output_dir),
+            _make_theorem_constant_sweep(output_dir, config_name),
         ),
         (
-            "CTMC Generator Boundary-Mismatch Demo",
-            "H3",
-            _make_boundary_mismatch_demo(output_dir),
+            "Consolidated CTMC Support Summary",
+            "H3, H4",
+            _make_ctmc_support_summary(output_dir),
+        ),
+        (
+            "Configuration Sanity Checks",
+            "Pre-flight",
+            _make_check_configs(config_name, output_dir),
+        ),
+        (
+            "Engine Parity Check (NumPy vs JAX)",
+            "Verification",
+            _make_engine_parity(config_name, output_dir),
+        ),
+        (
+            "Theorem-Backed Drift Verification",
+            "Verification",
+            _make_drift_verification(config_name, output_dir),
+        ),
+        (
+            "Reflected UAS Exploratory Proof Search",
+            "Verification",
+            _make_proof_search(config_name, output_dir),
         ),
     ]
 
@@ -348,6 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_REPORT_DIR,
         help="Output directory for pipeline reports.",
     )
+    parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -362,7 +527,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    experiments = build_verification_experiments(args.output_dir)
+    experiments = build_verification_experiments(args.output_dir, args.config_name)
 
     if args.dry_run:
         log.info("DRY RUN — %d experiments would be executed:", len(experiments))

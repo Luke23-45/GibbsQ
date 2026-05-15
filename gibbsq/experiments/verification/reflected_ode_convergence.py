@@ -20,6 +20,11 @@ Outputs:
       terminal_residual_norm, H_value, converged, etc.
     - Summary CSV: system_id, terminal_diameter, max_residual_norm,
       H_monotone_fraction, num_trajectories, etc.
+    - Human-readable markdown summary.
+
+What it does not claim:
+    - anything about CTMC stability
+    - exact proof replacement for the deterministic theorem
 
 References:
     - z2/01_reflected_fluid_model.md  (reflected ODE definition)
@@ -33,13 +38,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
 import numpy as np
+from omegaconf import OmegaConf
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parents[2]
@@ -51,6 +56,7 @@ from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: 
 log = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_CONFIG_NAME = "final_experiment"
 DEFAULT_DT = 0.01
 DEFAULT_MAX_TIME = 800.0
 DEFAULT_H_SAMPLE_INTERVAL = 1.0
@@ -82,18 +88,23 @@ class SystemSpec:
         return self.lam / self.Lambda
 
 
-def benchmark_systems() -> list[SystemSpec]:
+def _load_profile_system(config_name: str) -> SystemSpec:
+    raw_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / f"{config_name}.yaml")
+    return SystemSpec(
+        system_id=f"{config_name}_benchmark",
+        mu=tuple(float(x) for x in raw_cfg.system.service_rates),
+        lam=float(raw_cfg.system.arrival_rate),
+        alpha=20.0,
+        beta=0.85,
+        gamma=0.5,
+        c=0.5,
+    )
+
+
+def benchmark_systems(config_name: str = DEFAULT_CONFIG_NAME) -> list[SystemSpec]:
     """Return the benchmark system catalog."""
     return [
-        SystemSpec(
-            system_id="benchmark_10server",
-            mu=tuple(0.5 + 0.2 * i for i in range(10)),
-            lam=11.2,
-            alpha=20.0,
-            beta=0.85,
-            gamma=0.5,
-            c=0.5,
-        ),
+        _load_profile_system(config_name),
         SystemSpec(
             system_id="symmetric_4server",
             mu=(1.0, 1.0, 1.0, 1.0),
@@ -207,6 +218,26 @@ def compute_H(
     return float(np.sum(np.power(mu, 1.0 - beta) * q) + (lam / alpha) * log_W)
 
 
+def stable_policy_probs(
+    q: np.ndarray,
+    *,
+    mu: np.ndarray,
+    alpha: float,
+    beta: float,
+    gamma: float,
+    c: float,
+) -> np.ndarray:
+    """Return numerically stable Reflected-UAS routing probabilities."""
+    mu_beta = np.power(mu, beta)
+    log_w = gamma * np.log(mu) - alpha * (q + c) / mu_beta
+    log_w -= np.max(log_w)
+    w = np.exp(log_w)
+    W = np.sum(w)
+    if W <= 0.0 or not np.isfinite(W):
+        return np.full_like(mu, 1.0 / len(mu), dtype=np.float64)
+    return w / W
+
+
 def compute_equilibrium_residual(
     q: np.ndarray,
     *,
@@ -234,9 +265,14 @@ def compute_equilibrium_residual(
     float
         Maximum equilibrium residual.
     """
-    w = np.power(mu, gamma) * np.exp(-alpha * (q + c) / np.power(mu, beta))
-    W = np.sum(w)
-    p = w / W
+    p = stable_policy_probs(
+        q,
+        mu=mu,
+        alpha=alpha,
+        beta=beta,
+        gamma=gamma,
+        c=c,
+    )
     lam_p = lam * p
 
     residuals = np.zeros(len(mu), dtype=np.float64)
@@ -298,12 +334,14 @@ def integrate_reflected_ode(
             )
             H_values.append(H_val)
 
-        # Compute routing probabilities (numerically stable)
-        log_w = np.log(np.power(mu, spec.gamma)) - spec.alpha * (q + spec.c) / np.power(mu, spec.beta)
-        log_w -= np.max(log_w)  # Shift for numerical stability
-        w = np.exp(log_w)
-        W = np.sum(w)
-        p = w / W if W > 0 else np.ones(spec.N, dtype=np.float64) / spec.N
+        p = stable_policy_probs(
+            q,
+            mu=mu,
+            alpha=spec.alpha,
+            beta=spec.beta,
+            gamma=spec.gamma,
+            c=spec.c,
+        )
 
         # Drift + orthant projection
         drift = spec.lam * p - mu
@@ -431,6 +469,8 @@ def run_convergence_verification(
         },
     )
 
+    summary_rows: list[dict[str, object]] = []
+
     for spec in systems:
         log.info("Running convergence test: %s (N=%d, ρ=%.4f)", spec.system_id, spec.N, spec.rho)
         mu = np.asarray(spec.mu, dtype=np.float64)
@@ -500,7 +540,7 @@ def run_convergence_verification(
             converged_count, len(ics), status,
         )
 
-        summary_writer.write_row({
+        row = {
             "system_id": spec.system_id,
             "N": spec.N,
             "lambda": spec.lam,
@@ -512,10 +552,28 @@ def run_convergence_verification(
             "max_residual_norm": max_residual,
             "min_H_monotone_fraction": min_monotone_frac,
             "status": status,
-        })
+        }
+        summary_writer.write_row(row)
+        summary_rows.append(row)
 
     traj_path = traj_writer.finalize()
     summary_path = summary_writer.finalize()
+    report_path = summary_path.with_name("reflected_ode_convergence_summary.md")
+    lines = [
+        "# Reflected ODE Convergence Summary",
+        "",
+        "This report records deterministic multi-start convergence diagnostics.",
+        "It does not claim CTMC stability or replace the deterministic proof.",
+        "",
+    ]
+    for row in summary_rows:
+        lines.append(
+            f"- {row['system_id']}: status={row['status']}, "
+            f"convergence_rate={row['convergence_rate']:.3f}, "
+            f"terminal_diameter={row['terminal_diameter']:.6e}, "
+            f"max_residual_norm={row['max_residual_norm']:.6e}"
+        )
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return traj_path, summary_path
 
 
@@ -541,6 +599,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-time", type=float, default=DEFAULT_MAX_TIME)
     parser.add_argument("--n-random", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME)
     return parser
 
 
@@ -551,7 +610,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     log.info("Starting reflected-ODE convergence verification")
-    systems = benchmark_systems()
+    systems = benchmark_systems(args.config_name)
     traj_path, summary_path = run_convergence_verification(
         systems,
         args.output_dir,

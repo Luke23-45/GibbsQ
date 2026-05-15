@@ -1,10 +1,19 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Validation capsule for the direct CTMC quadratic proof route.
 
-This script is deliberately parallel to `sruas_validation.py`, but it validates
-the newer theorem attempt based on the weighted quadratic Lyapunov function and
-the exact softmax-minimum bound.
+This script validates the newer theorem attempt based on the weighted
+quadratic Lyapunov function and the exact softmax-minimum bound.
+
+What it computes:
+    - theorem constants for audited candidates
+    - sampled drift-bound checks on a reproducible state bank
+    - benchmark rerun metrics for audited candidates
+
+What it does not claim:
+    - that the full stochastic theorem is promoted beyond the current `z2`
+      status files
+    - that sampled support alone is a final theorem
 
 Modes
 -----
@@ -37,7 +46,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.experiments.verification import reflected_uas_proof_search as ps  # noqa: E402
-from gibbsq.qroute.analysis.metrics import (  # noqa: E402
+from studies.analysis.common.metrics import (  # noqa: E402
     gini_coefficient,
     sojourn_time_estimate,
     time_averaged_queue_lengths,
@@ -166,7 +175,7 @@ def default_candidate_catalog() -> list[CandidateSpec]:
             c=0.25,
             family="grid_candidate",
             alpha_kind="reflected",
-            notes="Legacy SRUAS grid candidate.",
+            notes="Auxiliary grid candidate.",
         ),
         CandidateSpec(
             name="grid_b0p5_g0p5_c0p25",
@@ -175,7 +184,7 @@ def default_candidate_catalog() -> list[CandidateSpec]:
             c=0.25,
             family="grid_candidate",
             alpha_kind="reflected",
-            notes="Legacy SRUAS grid candidate.",
+            notes="Auxiliary grid candidate.",
         ),
         CandidateSpec(
             name="grid_b0p7_g0p25_c0p25",
@@ -184,7 +193,7 @@ def default_candidate_catalog() -> list[CandidateSpec]:
             c=0.25,
             family="grid_candidate",
             alpha_kind="reflected",
-            notes="Legacy SRUAS grid candidate.",
+            notes="Auxiliary grid candidate.",
         ),
     ]
 
@@ -316,6 +325,7 @@ def compute_direct_ctmc_constants(
     )
     load_margin = float(lambda_total - lambda_value)
     theorem_load_ok = bool(load_margin > 0.0)
+    has_positive_epsilon = bool(epsilon > 0.0)
     return {
         "beta": float(beta),
         "gamma": float(gamma),
@@ -327,8 +337,8 @@ def compute_direct_ctmc_constants(
         "load_margin": load_margin,
         "epsilon": epsilon,
         "R": r_value,
-        "theorem_load_ok": theorem_load_ok,
-        "is_certified": theorem_load_ok,
+        "load_condition_ok": theorem_load_ok,
+        "has_positive_epsilon": has_positive_epsilon,
     }
 
 
@@ -560,7 +570,8 @@ def render_summary_markdown(
             "- "
             f"{row['name']}: epsilon={row['epsilon']:.12f}, "
             f"R={row['R']:.12f}, "
-            f"certified={row['is_certified']}, "
+            f"load_ok={row['load_condition_ok']}, "
+            f"positive_epsilon={row['has_positive_epsilon']}, "
             f"sampled_bound_pass={row['passes_sampled_bound']}, "
             f"max_residual={row['max_sampled_residual']:.12e}"
         )
@@ -625,7 +636,8 @@ def run_rerun(
                     "alpha": audit_row["alpha"],
                     "epsilon": audit_row["epsilon"],
                     "R": audit_row["R"],
-                    "certified": audit_row["is_certified"],
+                    "load_condition_ok": audit_row["load_condition_ok"],
+                    "has_positive_epsilon": audit_row["has_positive_epsilon"],
                     "passes_sampled_bound": audit_row["passes_sampled_bound"],
                 }
             )
@@ -750,3 +762,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

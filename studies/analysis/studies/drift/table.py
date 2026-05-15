@@ -37,8 +37,9 @@ def table_drift_audit(data_dir: Path, table_dir: Path) -> List[Path]:
         r"    \midrule",
     ]
     for r in rows:
+        sys_id = r['system_id'].replace('_', r'\_')
         latex_lines.append(
-            f"    {r['system_id'].replace('_', r'\\_')} & "
+            f"    {sys_id} & "
             f"{r['N']} & "
             f"{float(r['rho']):.4f} & "
             f"{r['total_states']} & "

@@ -1,4 +1,4 @@
-"""
+﻿"""
 SSA-based empirical ablation study for N-GibbsQ.
 
 This ablation is framed as empirical model selection, not theorem validation.
@@ -6,7 +6,7 @@ It compares neural design choices against the strongest closed-form baselines:
 
 - JSSQ
 - Reflected UAS
-- best legacy UAS
+- UAS baseline
 
 and against a compact matrix of neural training variants.
 """
@@ -28,9 +28,9 @@ import numpy as np
 from jaxtyping import PRNGKeyArray
 from omegaconf import DictConfig, OmegaConf
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
-from gibbsq.qroute.analysis.plotting import plot_ablation_dual_panel
+from studies.analysis.common.metrics import time_averaged_queue_lengths
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.visualization.plotting import plot_ablation_dual_panel
 from gibbsq.qroute.core.config import ExperimentConfig, load_experiment_config_chain, validate
 from gibbsq.qroute.core.neural_policies import NeuralRouter
 from gibbsq.qroute.core.policies import ReflectedUASRouting, JSSQRouting, UASRouting
@@ -40,12 +40,12 @@ from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy
 from gibbsq.qroute.utils.progress import create_progress
 from gibbsq.qroute.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
-from gibbsq.experiments.legacy.train_reinforce import ReinforceTrainer
+from gibbsq.experiments.training.train_reinforce import ReinforceTrainer
 
 log = logging.getLogger(__name__)
 
 NEURAL_EVAL_MODE = "deterministic"
-LEGACY_UAS_ALPHA = 10.0
+UAS_BASELINE_ALPHA = 10.0
 CI_Z_SCORE = 1.96
 
 
@@ -71,7 +71,7 @@ NEURAL_VARIANTS: list[AblationVariantSpec] = [
         init_type="standard",
         bootstrap_mode="expert",
         expert_policy_name="uas",
-        expert_policy_params={"alpha": LEGACY_UAS_ALPHA},
+        expert_policy_params={"alpha": UAS_BASELINE_ALPHA},
         artifact_dir="variant_1_no_log_norm",
     ),
     AblationVariantSpec(
@@ -82,7 +82,7 @@ NEURAL_VARIANTS: list[AblationVariantSpec] = [
         init_type="zero_final",
         bootstrap_mode="expert",
         expert_policy_name="uas",
-        expert_policy_params={"alpha": LEGACY_UAS_ALPHA},
+        expert_policy_params={"alpha": UAS_BASELINE_ALPHA},
         artifact_dir="variant_2_zero_init_final",
     ),
     AblationVariantSpec(
@@ -93,7 +93,7 @@ NEURAL_VARIANTS: list[AblationVariantSpec] = [
         init_type="standard",
         bootstrap_mode="expert",
         expert_policy_name="uas",
-        expert_policy_params={"alpha": LEGACY_UAS_ALPHA},
+        expert_policy_params={"alpha": UAS_BASELINE_ALPHA},
         artifact_dir="variant_3_bc_from_uas_to_reinforce",
     ),
     AblationVariantSpec(
@@ -123,7 +123,7 @@ NEURAL_VARIANTS: list[AblationVariantSpec] = [
 REFERENCE_VARIANTS: list[AblationVariantSpec] = [
     AblationVariantSpec(name="JSSQ", variant_kind="reference", panel="teacher"),
     AblationVariantSpec(name="Reflected UAS", variant_kind="reference", panel="teacher"),
-    AblationVariantSpec(name=f"UAS (alpha={LEGACY_UAS_ALPHA:.1f})", variant_kind="reference", panel="teacher"),
+    AblationVariantSpec(name=f"UAS (alpha={UAS_BASELINE_ALPHA:.1f})", variant_kind="reference", panel="teacher"),
 ]
 
 ALL_VARIANTS: list[AblationVariantSpec] = [*NEURAL_VARIANTS, *REFERENCE_VARIANTS]
@@ -150,7 +150,7 @@ class AblationReinforceTrainer(ReinforceTrainer):
         return super().bootstrap_from_expert(policy_net, value_net, key, jsq_limit, random_limit, denom)
 
     def _save_assets(self, *args, **kwargs):
-        from gibbsq.qroute.analysis.plotting import plot_ablation_training_curve
+        from studies.analysis.common.visualization.plotting import plot_ablation_training_curve
 
         policy_net = args[0] if len(args) > 0 else kwargs.get("policy_net")
         value_net = args[1] if len(args) > 1 else kwargs.get("value_net")
@@ -351,7 +351,7 @@ def _reference_policy(spec: AblationVariantSpec, cfg: ExperimentConfig):
     if spec.name == "Reflected UAS":
         return ReflectedUASRouting(mu_arr, alpha=20.0, beta=0.85, gamma=0.5, c=0.5)
     if spec.name.startswith("UAS"):
-        return UASRouting(mu_arr, alpha=LEGACY_UAS_ALPHA)
+        return UASRouting(mu_arr, alpha=UAS_BASELINE_ALPHA)
     raise ValueError(f"Unsupported reference policy '{spec.name}'")
 
 
@@ -631,11 +631,13 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1:
-        hydra.main(version_base=None, config_path="../../../configs", config_name="default")(main)()
+        hydra.main(version_base=None, config_path="../../../../configs", config_name="default")(main)()
     else:
         from hydra import compose, initialize_config_dir
 
-        config_dir = str(Path(__file__).resolve().parents[3] / "configs")
+        config_dir = str(Path(__file__).resolve().parents[4] / "configs")
         with initialize_config_dir(config_dir=config_dir, version_base=None):
             raw_cfg = compose(config_name="default")
             main(raw_cfg)
+
+

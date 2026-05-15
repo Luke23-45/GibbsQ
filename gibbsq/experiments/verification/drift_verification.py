@@ -1,8 +1,18 @@
-"""
-Experiment: Drift Verification (Experiment 2)
+﻿"""
+Theorem-backed drift verification for raw softmax and UAS baselines.
 
-- Grid evaluation for N=2: outputs heatmap and scatter plot.
-- Trajectory evaluation for N>2: outputs scatter plot.
+What it computes:
+    - exact grid-based or trajectory-based drift checks for the older
+      theorem-backed softmax and UAS routes
+    - publication-facing figures and metrics for those baseline paths
+
+Outputs:
+    - metrics JSONL artifacts
+    - drift figures for the configured mode
+
+What it does not claim:
+    - any certification of Reflected UAS
+    - any role as part of the z2 direct-CTMC certification path
 """
 
 from __future__ import annotations
@@ -15,17 +25,17 @@ import numpy as np
 import hydra
 from omegaconf import DictConfig
 
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.config import load_experiment_config, drift_constant_R, drift_rate_epsilon
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.engines.numpy_engine import simulate
 from gibbsq.qroute.core.drift import evaluate_grid, evaluate_trajectory
-from gibbsq.qroute.analysis.plotting import plot_drift_landscape, plot_drift_vs_norm
+from studies.analysis.common.visualization.plotting import plot_drift_landscape, plot_drift_vs_norm
 from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import setup_wandb, get_run_config
 from gibbsq.qroute.utils.progress import create_progress
 from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
-from gibbsq.qroute.analysis.theme import apply_theme
+from studies.analysis.common.visualization.theme import apply_theme
 
 try:
     import wandb
@@ -50,7 +60,7 @@ def _require_theorem_supported_policy(policy_name: str) -> str:
         ) from exc
 
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig) -> None:
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "drift")
 
@@ -208,3 +218,5 @@ def main(raw_cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     main()
+
+

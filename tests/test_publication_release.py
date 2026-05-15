@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from pathlib import Path
 from types import SimpleNamespace
 from omegaconf import OmegaConf
@@ -25,10 +25,14 @@ def test_publication_neural_evaluation_runners_pin_reflected_uas_baseline():
     from gibbsq.experiments.evaluation.n_gibbsq_evals.critical_load import _publication_baseline_spec as critical_spec
     from gibbsq.experiments.evaluation.n_gibbsq_evals.gen_sweep import _publication_baseline_spec as generalize_spec
     from gibbsq.experiments.evaluation.n_gibbsq_evals.stats_bench import _publication_baseline_spec as stats_spec
+    from gibbsq.experiments.evaluation.n_gibbsq_evals.critical_load import PUBLICATION_BASELINE_ALPHA as critical_alpha
+    from gibbsq.experiments.evaluation.n_gibbsq_evals.gen_sweep import PUBLICATION_BASELINE_ALPHA as generalize_alpha
 
     assert stats_spec()[0] == "reflected_uas"
     assert generalize_spec()[0] == "reflected_uas"
     assert critical_spec()[0] == "reflected_uas"
+    assert generalize_alpha == pytest.approx(20.0)
+    assert critical_alpha == pytest.approx(20.0)
 
 
 @pytest.mark.parametrize(
@@ -76,7 +80,7 @@ def test_hyperqual_summarizes_clean_policy_labels():
 
 
 def test_critical_regeneration_prefers_reflected_uas_metric(monkeypatch):
-    from gibbsq.qroute.analysis import critical_regeneration
+    from studies.analysis import critical_regeneration
 
     workspace_tmp = Path("tests") / "_tmp_publication_release"
     if workspace_tmp.exists():
@@ -110,7 +114,7 @@ def test_critical_regeneration_prefers_reflected_uas_metric(monkeypatch):
 
 
 def test_critical_regeneration_requires_v3_reflected_uas_metric():
-    from gibbsq.qroute.analysis.critical_regeneration import regenerate_critical_figure
+    from studies.analysis.critical_regeneration import regenerate_critical_figure
 
     workspace_tmp = Path("tests") / "_tmp_publication_release_missing_v3"
     if workspace_tmp.exists():
@@ -226,3 +230,4 @@ def test_final_phase_pipelines_preserve_explicit_config_name(monkeypatch):
         assert call["current_args"][idx + 1] == "final_experiment"
         assert call["dry_run"] is True
         assert call["progress_mode"] == "auto"
+

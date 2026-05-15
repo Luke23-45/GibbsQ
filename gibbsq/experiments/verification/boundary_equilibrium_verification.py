@@ -19,7 +19,11 @@ Outputs:
     - CSV with columns: system_id, N, lambda, Lambda, rho, K_star,
       q_star (JSON), active_set (JSON), max_discrepancy,
       active_set_match, etc.
-    - Metadata sidecar JSON.
+    - Human-readable markdown summary.
+
+What it does not claim:
+    - stochastic stability of the CTMC
+    - anything beyond deterministic equilibrium consistency
 
 References:
     - z2/02_boundary_equilibrium.md  (Theorem 1)
@@ -32,13 +36,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
 import numpy as np
+from omegaconf import OmegaConf
 from scipy.optimize import brentq
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -51,6 +55,7 @@ from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: 
 log = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_CONFIG_NAME = "final_experiment"
 
 # ──────────────────────────────────────────────────────────────────────
 # Benchmark system definitions
@@ -102,22 +107,30 @@ class SystemSpec:
         return self.lam / self.Lambda
 
 
-def benchmark_systems() -> list[SystemSpec]:
+def _load_profile_system(config_name: str) -> SystemSpec:
+    raw_cfg = OmegaConf.load(PROJECT_ROOT / "configs" / f"{config_name}.yaml")
+    service_rates = tuple(float(x) for x in raw_cfg.system.service_rates)
+    arrival_rate = float(raw_cfg.system.arrival_rate)
+    return SystemSpec(
+        system_id=f"{config_name}_benchmark",
+        mu=service_rates,
+        lam=arrival_rate,
+        alpha=20.0,
+        beta=0.85,
+        gamma=0.5,
+        c=0.5,
+    )
+
+
+def benchmark_systems(config_name: str = DEFAULT_CONFIG_NAME) -> list[SystemSpec]:
     """Return the declared benchmark system catalog.
 
     This catalog includes the primary 10-server benchmark used in the
     thesis and several auxiliary systems for multi-scale validation.
     """
+    benchmark = _load_profile_system(config_name)
     return [
-        SystemSpec(
-            system_id="benchmark_10server",
-            mu=tuple(0.5 + 0.2 * i for i in range(10)),
-            lam=11.2,
-            alpha=20.0,
-            beta=0.85,
-            gamma=0.5,
-            c=0.5,
-        ),
+        benchmark,
         SystemSpec(
             system_id="symmetric_4server",
             mu=(1.0, 1.0, 1.0, 1.0),
@@ -147,8 +160,8 @@ def benchmark_systems() -> list[SystemSpec]:
         ),
         SystemSpec(
             system_id="uas_special_case",
-            mu=tuple(0.5 + 0.2 * i for i in range(10)),
-            lam=11.2,
+            mu=benchmark.mu,
+            lam=benchmark.lam,
             alpha=10.0,
             beta=1.0,
             gamma=1.0,
@@ -181,6 +194,26 @@ def compute_theta(spec: SystemSpec) -> np.ndarray:
     return np.power(mu, spec.gamma - 1.0) * np.exp(
         -spec.alpha * spec.c / np.power(mu, spec.beta)
     )
+
+
+def stable_policy_probs(
+    q: np.ndarray,
+    *,
+    mu: np.ndarray,
+    alpha: float,
+    beta: float,
+    gamma: float,
+    c: float,
+) -> np.ndarray:
+    """Return numerically stable Reflected-UAS routing probabilities."""
+    mu_beta = np.power(mu, beta)
+    log_w = gamma * np.log(mu) - alpha * (q + c) / mu_beta
+    log_w -= np.max(log_w)
+    w = np.exp(log_w)
+    W = np.sum(w)
+    if W <= 0.0 or not np.isfinite(W):
+        return np.full_like(mu, 1.0 / len(mu), dtype=np.float64)
+    return w / W
 
 
 def G_function(K: float, mu: np.ndarray, theta: np.ndarray) -> float:
@@ -333,12 +366,14 @@ def verify_equilibrium_conditions(
     """
     mu = np.asarray(spec.mu, dtype=np.float64)
 
-    # Compute routing probabilities at q*
-    w = np.power(mu, spec.gamma) * np.exp(
-        -spec.alpha * (q_star + spec.c) / np.power(mu, spec.beta)
+    p = stable_policy_probs(
+        q_star,
+        mu=mu,
+        alpha=spec.alpha,
+        beta=spec.beta,
+        gamma=spec.gamma,
+        c=spec.c,
     )
-    W = np.sum(w)
-    p = w / W
 
     # Check conditions
     lam_p = spec.lam * p
@@ -395,12 +430,14 @@ def simulate_reflected_ode(
     n_steps = int(max_time / dt)
 
     for _ in range(n_steps):
-        # Compute routing probabilities
-        w = np.power(mu, spec.gamma) * np.exp(
-            -spec.alpha * (q + spec.c) / np.power(mu, spec.beta)
+        p = stable_policy_probs(
+            q,
+            mu=mu,
+            alpha=spec.alpha,
+            beta=spec.beta,
+            gamma=spec.gamma,
+            c=spec.c,
         )
-        W = np.sum(w)
-        p = w / W
 
         # Drift
         drift = spec.lam * p - mu
@@ -473,6 +510,8 @@ def run_verification(
         },
     )
 
+    summary_rows: list[dict[str, object]] = []
+
     for spec in systems:
         log.info("Verifying system: %s (N=%d, ρ=%.4f)", spec.system_id, spec.N, spec.rho)
 
@@ -517,7 +556,7 @@ def run_verification(
 
         log.info("  max_discrepancy = %.6e, status = %s", max_discrepancy, status)
 
-        writer.write_row({
+        row = {
             "system_id": spec.system_id,
             "N": spec.N,
             "lambda": spec.lam,
@@ -540,9 +579,29 @@ def run_verification(
             "max_complementarity_residual": cond["max_complementarity_residual"],
             "scalar_equation_residual": scalar_residual,
             "status": status,
-        })
+        }
+        writer.write_row(row)
+        summary_rows.append(row)
 
-    return writer.finalize()
+    csv_path = writer.finalize()
+    summary_path = csv_path.with_name("boundary_equilibrium_verification_summary.md")
+    summary_lines = [
+        "# Boundary Equilibrium Verification Summary",
+        "",
+        "This report documents deterministic agreement between the closed-form",
+        "boundary equilibrium and the reflected-ODE attractor. It does not",
+        "claim stochastic CTMC stability.",
+        "",
+    ]
+    for row in summary_rows:
+        summary_lines.append(
+            f"- {row['system_id']}: status={row['status']}, "
+            f"K*={row['K_star']:.12e}, "
+            f"max_discrepancy={row['max_discrepancy']:.6e}, "
+            f"active_set_match={row['active_set_match']}"
+        )
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    return csv_path
 
 
 def configure_logging() -> None:
@@ -567,6 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OUTPUT_DIR,
         help="Output directory for CSV data files.",
     )
+    parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME)
     return parser
 
 
@@ -577,7 +637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     log.info("Starting boundary-equilibrium verification experiment")
-    systems = benchmark_systems()
+    systems = benchmark_systems(args.config_name)
     csv_path = run_verification(systems, args.output_dir)
     log.info("Results written to: %s", csv_path)
     return 0

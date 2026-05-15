@@ -1,9 +1,18 @@
-"""
+﻿"""
 Engine parity verification for publication-critical closed-form baselines.
 
 This runner checks whether NumPy SSA and JAX SSA produce materially
 equivalent results for the publication-relevant closed-form policies
 under the exact scenario contracts used by the paper-facing experiments.
+
+Outputs:
+    - JSON metrics summary
+    - JSONL metrics rows
+    - parity figures for the configured scenarios
+
+What it does not claim:
+    - any theorem proof or stability certification
+    - any advantage of one engine beyond numerical agreement checks
 """
 
 from __future__ import annotations
@@ -22,7 +31,7 @@ import numpy as np
 from omegaconf import DictConfig
 from scipy import stats
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
+from studies.analysis.common.metrics import time_averaged_queue_lengths
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import (
     ExperimentConfig,
@@ -571,7 +580,7 @@ class EngineParityExperiment:
         return summary
 
 
-@hydra.main(version_base=None, config_path="../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "engine_parity")
     run_dir, run_id = get_run_config(cfg, "engine_parity", resolved_raw_cfg)
@@ -593,3 +602,5 @@ def main(raw_cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
+
+

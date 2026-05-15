@@ -1,4 +1,4 @@
-"""
+﻿"""
 N-GibbsQ critical load test.
 
 Tests N-GibbsQ as rho -> 1 against the publication closed-form baseline,
@@ -17,8 +17,8 @@ import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.metrics import time_averaged_queue_lengths
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.qroute.core.neural_policies import NeuralRouter
@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 NEURAL_EVAL_MODE = "deterministic"
 PUBLICATION_BASELINE_POLICY_NAME = "reflected_uas"
 PUBLICATION_BASELINE_LABEL = "Reflected UAS"
+PUBLICATION_BASELINE_ALPHA = 20.0
 
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
@@ -65,9 +66,9 @@ class CriticalLoadTest:
         """Sweep rho and measure stability."""
         k_load, _ = jax.random.split(key)
 
-        project_root = Path(__file__).resolve().parents[3]
+        project_root = Path(__file__).resolve().parents[4]
         output_root = self.run_dir.parent.parent
-        model_path = resolve_model_pointer(project_root, output_root, allow_bc=False, allow_legacy=False)
+        model_path = resolve_model_pointer(project_root, output_root, allow_bc=True, allow_legacy=False)
         skeleton = NeuralRouter(
             num_servers=self.num_servers,
             config=self.cfg.neural,
@@ -105,7 +106,7 @@ class CriticalLoadTest:
 
                     baseline_policy = build_policy_by_name(
                         baseline_policy_name,
-                        alpha=float(self.cfg.system.alpha),
+                        alpha=PUBLICATION_BASELINE_ALPHA,
                         mu=mu_np,
                     )
                     max_events = compute_poisson_max_steps(float(arrival_rate), mu_np, rho_sim_time)
@@ -217,7 +218,7 @@ class CriticalLoadTest:
 
     def _plot(self, rho_vals, neural_r, baseline_r):
         """Generate the critical-load curve."""
-        from gibbsq.qroute.analysis.plotting import plot_critical_load
+        from studies.analysis.common.visualization.plotting import plot_critical_load
 
         plot_path = figure_path(self.run_dir, "critical_load_curve")
         fig = plot_critical_load(
@@ -274,7 +275,7 @@ class CriticalLoadTest:
             )
 
 
-@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "critical")
 
@@ -297,3 +298,5 @@ def main(raw_cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
+
+

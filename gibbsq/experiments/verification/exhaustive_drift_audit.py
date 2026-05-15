@@ -21,6 +21,11 @@ Outputs:
       theorem_rhs, residual, bound_holds.
     - Summary CSV: system_id, N, total_states, violations,
       max_residual, epsilon, R, status.
+    - Human-readable markdown summary.
+
+What it does not claim:
+    - full benchmark-level stochastic certification by itself
+    - anything beyond the declared toy grids
 
 References:
     - z2/10_direct_ctmc_quadratic_proof_attempt.md  (Theorem 3)
@@ -367,6 +372,8 @@ def run_exhaustive_audit(
         },
     )
 
+    summary_rows: list[dict[str, object]] = []
+
     for sys in systems:
         mu = np.asarray(sys.mu, dtype=np.float64)
         constants = compute_theorem_constants(sys)
@@ -417,7 +424,7 @@ def run_exhaustive_audit(
             sys.system_id, states_checked, violations, max_residual, status,
         )
 
-        summary_writer.write_row({
+        row = {
             "system_id": sys.system_id,
             "N": sys.N,
             "lambda": sys.lam,
@@ -432,10 +439,28 @@ def run_exhaustive_audit(
             "C0": constants["C0"],
             "C1": constants["C1"],
             "status": status,
-        })
+        }
+        summary_writer.write_row(row)
+        summary_rows.append(row)
 
     grid_path = grid_writer.finalize()
     summary_path = summary_writer.finalize()
+    report_path = summary_path.with_name("exhaustive_drift_summary.md")
+    lines = [
+        "# Exhaustive Drift Audit Summary",
+        "",
+        "This report records exact weighted-quadratic drift checks on small toy",
+        "grids. It does not by itself establish benchmark-level CTMC stability.",
+        "",
+    ]
+    for row in summary_rows:
+        lines.append(
+            f"- {row['system_id']}: status={row['status']}, "
+            f"violations={row['violations']}, "
+            f"max_residual={row['max_residual']:.6e}, "
+            f"epsilon={row['epsilon']:.6e}"
+        )
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return grid_path, summary_path
 
 

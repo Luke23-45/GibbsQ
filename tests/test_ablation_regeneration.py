@@ -1,4 +1,4 @@
-import json
+﻿import json
 import uuid
 from pathlib import Path
 
@@ -8,7 +8,7 @@ import pytest
 matplotlib.use("Agg")
 
 from gibbsq.experiments.evaluation.n_gibbsq_evals.ablation_ssa import variant_catalog
-from gibbsq.qroute.analysis.ablation_regeneration import (
+from studies.analysis.ablation_regeneration import (
     AblationRecord,
     CANONICAL_VARIANTS,
     build_ablation_plot_payload,
@@ -248,3 +248,4 @@ def test_build_ablation_plot_payload_tracks_teacher_and_delta_fields():
     assert payload["teacher_policy"][3] == "reflected_uas"
     assert payload["ci95_half_width"][6] == pytest.approx(0.04)
     assert payload["delta_vs_best_neural_mean"][4] == pytest.approx(1.04)
+

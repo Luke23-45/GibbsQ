@@ -1,9 +1,17 @@
+"""Config sanity checker for public experiment profiles.
+
+This support script validates that declared profile configs and resolved
+public experiment paths can be composed and converted into typed configs.
+
+It does not provide theorem evidence or benchmark evidence.
+"""
+
 import sys
 import logging
 from pathlib import Path
 from hydra import compose, initialize
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -49,11 +57,11 @@ def _resolve_for_validation(raw_cfg, experiment_name: str, profile_name: str):
         )
     return resolve_experiment_config(raw_cfg, experiment_name, profile_name=profile_name)
 
-def main():
+def main(argv=None):
     root_config_names = _discover_root_config_names()
 
     failed = False
-    with initialize(version_base=None, config_path="../../configs"):
+    with initialize(version_base=None, config_path="../../../configs"):
         for name in iter_progress(
             root_config_names,
             total=len(root_config_names),

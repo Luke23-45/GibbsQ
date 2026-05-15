@@ -1,4 +1,4 @@
-"""
+﻿"""
 Corrected Policy Comparison for N-GibbsQ.
 
 This module implements the corrected baseline hierarchy for policy comparison,
@@ -20,19 +20,19 @@ from pathlib import Path
 import numpy as np
 import jax
 from omegaconf import DictConfig
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.qroute.engines.numpy_engine import simulate, run_replications, SimResult
-from gibbsq.qroute.analysis.metrics import (
+from studies.analysis.common.metrics import (
     time_averaged_queue_lengths, gini_coefficient, sojourn_time_estimate
 )
 from gibbsq.qroute.utils.logging import setup_wandb, get_run_config
 from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.progress import iter_progress
 from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
-from gibbsq.qroute.analysis.theme import apply_theme, THEMES
+from studies.analysis.common.visualization.theme import apply_theme, THEMES
 from gibbsq.qroute.utils.chart_exporter import save_chart
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -197,7 +197,7 @@ def run_corrected_comparison(
             **metrics,
         }
 
-        log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
+        log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} Â± {metrics['se_q_total']:.4f}")
 
         append_metrics_jsonl({
             "policy": label,
@@ -206,14 +206,14 @@ def run_corrected_comparison(
         }, metrics_path(run_dir, "corrected_comparison_metrics.jsonl"))
 
     # Resolve pointer directory from active run output layout
-    _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    _PROJECT_ROOT = Path(__file__).resolve().parents[3]
     # run_dir = output_dir / experiment_type / run_id, so run_dir.parent.parent = output_dir
     pointer_dir = run_dir.parent.parent
 
     model_path = resolve_model_pointer(
         _PROJECT_ROOT,
         pointer_dir,
-        allow_bc=False,
+        allow_bc=True,
         allow_legacy=False,
     )
     log.info("\nEvaluating Tier 5: N-GibbsQ (REINFORCE trained)...")
@@ -245,7 +245,7 @@ def run_corrected_comparison(
         **metrics,
     }
 
-    log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} ± {metrics['se_q_total']:.4f}")
+    log.info(f"  E[Q_total] = {metrics['mean_q_total']:.4f} Â± {metrics['se_q_total']:.4f}")
     append_metrics_jsonl(
         {
             "policy": neural_label,
@@ -262,9 +262,9 @@ def run_corrected_comparison(
     log.info("=" * 60)
 
     # Professor's spec at suggestions.md:547-551:
-    # GOLD: N-GibbsQ E[Q] ≤ JSSQ E[Q] (matches asymptotic optimum)
-    # SILVER: N-GibbsQ E[Q] ≤ strongest Tier 3 GibbsQ-family baseline
-    # BRONZE: N-GibbsQ E[Q] ≤ Proportional E[Q] (exceeds static baseline)
+    # GOLD: N-GibbsQ E[Q] â‰¤ JSSQ E[Q] (matches asymptotic optimum)
+    # SILVER: N-GibbsQ E[Q] â‰¤ strongest Tier 3 GibbsQ-family baseline
+    # BRONZE: N-GibbsQ E[Q] â‰¤ Proportional E[Q] (exceeds static baseline)
     # FAILED: N-GibbsQ E[Q] > Proportional E[Q]
 
     jssq_result = results.get("JSSQ (Min Sojourn)")
@@ -309,13 +309,13 @@ def run_corrected_comparison(
         proportional_se = proportional_result["se_q_total"] if proportional_result else 0.0
 
         log.info(f"Reference statistical bounds (95% CI):")
-        log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f} ± {jssq_se:.4f}")
+        log.info(f"  JSSQ (Tier 2 structural): E[Q] = {jssq_q:.4f} Â± {jssq_se:.4f}")
         if strongest_tier3_result:
             log.info(
                 f"  Strongest Tier 3 ({strongest_tier3_result['name']}): "
-                f"E[Q] = {strongest_tier3_q:.4f} ± {strongest_tier3_se:.4f}"
+                f"E[Q] = {strongest_tier3_q:.4f} Â± {strongest_tier3_se:.4f}"
             )
-        log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f} ± {proportional_se:.4f}")
+        log.info(f"  Proportional (Tier 4 blind): E[Q] = {proportional_q:.4f} Â± {proportional_se:.4f}")
 
         if has_parity(neural_q, se_neural, jssq_q, jssq_se):
             parity = "GOLD"
@@ -341,7 +341,7 @@ def run_corrected_comparison(
 
 def _generate_comparison_plot(results: dict, run_dir: Path):
     """Generate comparison bar chart with chart-type-aware styling."""
-    from gibbsq.qroute.analysis.plotting import plot_policy_dual_panel
+    from studies.analysis.common.visualization.plotting import plot_policy_dual_panel
 
     sorted_results = sorted(results.items(), key=lambda x: (x[1]["tier"], x[1]["mean_q_total"]))
 
@@ -455,7 +455,7 @@ def run_grid_generalization(
 
 def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
     """Generate log-scale curves and performance index plots over rho."""
-    from gibbsq.qroute.analysis.plotting import plot_platinum_grid
+    from studies.analysis.common.visualization.plotting import plot_platinum_grid
 
     plot_path = figure_path(output_dir, "platinum_grid_analysis")
     fig = plot_platinum_grid(
@@ -497,9 +497,9 @@ def main(raw_cfg: DictConfig):
             mu = np.array(cfg.system.service_rates)
             pointer_dir = run_dir.parent.parent
             model_path = resolve_model_pointer(
-                Path(__file__).resolve().parents[2],
+                Path(__file__).resolve().parents[3],
                 pointer_dir,
-                allow_bc=False,
+                allow_bc=True,
                 allow_legacy=False,
             )
             key = jax.random.PRNGKey(cfg.simulation.seed)
@@ -517,11 +517,13 @@ if __name__ == "__main__":
     import sys
     import hydra
     if len(sys.argv) > 1:
-        hydra.main(version_base=None, config_path="../../configs", config_name="default")(main)()
+        hydra.main(version_base=None, config_path="../../../configs", config_name="default")(main)()
     else:
         from hydra import compose, initialize_config_dir
         import os
-        config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "configs")
+        config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "configs")
         with initialize_config_dir(config_dir=config_dir, version_base=None):
             raw_cfg = compose(config_name="default")
             main(raw_cfg)
+
+

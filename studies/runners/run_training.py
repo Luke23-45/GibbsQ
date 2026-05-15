@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Run all z2 benchmark experiments.
+Run all z2 neural training experiments.
 
-This runner executes the benchmark-level experiments that support
-Hypothesis H5 (empirical benchmark performance).
+This runner executes the training phase (Phase 2) of the N-GibbsQ
+neural learning pipeline. It runs Platinum BC Pretraining followed
+by REINFORCE SSA Training.
 
 Usage:
-    python -m studies.runners.run_benchmarks
-    python -m studies.runners.run_benchmarks --output-dir outputs/data
-    python -m studies.runners.run_benchmarks --dry-run
+    python -m studies.runners.run_training
+    python -m studies.runners.run_training --output-dir outputs/data
+    python -m studies.runners.run_training --dry-run
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import subprocess
 import sys
 import time
 import traceback
@@ -32,14 +34,16 @@ log = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = "outputs/data"
 DEFAULT_REPORT_DIR = "outputs/reports"
+DEFAULT_CONFIG_NAME = "final_experiment"
 
 
 @dataclass
 class ExperimentResult:
-    """Structured result for a single experiment execution."""
+    """Structured result for a single training execution."""
 
     name: str
     hypothesis: str
+    module: str
     status: str = "NOT_RUN"
     elapsed_seconds: float = 0.0
     output_files: list[str] = field(default_factory=list)
@@ -50,6 +54,7 @@ class ExperimentResult:
         return {
             "name": self.name,
             "hypothesis": self.hypothesis,
+            "module": self.module,
             "status": self.status,
             "elapsed_seconds": round(self.elapsed_seconds, 3),
             "output_files": self.output_files,
@@ -57,66 +62,71 @@ class ExperimentResult:
         }
 
 
-def _run_experiment(
+def _run_module(
     name: str,
     hypothesis: str,
-    func: Callable[[], list[Path | str]],
+    module: str,
+    config_name: str,
+    output_dir: str,
 ) -> ExperimentResult:
-    """Execute a single experiment with full error isolation."""
-    result = ExperimentResult(name=name, hypothesis=hypothesis)
+    """Execute a single training module."""
+    result = ExperimentResult(name=name, hypothesis=hypothesis, module=module)
     log.info("=" * 70)
     log.info("  EXPERIMENT: %s  (supports %s)", name, hypothesis)
     log.info("=" * 70)
-
+    
+    cmd = [
+        sys.executable,
+        "-m",
+        module,
+        "--config-name",
+        config_name,
+    ]
     t0 = time.perf_counter()
+    
+    out_dir_path = Path(output_dir) / "logs"
+    out_dir_path.mkdir(parents=True, exist_ok=True)
+    log_file = out_dir_path / f"{name.replace(' ', '_').lower()}.log"
+    
     try:
-        output_files = func()
+        with open(log_file, "w", encoding="utf-8") as f:
+            subprocess.run(cmd, cwd=PROJECT_ROOT, check=True, stdout=f, stderr=subprocess.STDOUT)
         result.elapsed_seconds = time.perf_counter() - t0
-        result.output_files = [str(f) for f in output_files]
         result.status = "PASS"
-        log.info(
-            "  ✓ %s completed in %.2fs — %d output files",
-            name, result.elapsed_seconds, len(result.output_files),
-        )
+        result.output_files = [str(log_file)]
+        log.info("  ✓ %s completed in %.2fs (Log: %s)", name, result.elapsed_seconds, log_file.name)
     except Exception as exc:
         result.elapsed_seconds = time.perf_counter() - t0
         result.status = "FAIL"
         result.error_message = str(exc)
+        result.output_files = [str(log_file)]
         result.traceback = traceback.format_exc()
-        log.error(
-            "  ✗ %s FAILED after %.2fs: %s",
-            name, result.elapsed_seconds, exc,
-        )
-        log.error("  Traceback:\n%s", result.traceback)
-
+        log.error("  ✗ %s FAILED after %.2fs: %s (Log: %s)", name, result.elapsed_seconds, exc, log_file.name)
     return result
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Experiment definitions
-# ──────────────────────────────────────────────────────────────────────
+def build_training_experiments() -> list[tuple[str, str, str]]:
+    """Build the ordered list of training experiments."""
+    return [
+        (
+            "Platinum BC Pretraining",
+            "H7",
+            "gibbsq.experiments.training.pretrain_bc",
+        ),
+        (
+            "REINFORCE SSA Training",
+            "H7",
+            "gibbsq.experiments.training.train_reinforce",
+        ),
+    ]
 
-def _make_independent_seed_rerun(output_dir: str, config_name: str) -> Callable[[], list[Path]]:
-    """Create a callable for the independent-seed benchmark rerun."""
-    def run() -> list[Path]:
-        from gibbsq.experiments.benchmark.independent_seed_rerun import (
-            run_benchmark_rerun,
-        )
-        policy_path, comp_path = run_benchmark_rerun(output_dir, config_name=config_name)
-        return [policy_path, comp_path]
-    return run
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Report
-# ──────────────────────────────────────────────────────────────────────
 
 def _write_report(
     results: list[ExperimentResult],
     report_dir: str | Path,
     total_elapsed: float,
 ) -> Path:
-    """Write structured pipeline report."""
+    """Write structured training pipeline report."""
     report_dir = Path(report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,7 +136,7 @@ def _write_report(
     overall = "PASS" if n_fail == 0 else "FAIL"
 
     json_report = {
-        "pipeline": "benchmark",
+        "pipeline": "training",
         "timestamp": timestamp,
         "overall_status": overall,
         "total_elapsed_seconds": round(total_elapsed, 3),
@@ -137,23 +147,24 @@ def _write_report(
         },
         "experiments": [r.to_dict() for r in results],
     }
-    json_path = report_dir / f"benchmark_report_{timestamp}.json"
+    json_path = report_dir / f"training_report_{timestamp}.json"
     json_path.write_text(json.dumps(json_report, indent=2), encoding="utf-8")
 
     lines = [
-        f"# Benchmark Pipeline Report — {timestamp}",
+        f"# Training Pipeline Report — {timestamp}",
         "",
         f"**Overall**: {overall}  |  "
         f"**Pass**: {n_pass}  |  **Fail**: {n_fail}  |  "
         f"**Wall time**: {total_elapsed:.1f}s",
         "",
-        "| # | Experiment | Hypothesis | Status | Time (s) |",
-        "|---|-----------|-----------|--------|----------|",
+        "| # | Experiment | Hypothesis | Module | Status | Time (s) | Output Files |",
+        "|---|-----------|-----------|--------|--------|----------|-------------|",
     ]
     for idx, r in enumerate(results, start=1):
+        files_str = ", ".join(Path(f).name for f in r.output_files) or "—"
         lines.append(
             f"| {idx} | {r.name} | {r.hypothesis} | "
-            f"{r.status} | {r.elapsed_seconds:.1f} |"
+            f"`{r.module}` | {r.status} | {r.elapsed_seconds:.1f} | {files_str} |"
         )
     if n_fail > 0:
         lines.extend(["", "## Failures", ""])
@@ -163,41 +174,22 @@ def _write_report(
                 lines.append(f"```\n{r.error_message}\n```")
     lines.append("")
 
-    md_path = report_dir / f"benchmark_report_{timestamp}.md"
+    md_path = report_dir / f"training_report_{timestamp}.md"
     md_path.write_text("\n".join(lines), encoding="utf-8")
     return md_path
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Main
-# ──────────────────────────────────────────────────────────────────────
-
-def build_benchmark_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
-    """Build the ordered list of benchmark experiments."""
-    return [
-        (
-            "Independent-Seed Benchmark Rerun",
-            "H5",
-            _make_independent_seed_rerun(output_dir, config_name),
-        ),
-    ]
 
 
 def configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
-        format="[%(asctime)s][%(levelname)s][benchmark] %(message)s",
+        format="[%(asctime)s][%(levelname)s][training] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description=(
-            "Run z2 benchmark experiments (H5). "
-            "NOTE: The independent-seed rerun is simulation-heavy "
-            "and may take ~30 minutes."
-        ),
+        description="Run z2 neural training experiments (Phase 2).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
@@ -212,21 +204,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    experiments = build_benchmark_experiments(args.output_dir, args.config_name)
+    experiments = build_training_experiments()
 
     if args.dry_run:
         log.info("DRY RUN — %d experiments would be executed:", len(experiments))
-        for name, hyp, _ in experiments:
-            log.info("  • %s (%s)", name, hyp)
+        for name, hyp, module in experiments:
+            log.info("  • %s (%s) -> %s", name, hyp, module)
         return 0
 
-    log.info("Starting benchmark pipeline: %d experiments", len(experiments))
+    log.info("Starting training pipeline: %d experiments", len(experiments))
     t_pipeline = time.perf_counter()
 
     results: list[ExperimentResult] = []
-    for name, hypothesis, func in experiments:
-        result = _run_experiment(name, hypothesis, func)
+    for name, hypothesis, module in experiments:
+        result = _run_module(name, hypothesis, module, args.config_name, args.output_dir)
         results.append(result)
+        # If BC Pretraining fails, we probably shouldn't attempt REINFORCE.
+        if result.status == "FAIL":
+            log.error("Pipeline halted due to failure in %s", name)
+            break
 
     total_elapsed = time.perf_counter() - t_pipeline
 
@@ -235,15 +231,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     log.info("")
     log.info("=" * 70)
-    log.info("  BENCHMARK PIPELINE COMPLETE")
+    log.info("  TRAINING PIPELINE COMPLETE")
     log.info("  Pass: %d / %d  |  Fail: %d  |  Wall time: %.1fs",
-             n_pass, len(results), n_fail, total_elapsed)
+             n_pass, len(experiments), n_fail, total_elapsed)
     log.info("=" * 70)
 
     report_path = _write_report(results, args.report_dir, total_elapsed)
     log.info("Report: %s", report_path)
 
-    return 0 if n_fail == 0 else 1
+    return 0 if n_fail == 0 and len(results) == len(experiments) else 1
 
 
 if __name__ == "__main__":

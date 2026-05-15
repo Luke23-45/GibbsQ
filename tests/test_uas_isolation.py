@@ -1,6 +1,6 @@
-import numpy as np
+﻿import numpy as np
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
+from studies.analysis.common.metrics import time_averaged_queue_lengths
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.policies import JSSQRouting, UASRouting
 from gibbsq.qroute.engines.numpy_engine import run_replications
@@ -67,3 +67,5 @@ def test_isolated_numpy_ssa_reproduces_uas_below_jssq_on_policy_benchmark():
     uas_mean = float(np.mean([time_averaged_queue_lengths(r, burn_in).sum() for r in uas_results]))
 
     assert uas_mean > jssq_mean
+
+

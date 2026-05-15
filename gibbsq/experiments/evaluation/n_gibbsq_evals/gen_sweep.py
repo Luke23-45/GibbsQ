@@ -1,4 +1,4 @@
-"""
+﻿"""
 N-GibbsQ generalization sweep.
 
 Tests N-GibbsQ generalization to unseen configurations at FIXED server count
@@ -38,8 +38,8 @@ import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
-from gibbsq.qroute.analysis.metrics import time_averaged_queue_lengths
-from gibbsq.qroute.analysis.plot_profiles import ExperimentPlotContext
+from studies.analysis.common.metrics import time_averaged_queue_lengths
+from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core import constants
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import load_experiment_config
@@ -58,6 +58,7 @@ log = logging.getLogger(__name__)
 NEURAL_EVAL_MODE = "deterministic"
 PUBLICATION_BASELINE_POLICY_NAME = "reflected_uas"
 PUBLICATION_BASELINE_LABEL = "Reflected UAS"
+PUBLICATION_BASELINE_ALPHA = 20.0
 
 
 def evaluate_model(model: NeuralRouter, Q: Float[Array, "num_servers"]) -> Float[Array, "num_servers"]:
@@ -86,9 +87,9 @@ class GeneralizationSweeper:
         """Run the multi-dimensional sweep."""
         k_load, k_grid = jax.random.split(key)
 
-        project_root = Path(__file__).resolve().parents[3]
+        project_root = Path(__file__).resolve().parents[4]
         output_root = self.run_dir.parent.parent
-        model_path = resolve_model_pointer(project_root, output_root, allow_bc=False, allow_legacy=False)
+        model_path = resolve_model_pointer(project_root, output_root, allow_bc=True, allow_legacy=False)
 
         scale_vals = list(self.cfg.generalization.scale_vals)
         rho_vals = list(self.cfg.generalization.rho_grid_vals)
@@ -142,7 +143,7 @@ class GeneralizationSweeper:
                     )
                     baseline_policy = build_policy_by_name(
                         baseline_policy_name,
-                        alpha=float(self.cfg.system.alpha),
+                        alpha=PUBLICATION_BASELINE_ALPHA,
                         mu=mu_np,
                     )
                     max_events = compute_poisson_max_steps(lambda_rate, mu_np, self.ssa_sim_time)
@@ -210,7 +211,7 @@ class GeneralizationSweeper:
 
     def _plot_heatmap(self, grid, scale_vals, rho_vals):
         """Generate generalization heatmap."""
-        from gibbsq.qroute.analysis.plotting import plot_improvement_heatmap
+        from studies.analysis.common.visualization.plotting import plot_improvement_heatmap
 
         plot_path = figure_path(self.run_dir, "generalization_heatmap")
         fig = plot_improvement_heatmap(
@@ -259,7 +260,7 @@ class GeneralizationSweeper:
         )
 
 
-@hydra.main(version_base=None, config_path="../../../configs", config_name="default")
+@hydra.main(version_base=None, config_path="../../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):
     cfg, resolved_raw_cfg = load_experiment_config(raw_cfg, "generalize")
 
@@ -282,3 +283,5 @@ def main(raw_cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
+
+

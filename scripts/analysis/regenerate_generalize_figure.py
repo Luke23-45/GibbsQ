@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Regenerate the premium generalization heatmap from frozen run artifacts."""
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from gibbsq.qroute.analysis.generalize_regeneration import regenerate_generalize_figure
+from studies.analysis.regeneration.generalize_regeneration import regenerate_generalize_figure
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,3 +50,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -16,6 +16,9 @@ import logging
 import sys
 import time
 from pathlib import Path
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from analysis.common.io import resolve_data_root
 
@@ -38,33 +41,18 @@ def main(args: argparse.Namespace) -> None:
 
     # Tables
     logger.info("\n── Phase 1: Tables ──")
-    from analysis.scripts.generate_tables import main as gen_tables
-    table_args = argparse.Namespace(
-        data_dir=str(data_root),
-        table_dir=str(base_output / "tables"),
-        verbose=args.verbose,
-    )
-    gen_tables(table_args)
+    from analysis.scripts.generate_tables import generate_all_tables
+    generate_all_tables(str(data_root), str(base_output / "tables"))
 
     # Figures
     logger.info("\n── Phase 2: Figures ──")
-    from analysis.scripts.generate_figures import main as gen_figures
-    fig_args = argparse.Namespace(
-        data_dir=str(data_root),
-        figure_dir=str(base_output / "figures"),
-        verbose=args.verbose,
-    )
-    gen_figures(fig_args)
+    from analysis.scripts.generate_figures import generate_all_figures
+    generate_all_figures(str(data_root), str(base_output / "figures"))
 
     # Statistics
     logger.info("\n── Phase 3: Statistics ──")
-    from analysis.scripts.generate_stats import main as gen_stats
-    stats_args = argparse.Namespace(
-        data_dir=str(data_root),
-        report_dir=str(base_output / "reports"),
-        verbose=args.verbose,
-    )
-    gen_stats(stats_args)
+    from analysis.scripts.generate_stats import generate_statistical_summary
+    generate_statistical_summary(data_root, base_output / "reports")
 
     elapsed = time.time() - t0
     logger.info("=" * 60)
