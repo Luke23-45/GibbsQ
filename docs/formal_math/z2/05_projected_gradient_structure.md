@@ -1,6 +1,6 @@
 # Hidden Convex Structure Of The Reflected ODE
 
-This note shows that the reflected reflected-UAS ODE is a projected gradient
+This note shows that the reflected Reflected-UAS ODE is a projected gradient
 system for an explicit convex potential. That observation is the key step that
 turns the equilibrium formula into a genuine deterministic convergence theorem.
 
@@ -169,67 +169,66 @@ Let
 \[
 s_i := \frac{q_i}{\mu_i^\beta},
 \qquad
-m := \min_{1\le i\le N} s_i.
-\]
-
-Then \(s_i\ge m\) for all \(i\), so
-
-\[
-W(q)
-=
-\sum_{i=1}^N \mu_i^\gamma e^{-\alpha c/\mu_i^\beta}e^{-\alpha s_i}
-\le
-e^{-\alpha m}
-\sum_{i=1}^N \mu_i^\gamma e^{-\alpha c/\mu_i^\beta}.
-\]
-
-Let
-
-\[
-C := \sum_{i=1}^N \mu_i^\gamma e^{-\alpha c/\mu_i^\beta}.
+a_i := \mu_i^\gamma e^{-\alpha c/\mu_i^\beta}.
 \]
 
 Then
 
 \[
-\log W(q)\le \log C-\alpha m.
+H(q)=\sum_{i=1}^N \mu_i s_i
++\frac{\lambda}{\alpha}\log\!\left(\sum_{i=1}^N a_i e^{-\alpha s_i}\right).
 \]
 
-Substituting into \(H\) gives
+Choose the fixed probability vector
+
+\[
+\rho_i:=\frac{\mu_i}{\Lambda},
+\qquad
+\Lambda:=\sum_{i=1}^N\mu_i.
+\]
+
+For any real numbers \(x_i\), \(\max_i x_i\ge \sum_i\rho_i x_i\), and
+\(\log\sum_i e^{x_i}\ge \max_i x_i\). Applying this with
+\(x_i=\log a_i-\alpha s_i\) gives
+
+\[
+\log\!\left(\sum_{i=1}^N a_i e^{-\alpha s_i}\right)
+\ge
+\sum_{i=1}^N \rho_i\log a_i
+-\alpha\sum_{i=1}^N \rho_i s_i.
+\]
+
+Therefore
 
 \[
 H(q)
 \ge
-\sum_{i=1}^N \mu_i s_i - \lambda m + \frac{\lambda}{\alpha}\log C.
-\]
-
-Rewrite the first term as
-
-\[
 \sum_{i=1}^N \mu_i s_i
-=
-\sum_{i=1}^N \mu_i(s_i-m)+\Lambda m.
+-\lambda\sum_{i=1}^N \rho_i s_i
++\frac{\lambda}{\alpha}\sum_{i=1}^N\rho_i\log a_i.
 \]
 
-Hence
+Since \(\rho_i=\mu_i/\Lambda\), this becomes
 
 \[
 H(q)
 \ge
-\sum_{i=1}^N \mu_i(s_i-m)
-+
-(\Lambda-\lambda)m
-+
-\frac{\lambda}{\alpha}\log C.
+\left(1-\frac{\lambda}{\Lambda}\right)
+\sum_{i=1}^N \mu_i s_i
++ C,
 \]
 
-Every term on the right except the constant is nonnegative because
-\(\lambda<\Lambda\) and \(s_i\ge m\).
+where
 
-If \(\|q\|_2\to\infty\), then either \(m\to\infty\) or
-\(\max_i(s_i-m)\to\infty\). In the first case the term \((\Lambda-\lambda)m\)
-forces \(H(q)\to\infty\). In the second case at least one term
-\(\mu_i(s_i-m)\to\infty\), which again forces \(H(q)\to\infty\). `QED`
+\[
+C:=\frac{\lambda}{\alpha}\sum_{i=1}^N\rho_i\log a_i
+\]
+
+is finite. Because \(\lambda<\Lambda\) and every \(\mu_i>0\), the coefficient
+\(1-\lambda/\Lambda\) is strictly positive, and
+\(\sum_i\mu_i s_i=\sum_i\mu_i^{1-\beta}q_i\to\infty\) whenever
+\(\|q\|_2\to\infty\) with \(q\in\mathbb R_+^N\). Hence
+\(H(q)\to+\infty\). `QED`
 
 ## 6. Constrained Minimizer And KKT Conditions
 

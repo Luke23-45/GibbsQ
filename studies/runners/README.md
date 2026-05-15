@@ -126,9 +126,9 @@ python -m studies.runners.run_neural_support --dry-run
 
 Purpose:
 - supports `H1`, `H2`, `H3`, and `H4`
+- covers publication-facing verification experiments only
 
 Experiments covered:
-- `Configuration Sanity Checks`
 - `Boundary Equilibrium Verification`
 - `Reflected-ODE Multi-Start Convergence`
 - `CTMC Generator Boundary-Mismatch Demo`
@@ -136,18 +136,33 @@ Experiments covered:
 - `Exhaustive Small-Grid Drift Audit`
 - `Theorem-Constant Parameter Sweep`
 - `Consolidated CTMC Support Summary`
-- `Engine Parity Check (NumPy vs JAX)`
-- `Theorem-Backed Drift Verification`
-- `Reflected UAS Exploratory Proof Search`
 
 Outputs:
 - experiment artifacts under the selected `--output-dir`
 - pipeline report under the selected `--report-dir`
 
 Notes:
-- this runner covers the main verification layer
+- this runner covers the publication-facing verification layer
 - it does not run neural studies
 - it does not run archived experiments
+
+### `run_verification_checks.py`
+
+Purpose:
+- runs support-only verification checks that are not publication-facing experiments
+
+Checks covered:
+- `Configuration Sanity Checks`
+- `Engine Parity Check (NumPy vs JAX)`
+- `Theorem-Backed Drift Verification`
+- `Reflected UAS Exploratory Proof Search`
+
+Outputs:
+- check artifacts under the selected `--output-dir`
+- pipeline report under the selected `--report-dir`
+
+Notes:
+- use this runner when you want operational consistency checks without mixing them into the paper-facing experiment rollup
 
 ### `run_benchmarks.py`
 

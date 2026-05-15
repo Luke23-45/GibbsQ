@@ -1,7 +1,7 @@
 # Global Convergence Of The Reflected ODE
 
 This note completes the deterministic part of the theory. It proves that the
-reflected reflected-UAS ODE converges globally to the unique boundary
+reflected Reflected-UAS ODE converges globally to the unique boundary
 equilibrium characterized earlier.
 
 ## 1. Projected Drift Form
@@ -203,10 +203,15 @@ Whenever the trajectory hits \(V\), it must remain inside \(U\) for at least
 \(\rho/M\) units of time before it can exit \(U\). Hence each visit to \(V\)
 decreases \(H\) by at least \(\varepsilon\rho/M\).
 
-Because \(q(t_n)\in V\) for infinitely many \(n\), this would force
-\(H(q(t))\) to decrease by an unbounded total amount along an infinite
-subsequence. That is impossible because \(H\) is bounded below by \(H(q^*)\).
-This contradiction proves the claim.
+Choose a subsequence of visits recursively as follows. Let \(s_1\) be any time
+with \(q(s_1)\in V\). Having chosen \(s_k\), choose \(s_{k+1}>s_k+\rho/M\)
+with \(q(s_{k+1})\in V\), which is possible because \(z\) is an accumulation
+point and the visits to \(V\) occur at arbitrarily large times. The intervals
+\([s_k,s_k+\rho/M]\) are disjoint, and the trajectory remains in \(U\) on each
+of them. Hence each selected visit decreases \(H\) by at least
+\(\varepsilon\rho/M\). This would force \(H(q(t))\) to decrease by an
+unbounded total amount, which is impossible because \(H\) is bounded below by
+\(H(q^*)\). This contradiction proves the claim.
 
 So every accumulation point is an equilibrium, hence every accumulation point is
 the unique point \(q^*\).
@@ -219,7 +224,7 @@ Because the trajectory is precompact and all of its accumulation points equal
 **Theorem 2 (proved deterministic convergence theorem).**
 Fix \(\alpha>0\), \(\beta>0\), \(\gamma\in\mathbb R\), \(c\ge 0\), service rates
 \(\mu_i>0\), and \(\lambda<\Lambda=\sum_i\mu_i\). Then the reflected
-reflected-UAS ODE on \(\mathbb R_+^N\) has a unique equilibrium \(q^*\), and
+Reflected-UAS ODE on \(\mathbb R_+^N\) has a unique equilibrium \(q^*\), and
 every reflected trajectory satisfies
 
 \[

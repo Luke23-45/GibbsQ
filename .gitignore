@@ -72,3 +72,5 @@ docs/formal_math/z1/notes.md
 docs/dev/zq.md
 docs
 legacy
+engine_parity_rows.jsonl
+errors.md

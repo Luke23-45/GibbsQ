@@ -24,18 +24,28 @@ be retained.
 
 The review is also right that the negative square term in
 [08_ctmc_generator_analysis.md](./08_ctmc_generator_analysis.md) is uniformly
-bounded in magnitude, because
+bounded in magnitude. The correct bound is obtained from
 
 \[
 0\le \lambda p_i(Q)\le \lambda
 \quad\Longrightarrow\quad
-0\le \partial_i H(Q)\le \mu_i^{1-\beta}.
+\frac{\mu_i-\lambda}{\mu_i^\beta}
+\le
+\partial_i H(Q)
+\le
+\mu_i^{1-\beta}.
 \]
 
 Hence
 
 \[
-0\le \mu_i^\beta \bigl(\partial_i H(Q)\bigr)^2 \le \mu_i^{2-\beta}.
+0\le \mu_i^\beta \bigl(\partial_i H(Q)\bigr)^2
+\le
+\mu_i^\beta
+\max\!\left\{
+\left(\frac{\mu_i-\lambda}{\mu_i^\beta}\right)^2,
+\left(\mu_i^{1-\beta}\right)^2
+\right\}.
 \]
 
 So the `H`-based generator decomposition does **not** directly produce a drift

@@ -151,11 +151,26 @@ because \(\mu_i\theta_i/K \to 0\) for each \(i\).
 
 By continuity, at least one solution \(K^*>0\) exists.
 
-To prove uniqueness, note that if \(G(K)=\lambda<\Lambda\), then at least one
-term must be in the decaying branch \(\mu_i\theta_i/K\); otherwise
-\(G(K)=\Lambda\). On any interval containing such a point, \(G\) is strictly
-decreasing because at least one decaying term contributes a strictly negative
-slope. Therefore \(G(K)=\lambda\) can be solved at only one value \(K^*\). `QED`
+To prove uniqueness, let
+
+\[
+\theta_{\min}:=\min_{1\le i\le N}\theta_i.
+\]
+
+For \(0<K\le \theta_{\min}\), every term equals \(\mu_i\), so
+\(G(K)=\Lambda\). Hence any solution of \(G(K)=\lambda<\Lambda\) must satisfy
+\(K>\theta_{\min}\).
+
+Now take \(K_2>K_1>\theta_{\min}\). Since \(K_1>\theta_{\min}\), at least one
+index \(i\) satisfies \(\theta_i<K_1\), and for every such index
+\[
+\frac{\mu_i\theta_i}{K_2}<\frac{\mu_i\theta_i}{K_1}<\mu_i.
+\]
+That term strictly decreases from \(K_1\) to \(K_2\), while every other term is
+nonincreasing. Therefore \(G(K_2)<G(K_1)\) on
+\((\theta_{\min},\infty)\). Since every solution lies in this interval,
+\(G(K)=\lambda\) has at most one solution. Together with existence, this gives
+uniqueness. `QED`
 
 ## 6. Exact Equilibrium Formula
 

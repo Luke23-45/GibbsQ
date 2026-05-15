@@ -417,8 +417,8 @@ def _write_report(
 # Main
 # ──────────────────────────────────────────────────────────────────────
 
-def build_verification_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
-    """Build the ordered list of verification experiments.
+def build_verification_core_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
+    """Build the publication-facing verification experiments.
 
     Returns
     -------
@@ -460,6 +460,12 @@ def build_verification_experiments(output_dir: str, config_name: str) -> list[tu
             "H3, H4",
             _make_ctmc_support_summary(output_dir),
         ),
+    ]
+
+
+def build_verification_check_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
+    """Build the support checks that are not paper-facing experiments."""
+    return [
         (
             "Configuration Sanity Checks",
             "Pre-flight",
@@ -480,6 +486,19 @@ def build_verification_experiments(output_dir: str, config_name: str) -> list[tu
             "Verification",
             _make_proof_search(config_name, output_dir),
         ),
+    ]
+
+
+def build_verification_experiments(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
+    """Build the publication-facing verification experiment suite."""
+    return build_verification_core_experiments(output_dir, config_name)
+
+
+def build_verification_full_suite(output_dir: str, config_name: str) -> list[tuple[str, str, Callable]]:
+    """Build the legacy combined suite: experiments plus support checks."""
+    return [
+        *build_verification_core_experiments(output_dir, config_name),
+        *build_verification_check_experiments(output_dir, config_name),
     ]
 
 

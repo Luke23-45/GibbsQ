@@ -11,6 +11,7 @@ Use the labels exactly as follows:
 - `correct as is`
 - `needs framing update`
 - `needs theorem-language tightening`
+- `patched during publication review`
 - `archive/support only`
 
 ## Audit Summary
@@ -18,12 +19,14 @@ Use the labels exactly as follows:
 ### Theorem core
 
 - `01_reflected_fluid_model.md` - `correct as is`
-- `02_boundary_equilibrium.md` - `correct as is`
-- `05_projected_gradient_structure.md` - `correct as is`
-- `06_global_convergence_reflected_ode.md` - `correct as is`
+- `02_boundary_equilibrium.md` - `patched during publication review`
+- `05_projected_gradient_structure.md` - `patched during publication review`
+- `06_global_convergence_reflected_ode.md` - `patched during publication review`
 
-No proof gap was identified during the finalization pass. These files remain the
-active deterministic theorem backbone.
+The publication review tightened the scalar uniqueness proof in file `02`,
+corrected a proof-sign error in the coercivity argument in file `05`, and
+tightened the infinite-visits argument in file `06`. After these patches, these
+files remain the active deterministic theorem backbone.
 
 ### Framing and control layer
 
@@ -41,10 +44,12 @@ had to do, not unresolved follow-up by default.
 
 - `07_ctmc_scaling_gap.md` - `needs framing update`
 - `08_ctmc_generator_analysis.md` - `correct as is`
-- `09_review_of_suggestions.md` - `needs framing update`
+- `09_review_of_suggestions.md` - `patched during publication review`
 
 These files remain active because they document real mathematical corrections,
-not dead exploratory work.
+not dead exploratory work. The publication review corrected the uniform
+boundedness estimate in file `09`; the conclusion remains unchanged, but the
+displayed bound now allows \(\partial_i H\) to be negative.
 
 ### Conditional stochastic route
 
