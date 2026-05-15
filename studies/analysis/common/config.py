@@ -7,14 +7,14 @@ the location of this file on disk.
 
 Usage::
 
-    from analysis.common.config import get_config
+    from studies.analysis.common.config import get_config
 
     cfg = get_config()
     data_root = cfg.paths.data_root
 
 Override at runtime via OmegaConf merge::
 
-    from analysis.common.config import get_config
+    from studies.analysis.common.config import get_config
     cfg = get_config(overrides={"paths.data_root": "/custom/path"})
 """
 

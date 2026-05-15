@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from analysis.common.io import resolve_data_root
+from studies.analysis.common.io import resolve_data_root
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +41,17 @@ def main(args: argparse.Namespace) -> None:
 
     # Tables
     logger.info("\n── Phase 1: Tables ──")
-    from analysis.scripts.generate_tables import generate_all_tables
+    from studies.analysis.scripts.generate_tables import generate_all_tables
     generate_all_tables(str(data_root), str(base_output / "tables"))
 
     # Figures
     logger.info("\n── Phase 2: Figures ──")
-    from analysis.scripts.generate_figures import generate_all_figures
+    from studies.analysis.scripts.generate_figures import generate_all_figures
     generate_all_figures(str(data_root), str(base_output / "figures"))
 
     # Statistics
     logger.info("\n── Phase 3: Statistics ──")
-    from analysis.scripts.generate_stats import generate_statistical_summary
+    from studies.analysis.scripts.generate_stats import generate_statistical_summary
     generate_statistical_summary(data_root, base_output / "reports")
 
     elapsed = time.time() - t0

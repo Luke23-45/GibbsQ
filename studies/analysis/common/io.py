@@ -196,7 +196,7 @@ def resolve_data_root(
     """
     # Use the centralized config
     try:
-        from analysis.common.config import get_data_root
+        from studies.analysis.common.config import get_data_root
         data_root = get_data_root()
         if data_root.exists():
             logger.debug("Data root from config: %s", data_root)

@@ -10,7 +10,7 @@ Design principles
 
 Usage::
 
-    from analysis.common.style import apply_thesis_style, create_figure, save_figure
+    from studies.analysis.common.style import apply_thesis_style, create_figure, save_figure
 
     with apply_thesis_style():
         fig, ax = create_figure(width="single")

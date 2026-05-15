@@ -15,8 +15,8 @@ from typing import List
 
 import numpy as np
 
-from analysis.common.io import find_latest_csv, read_csv_rows
-from analysis.common.style import save_figure, get_status_color
+from studies.analysis.common.io import find_latest_csv, read_csv_rows
+from studies.analysis.common.style import save_figure, get_status_color
 
 logger = logging.getLogger(__name__)
 

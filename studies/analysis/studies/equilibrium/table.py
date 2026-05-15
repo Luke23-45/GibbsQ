@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import List
 
-from analysis.common.io import find_latest_csv, read_csv_rows, write_file
+from studies.analysis.common.io import find_latest_csv, read_csv_rows, write_file
 
 logger = logging.getLogger(__name__)
 
