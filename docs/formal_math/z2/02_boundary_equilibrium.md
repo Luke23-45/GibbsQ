@@ -244,9 +244,9 @@ q^*
 (0,0,0,0,0,0.05904346,0.11688593,0.17325504,0.22833526,0.28227270).
 \]
 
-This matches the stored numerical attractor in
-[direction1_fluid.json](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direction12_probe/run_20260512_194636/artifacts/direction1_fluid.json)
-to machine precision.
+This matches the numerical attractor recorded in the current
+[boundary_equilibrium_verification_20260515_091832.csv](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/data/boundary_equilibrium_verification_20260515_091832.csv)
+artifact to machine precision.
 
 So the current numerical evidence is fully consistent with the corrected
 boundary-equilibrium formula.

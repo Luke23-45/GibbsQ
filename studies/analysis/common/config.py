@@ -42,8 +42,15 @@ def _detect_project_root() -> Path:
 
 
 def _detect_data_root() -> Path:
-    """Resolve the outputs/data/ directory."""
-    return _detect_project_root() / "outputs" / "data"
+    """Resolve the experiment-data directory."""
+    project_root = _detect_project_root()
+    for candidate in (
+        project_root / "outputs" / "final",
+        project_root / "outputs" / "data",
+    ):
+        if candidate.exists():
+            return candidate
+    return project_root / "outputs" / "final"
 
 
 def get_config(

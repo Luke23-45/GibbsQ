@@ -28,14 +28,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 log = logging.getLogger(__name__)
 
-DEFAULT_DATA_DIR = "outputs/data"
+DEFAULT_DATA_DIR = "outputs/final"
 DEFAULT_TABLE_DIR = "outputs/tables"
 
 
 def _find_latest_csv(data_dir: Path, prefix: str) -> Path | None:
     """Find the most recent CSV file matching a given prefix."""
     candidates = sorted(
-        data_dir.glob(f"{prefix}_*.csv"),
+        data_dir.rglob(f"{prefix}_*.csv"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

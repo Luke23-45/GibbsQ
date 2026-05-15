@@ -26,6 +26,7 @@ The model is evaluated only at the same N used for training.
 Both sides measured on the true Gillespie SSA (not DGA surrogate).
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -33,13 +34,11 @@ import equinox as eqx
 import hydra
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
 from studies.analysis.common.metrics import time_averaged_queue_lengths
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core import constants
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import load_experiment_config
@@ -50,7 +49,7 @@ from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.qroute.utils.progress import create_progress, iter_progress
-from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import metadata_path, metrics_path
 
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -198,7 +197,19 @@ class GeneralizationSweeper:
                     )
                     cell_bar.update(1)
 
-        self._plot_heatmap(grid, scale_vals, rho_vals)
+        metadata_path(self.run_dir, "generalization_grid.json").write_text(
+            json.dumps(
+                {
+                    "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
+                    "baseline_label": PUBLICATION_BASELINE_LABEL,
+                    "grid": grid.tolist(),
+                    "scale_vals": scale_vals,
+                    "rho_vals": rho_vals,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         return {
             "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
             "baseline_label": PUBLICATION_BASELINE_LABEL,
@@ -208,57 +219,6 @@ class GeneralizationSweeper:
             "min_improvement_ratio": float(np.min(grid)) if grid.size else 0.0,
             "mean_improvement_ratio": float(np.mean(grid)) if grid.size else 0.0,
         }
-
-    def _plot_heatmap(self, grid, scale_vals, rho_vals):
-        """Generate generalization heatmap."""
-        from studies.analysis.common.visualization.plotting import plot_improvement_heatmap
-
-        plot_path = figure_path(self.run_dir, "generalization_heatmap")
-        fig = plot_improvement_heatmap(
-            grid=grid,
-            x_labels=[str(r) for r in rho_vals],
-            y_labels=[f"{s}x" for s in scale_vals],
-            x_axis_name=r"Load Factor $\rho$",
-            y_axis_name="Service Rate Scale (x base distribution)",
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-            context=ExperimentPlotContext(
-                experiment_id="generalize",
-                chart_name="plot_improvement_heatmap",
-                semantic_overrides={
-                    "axis_labels": {
-                        "y": "Service Rate Scale (x base distribution)",
-                        "colorbar": f"Improvement Ratio ({PUBLICATION_BASELINE_LABEL} / Neural)",
-                    },
-                },
-            ),
-        )
-        plt.close(fig)
-
-        log.info(f"Generalization analysis complete. Heatmap saved to {plot_path}.png, {plot_path}.pdf")
-
-        if self.run_logger:
-            try:
-                import wandb
-
-                self.run_logger.log(
-                    {"generalization_heatmap": wandb.Image(str(figure_path(self.run_dir, "generalization_heatmap").with_suffix(".png")))}
-                )
-            except Exception:
-                pass
-
-        append_metrics_jsonl(
-            {
-                "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
-                "baseline_label": PUBLICATION_BASELINE_LABEL,
-                "grid": grid.tolist(),
-                "scale_vals": scale_vals,
-                "rho_vals": rho_vals,
-            },
-            metrics_path(self.run_dir),
-        )
-
 
 @hydra.main(version_base=None, config_path="../../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):

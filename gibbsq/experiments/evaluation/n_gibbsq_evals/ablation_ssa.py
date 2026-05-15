@@ -23,14 +23,11 @@ from pathlib import Path
 import equinox as eqx
 import hydra
 import jax
-import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import PRNGKeyArray
 from omegaconf import DictConfig, OmegaConf
 
 from studies.analysis.common.metrics import time_averaged_queue_lengths
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
-from studies.analysis.common.visualization.plotting import plot_ablation_dual_panel
 from gibbsq.qroute.core.config import ExperimentConfig, load_experiment_config_chain, validate
 from gibbsq.qroute.core.neural_policies import NeuralRouter
 from gibbsq.qroute.core.policies import ReflectedUASRouting, JSSQRouting, UASRouting
@@ -39,7 +36,7 @@ from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy
 from gibbsq.qroute.utils.progress import create_progress
-from gibbsq.qroute.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import artifacts_dir, metadata_path, metrics_path
 from gibbsq.experiments.training.train_reinforce import ReinforceTrainer
 
 log = logging.getLogger(__name__)
@@ -150,8 +147,6 @@ class AblationReinforceTrainer(ReinforceTrainer):
         return super().bootstrap_from_expert(policy_net, value_net, key, jsq_limit, random_limit, denom)
 
     def _save_assets(self, *args, **kwargs):
-        from studies.analysis.common.visualization.plotting import plot_ablation_training_curve
-
         policy_net = args[0] if len(args) > 0 else kwargs.get("policy_net")
         value_net = args[1] if len(args) > 1 else kwargs.get("value_net")
         history_loss = args[2] if len(args) > 2 else kwargs.get("history_loss")
@@ -165,26 +160,21 @@ class AblationReinforceTrainer(ReinforceTrainer):
         value_path = artifacts / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
-        plot_path = figure_path(self.run_dir, "ablation_training_curve")
-        fig = plot_ablation_training_curve(
-            metrics={
-                "epoch": list(range(len(history_loss))),
-                "training_loss": history_loss,
-                "performance_index": history_reward,
-                "variant_label": self.run_dir.name,
-                "preprocessing": self.cfg.neural.preprocessing,
-                "init_type": self.cfg.neural.init_type,
-                "train_epochs": len(history_loss),
-            },
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-            context=ExperimentPlotContext(
-                experiment_id="ablation",
-                chart_name="plot_ablation_training_curve",
+        metadata_path(self.run_dir, "ablation_training_summary.json").write_text(
+            json.dumps(
+                {
+                    "epoch": list(range(len(history_loss))),
+                    "training_loss": history_loss,
+                    "performance_index": history_reward,
+                    "variant_label": self.run_dir.name,
+                    "preprocessing": self.cfg.neural.preprocessing,
+                    "init_type": self.cfg.neural.init_type,
+                    "train_epochs": len(history_loss),
+                },
+                indent=2,
             ),
+            encoding="utf-8",
         )
-        plt.close(fig)
         log.info("Saved variant artifacts in %s", self.run_dir)
 
 
@@ -440,28 +430,6 @@ def _write_summary_artifacts(run_dir: Path, summary_rows: list[dict]) -> None:
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
 
 
-def _plot_delta_vs_reflected_uas(summary_rows: list[dict], run_dir: Path) -> None:
-    names = [row["variant"] for row in summary_rows]
-    delta_means = [float(row.get("delta_vs_reflected_uas_mean", 0.0)) for row in summary_rows]
-    delta_cis = [float(row.get("delta_vs_reflected_uas_ci95_half_width", 0.0)) for row in summary_rows]
-    x = np.arange(len(names))
-
-    fig, ax = plt.subplots(figsize=(12.5, 6.5))
-    colors = ["#009E73" if value <= 0 else "#D55E00" for value in delta_means]
-    ax.bar(x, delta_means, yerr=delta_cis, color=colors, capsize=4, edgecolor="#333333", alpha=0.9)
-    ax.axhline(0.0, color="#444444", linewidth=1.1, linestyle="--")
-    ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=22, ha="right")
-    ax.set_ylabel(r"$\Delta \mathbb{E}[Q_{total}]$ vs Reflected UAS")
-    ax.set_title("Ablation Study: Paired Delta vs Reflected UAS")
-    ax.grid(True, axis="y", linestyle=(0, (3, 3)), alpha=0.25)
-    fig.tight_layout()
-    save_path = figure_path(run_dir, "ablation_delta_vs_reflected_uas")
-    fig.savefig(save_path.with_suffix(".png"), dpi=300, bbox_inches="tight")
-    fig.savefig(save_path.with_suffix(".pdf"), bbox_inches="tight")
-    plt.close(fig)
-
-
 def run_ablation(
     cfg: ExperimentConfig,
     run_dir: Path,
@@ -558,39 +526,17 @@ def run_ablation(
 
     _write_summary_artifacts(run_dir, summary_rows)
 
-    names = [row["variant"] for row in summary_rows]
-    values = [row["mean_q_total"] for row in summary_rows]
-    ci_values = [row["ci95_half_width"] for row in summary_rows]
-    plot_path = figure_path(run_dir, "ablation_ssa")
-    fig = plot_ablation_dual_panel(
-        variant_names=names,
-        mean_values=values,
-        se_values=ci_values,
-        save_path=plot_path,
-        theme="publication",
-        formats=["png", "pdf"],
-        context=ExperimentPlotContext(
-            experiment_id="ablation",
-            chart_name="plot_ablation_dual_panel",
+    metadata_path(run_dir, "ablation_best_variant.json").write_text(
+        json.dumps(
+            {
+                "best_neural_variant": best_neural_name,
+                "best_neural_mean_q_total": float(best_neural_metrics["mean_q_total"]),
+                "summary_rows": summary_rows,
+            },
+            indent=2,
         ),
+        encoding="utf-8",
     )
-    plt.close(fig)
-
-    _plot_delta_vs_reflected_uas(summary_rows, run_dir)
-
-    if run_logger:
-        try:
-            import wandb
-
-            run_logger.log(
-                {
-                    "ablation_ssa_plot": wandb.Image(str(plot_path.with_suffix(".png"))),
-                    "best_neural_variant": best_neural_name,
-                    "best_neural_mean_q_total": float(best_neural_metrics["mean_q_total"]),
-                }
-            )
-        except Exception:
-            pass
 
 
 def main(raw_cfg: DictConfig):

@@ -47,10 +47,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_CONFIG_NAME = "final_experiment"
 
 BENCHMARK_ALPHA = 20.0
@@ -246,9 +254,23 @@ def run_theorem_constant_sweep(
         len(c_values),
     )
 
+    run_dir, _ = create_run_capsule(output_dir, "theorem_constant_sweep")
+    attach_run_log_handler(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "theorem_constant_sweep",
+            "output_dir": str(output_dir),
+            "config_name": config_name,
+            "beta_values": list(beta_values),
+            "gamma_values": list(gamma_values),
+            "c_values": list(c_values),
+        },
+    )
+
     writer = ExperimentCSVWriter(
         experiment_name="theorem_constant_sweep",
-        output_dir=output_dir,
+        output_dir=metrics_dir(run_dir),
         columns=columns,
         metadata={
             "hypothesis": "H4",
@@ -269,7 +291,12 @@ def run_theorem_constant_sweep(
     n_certified = 0
     n_non_positive = 0
 
-    for beta, gamma, c_val in itertools.product(beta_values, gamma_values, c_values):
+    parameter_grid = list(itertools.product(beta_values, gamma_values, c_values))
+    for beta, gamma, c_val in iter_progress(
+        parameter_grid,
+        total=len(parameter_grid),
+        desc="theorem sweep",
+    ):
         if beta <= 0:
             log.warning("Skipping invalid beta=%.4f", beta)
             continue
@@ -353,7 +380,7 @@ def run_theorem_constant_sweep(
     )
 
     csv_path = writer.finalize()
-    report_path = csv_path.with_name("theorem_constant_sweep_summary.md")
+    report_path = metadata_path(run_dir, "theorem_constant_sweep_summary.md")
     lines = [
         "# Theorem Constant Sweep Summary",
         "",

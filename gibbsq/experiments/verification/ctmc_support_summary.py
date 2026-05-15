@@ -38,10 +38,19 @@ from gibbsq.experiments.verification import ctmc_boundary_mismatch_demo as cbm  
 from gibbsq.experiments.verification import direct_ctmc_validation as dcv  # noqa: E402
 from gibbsq.experiments.verification import exhaustive_drift_audit as eda  # noqa: E402
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    resolve_output_root,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 
 
 def configure_logging() -> None:
@@ -60,6 +69,24 @@ def _bool_str(value: bool) -> str:
     return "true" if value else "false"
 
 
+def _find_latest_csv_recursive(root: Path, prefix: str) -> Path | None:
+    matches = sorted(
+        root.rglob(f"{prefix}_*.csv"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return matches[0] if matches else None
+
+
+def _find_latest_json_recursive(root: Path, name: str) -> Path | None:
+    matches = sorted(
+        root.rglob(name),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return matches[0] if matches else None
+
+
 def run_ctmc_support_summary(
     output_dir: str | Path,
     *,
@@ -74,14 +101,28 @@ def run_ctmc_support_summary(
 ) -> tuple[Path, Path]:
     """Run the consolidated CTMC support capsule."""
     protocol = protocol or dcv.ValidationProtocol()
-    base_dir = Path(output_dir)
+    base_dir = resolve_output_root(output_dir)
     boundary_systems = list(boundary_systems or cbm.demo_systems())
     exhaustive_systems = list(exhaustive_systems or eda.toy_systems())
     candidates = list(candidates or dcv.default_candidate_catalog())
 
+    run_dir, _ = create_run_capsule(base_dir, "ctmc_support_summary")
+    attach_run_log_handler(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "ctmc_support_summary",
+            "output_dir": str(base_dir),
+            "config_name": config_name,
+            "boundary_max_norm": boundary_max_norm,
+            "exhaustive_max_norm": exhaustive_max_norm,
+            "candidate_names": [candidate.name for candidate in candidates],
+        },
+    )
+
     component_writer = ExperimentCSVWriter(
         experiment_name="ctmc_support_components",
-        output_dir=base_dir,
+        output_dir=metrics_dir(run_dir),
         columns=[
             Column("component_type", str, "boundary_obstruction / direct_audit / exhaustive_audit"),
             Column("item_id", str, "System or candidate identifier"),
@@ -105,43 +146,67 @@ def run_ctmc_support_summary(
         },
     )
 
-    boundary_dir = base_dir / "boundary_mismatch"
-    _, boundary_summary_path = cbm.run_boundary_mismatch_demo(
-        boundary_systems,
-        boundary_dir,
-        max_norm=boundary_max_norm,
+    boundary_summary_path = _find_latest_csv_recursive(
+        base_dir,
+        "ctmc_boundary_mismatch_summary",
     )
+    if boundary_summary_path is None:
+        _, boundary_summary_path = cbm.run_boundary_mismatch_demo(
+            boundary_systems,
+            base_dir,
+            max_norm=boundary_max_norm,
+        )
     boundary_rows = _read_csv_rows(boundary_summary_path)
 
-    exhaustive_dir = base_dir / "exhaustive_drift"
-    _, exhaustive_summary_path = eda.run_exhaustive_audit(
-        exhaustive_systems,
-        exhaustive_dir,
-        max_norm=exhaustive_max_norm,
+    exhaustive_summary_path = _find_latest_csv_recursive(
+        base_dir,
+        "exhaustive_drift_summary",
     )
+    if exhaustive_summary_path is None:
+        _, exhaustive_summary_path = eda.run_exhaustive_audit(
+            exhaustive_systems,
+            base_dir,
+            max_norm=exhaustive_max_norm,
+        )
     exhaustive_rows = _read_csv_rows(exhaustive_summary_path)
 
-    cfg, _ = dcv.load_policy_experiment_config(
-        config_name=config_name,
-        overrides=overrides,
-        protocol=protocol,
-        output_dir=str(base_dir / "direct_ctmc_audit"),
+    audit_summary_path = _find_latest_json_recursive(
+        base_dir,
+        "direct_ctmc_audit_summary.json",
     )
-    audit_run_dir = base_dir / "direct_ctmc_audit"
-    audit_run_dir.mkdir(parents=True, exist_ok=True)
-    (audit_run_dir / "metadata").mkdir(parents=True, exist_ok=True)
-    (audit_run_dir / "metrics").mkdir(parents=True, exist_ok=True)
-    audit_rows = dcv.run_audit(
-        cfg=cfg,
-        run_dir=audit_run_dir,
-        candidates=candidates,
-        protocol=protocol,
+    audit_jsonl_path = _find_latest_json_recursive(
+        base_dir,
+        "direct_ctmc_audit.jsonl",
     )
+    if audit_summary_path is None:
+        cfg, resolved_raw = dcv.load_policy_experiment_config(
+            config_name=config_name,
+            overrides=overrides,
+            protocol=protocol,
+            output_dir=str(base_dir),
+        )
+        audit_run_dir, _ = dcv.get_run_config(cfg, "direct_ctmc_validation", resolved_raw)
+        audit_rows = dcv.run_audit(
+            cfg=cfg,
+            run_dir=audit_run_dir,
+            candidates=candidates,
+            protocol=protocol,
+        )
+        audit_summary_path = metadata_path(audit_run_dir, "direct_ctmc_audit_summary.json")
+        audit_jsonl_path = audit_run_dir / "metrics" / "direct_ctmc_audit.jsonl"
+    else:
+        audit_run_dir = audit_summary_path.parent.parent
+        audit_payload = json.loads(audit_summary_path.read_text(encoding="utf-8"))
+        audit_rows = list(audit_payload["audit_rows"])
 
     supportive_counts = {"H3": 0, "H4": 0}
     total_counts = {"H3": 0, "H4": 0}
 
-    for row in boundary_rows:
+    for row in iter_progress(
+        boundary_rows,
+        total=len(boundary_rows),
+        desc="support summary (H3)",
+    ):
         supportive = row["obstruction_demonstrated"].lower() == "true"
         total_counts["H3"] += 1
         supportive_counts["H3"] += int(supportive)
@@ -172,7 +237,11 @@ def run_ctmc_support_summary(
             }
         )
 
-    for row in exhaustive_rows:
+    for row in iter_progress(
+        exhaustive_rows,
+        total=len(exhaustive_rows),
+        desc="support summary (exhaustive)",
+    ):
         supportive = row["status"] == "PASS"
         total_counts["H4"] += 1
         supportive_counts["H4"] += int(supportive)
@@ -202,7 +271,11 @@ def run_ctmc_support_summary(
             }
         )
 
-    for row in audit_rows:
+    for row in iter_progress(
+        audit_rows,
+        total=len(audit_rows),
+        desc="support summary (audit)",
+    ):
         supportive = bool(row["passes_sampled_bound"]) and bool(row["has_positive_epsilon"])
         total_counts["H4"] += 1
         supportive_counts["H4"] += int(supportive)
@@ -229,7 +302,7 @@ def run_ctmc_support_summary(
                         "has_positive_epsilon": bool(row["has_positive_epsilon"]),
                         "state_bank_size": int(row["state_bank_size"]),
                         "worst_state": row["worst_state"],
-                        "audit_jsonl": str(audit_run_dir / "metrics" / "direct_ctmc_audit.jsonl"),
+                        "audit_jsonl": str(audit_jsonl_path or (audit_run_dir / "metrics" / "direct_ctmc_audit.jsonl")),
                     }
                 ),
             }
@@ -276,7 +349,7 @@ def run_ctmc_support_summary(
         ),
     }
 
-    summary_json_path = component_csv_path.with_name("ctmc_support_summary.json")
+    summary_json_path = metadata_path(run_dir, "ctmc_support_summary.json")
     summary_json_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     report_lines = [
@@ -318,7 +391,7 @@ def run_ctmc_support_summary(
             f"- Direct audit directory: {audit_run_dir}",
         ]
     )
-    report_path = component_csv_path.with_name("ctmc_support_summary.md")
+    report_path = metadata_path(run_dir, "ctmc_support_summary.md")
     report_path.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
     return component_csv_path, summary_json_path
 

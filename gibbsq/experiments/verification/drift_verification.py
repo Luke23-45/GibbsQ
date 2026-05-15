@@ -25,17 +25,14 @@ import numpy as np
 import hydra
 from omegaconf import DictConfig
 
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.config import load_experiment_config, drift_constant_R, drift_rate_epsilon
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.engines.numpy_engine import simulate
 from gibbsq.qroute.core.drift import evaluate_grid, evaluate_trajectory
-from studies.analysis.common.visualization.plotting import plot_drift_landscape, plot_drift_vs_norm
 from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import setup_wandb, get_run_config
 from gibbsq.qroute.utils.progress import create_progress
-from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
-from studies.analysis.common.visualization.theme import apply_theme
+from gibbsq.qroute.utils.run_artifacts import metrics_path
 
 try:
     import wandb
@@ -67,8 +64,6 @@ def main(raw_cfg: DictConfig) -> None:
     run_dir, run_id = get_run_config(cfg, "drift", resolved_raw_cfg)
 
     run = setup_wandb(cfg, resolved_raw_cfg, default_group="drift_verification", run_id=run_id, run_dir=run_dir)
-
-    apply_theme('publication')
 
     out_dir = run_dir
 
@@ -108,44 +103,7 @@ def main(raw_cfg: DictConfig) -> None:
                     f"Halt: paper results cannot be generated from an invalid {theorem_label}."
                 )
 
-
-            if N == 2:
-                f1 = figure_path(out_dir, "drift_heatmap")
-                plot_drift_landscape(
-                    res,
-                    alpha,
-                    save_path=f1,
-                    theme='publication',
-                    formats=['png', 'pdf'],
-                    context=ExperimentPlotContext(
-                        experiment_id="verification",
-                        chart_name="plot_drift_landscape",
-                    ),
-                )
-                log.info(f"Saved: {f1}.png, {f1}.pdf")
-
-            f2 = figure_path(out_dir, "drift_vs_norm")
-            plot_drift_vs_norm(
-                res,
-                eps,
-                R,
-                save_path=f2,
-                theme='publication',
-                formats=['png', 'pdf'],
-                context=ExperimentPlotContext(
-                    experiment_id="verification",
-                    chart_name="plot_drift_vs_norm",
-                ),
-            )
-            log.info(f"Saved: {f2}.png, {f2}.pdf")
             progress.update(1)
-
-            if run:
-                png_path = str(figure_path(out_dir, "drift_heatmap").with_suffix(".png")) if N == 2 else None
-                run.log({
-                    "drift_heatmap": wandb.Image(png_path) if png_path else None,
-                    "drift_vs_norm": wandb.Image(str(figure_path(out_dir, "drift_vs_norm").with_suffix(".png")))
-                })
 
             append_metrics_jsonl({
                 "num_servers": int(N),
@@ -180,24 +138,6 @@ def main(raw_cfg: DictConfig) -> None:
             progress.update(1)
             log.info(f"States evaluated: {len(res.states):,}")
             log.info(f"Bound violations: {res.violations:,}")
-
-            f = figure_path(out_dir, "drift_vs_norm")
-            plot_drift_vs_norm(
-                res,
-                eps,
-                R,
-                save_path=f,
-                theme='publication',
-                formats=['png', 'pdf'],
-                context=ExperimentPlotContext(
-                    experiment_id="verification",
-                    chart_name="plot_drift_vs_norm",
-                ),
-            )
-            log.info(f"Saved: {f}.png, {f}.pdf")
-
-            if run:
-                run.log({"drift_vs_norm": wandb.Image(str(figure_path(out_dir, "drift_vs_norm").with_suffix(".png")))})
 
             append_metrics_jsonl({
                 "num_servers": int(N),

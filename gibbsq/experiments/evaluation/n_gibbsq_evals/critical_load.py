@@ -6,19 +6,18 @@ Reflected UAS, where queueing systems become unstable.
 """
 
 import logging
+import json
 from pathlib import Path
 
 import equinox as eqx
 import hydra
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 
 from studies.analysis.common.metrics import time_averaged_queue_lengths
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import critical_load_sim_time, load_experiment_config
 from gibbsq.qroute.core.neural_policies import NeuralRouter
@@ -28,7 +27,7 @@ from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.qroute.utils.progress import create_progress, iter_progress
-from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import metadata_path, metrics_path
 
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -178,13 +177,22 @@ class CriticalLoadTest:
                         },
                         metrics_path(self.run_dir),
                     )
-                    self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, baseline_results)
                     rho_bar.update(1)
         finally:
-            self._plot_progress(self.rho_vals[: len(neural_results)], neural_results, baseline_results)
-
-        if neural_results:
-            self._assert_curve_artifacts()
+            if neural_results:
+                metadata_path(self.run_dir, "critical_load_summary.json").write_text(
+                    json.dumps(
+                        {
+                            "rho_vals": self.rho_vals[: len(neural_results)],
+                            "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
+                            "baseline_label": PUBLICATION_BASELINE_LABEL,
+                            "neural_eq": neural_results,
+                            "baseline_eq": baseline_results,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
 
         relative_ratios = [float(n / max(b, 1e-8)) for n, b in zip(neural_results, baseline_results)]
         return {
@@ -198,82 +206,6 @@ class CriticalLoadTest:
             "max_neural_to_gibbs_ratio": max(relative_ratios) if relative_ratios else float("inf"),
             "mean_neural_to_gibbs_ratio": float(np.mean(relative_ratios)) if relative_ratios else float("inf"),
         }
-
-    def _plot_progress(self, rho_vals, neural_r, baseline_r) -> None:
-        """Persist the best available critical-load curve when results exist."""
-        if not rho_vals or not neural_r or not baseline_r:
-            return
-        try:
-            self._plot(rho_vals, neural_r, baseline_r)
-        except Exception:
-            log.exception(
-                "Failed to persist critical-load curve for %d point(s). "
-                "rho_vals=%s neural_eq=%s baseline_eq=%s",
-                len(rho_vals),
-                rho_vals,
-                neural_r,
-                baseline_r,
-            )
-            raise
-
-    def _plot(self, rho_vals, neural_r, baseline_r):
-        """Generate the critical-load curve."""
-        from studies.analysis.common.visualization.plotting import plot_critical_load
-
-        plot_path = figure_path(self.run_dir, "critical_load_curve")
-        fig = plot_critical_load(
-            rho_values=np.array(rho_vals),
-            neural_eq=np.array(neural_r),
-            gibbs_eq=np.array(baseline_r),
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-            context=ExperimentPlotContext(
-                experiment_id="critical",
-                chart_name="plot_critical_load",
-                semantic_overrides={
-                    "thresholds": {"critical_rho": float(self.cfg.generalization.rho_boundary_threshold)},
-                },
-            ),
-        )
-        plt.close(fig)
-        self._assert_curve_artifacts()
-
-        log.info(f"Critical load test complete. Curve saved to {plot_path}.png, {plot_path}.pdf")
-
-        if self.run_logger:
-            self.run_logger.log(
-                {
-                    "critical_load/rho": rho_vals,
-                    "critical_load/neural_eq": neural_r,
-                    "critical_load/baseline_eq": baseline_r,
-                    "critical_load/reflected_uas_eq": baseline_r,
-                    "critical_load/gibbs_eq": baseline_r,
-                }
-            )
-            try:
-                import wandb
-
-                self.run_logger.log(
-                    {"critical_load_curve": wandb.Image(str(figure_path(self.run_dir, "critical_load_curve").with_suffix(".png")))}
-                )
-            except Exception:
-                pass
-
-    def _assert_curve_artifacts(self) -> None:
-        """Fail fast when the critical-load figure was not actually written."""
-        plot_path = figure_path(self.run_dir, "critical_load_curve")
-        missing = [
-            str(path)
-            for path in (plot_path.with_suffix(".png"), plot_path.with_suffix(".pdf"))
-            if not path.exists()
-        ]
-        if missing:
-            raise RuntimeError(
-                "Critical-load plotting did not produce the required figure artifact(s): "
-                + ", ".join(missing)
-            )
-
 
 @hydra.main(version_base=None, config_path="../../../../configs", config_name="default")
 def main(raw_cfg: DictConfig):

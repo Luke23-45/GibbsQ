@@ -46,9 +46,7 @@ manuscripts
 
 manuscripts/data
 Thumbs.db
-outputs
-tests
-outputs_legacy
+
 ledger
 new_test
 docs/PROPOSED
@@ -67,7 +65,7 @@ logs_r.md
 publication_review
 erroors.md
 tests/_tmp_critical_numeric/metrics/metrics.jsonl
-
+tests
 docs/formal_math/z1/notes.md
 docs/dev/zq.md
 docs

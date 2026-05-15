@@ -56,10 +56,10 @@ The references now split into two active groups:
    This is useful for translating between reflected dynamics and projected or
    complementarity formulations.
 
-7. **J. C. Dunn (1980).**
+7. **J. C. Dunn (1981).**
    *Global and asymptotic convergence rate estimates for a class of projected
    gradient processes.*
-   SIAM Journal on Control and Optimization 18(4), 368-400.
+   SIAM Journal on Control and Optimization 19(3), 368-400.
 
    This is a classical reference for viewing the deterministic reflected-UAS
    surrogate as a projected gradient flow.

@@ -66,10 +66,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_MAX_NORM = 25
 
 
@@ -397,9 +405,22 @@ def run_boundary_mismatch_demo(
         Column("gap", float, "LH_exact - reflected_ode_dH"),
     ]
 
+    run_dir, _ = create_run_capsule(output_dir, "ctmc_boundary_mismatch_demo")
+    attach_run_log_handler(run_dir)
+    run_metrics_dir = metrics_dir(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "ctmc_boundary_mismatch_demo",
+            "output_dir": str(output_dir),
+            "max_norm": max_norm,
+            "system_ids": [spec.system_id for spec in systems],
+        },
+    )
+
     state_writer = ExperimentCSVWriter(
         experiment_name="ctmc_boundary_mismatch_states",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=state_columns,
         metadata={
             "hypothesis": "H3",
@@ -432,7 +453,7 @@ def run_boundary_mismatch_demo(
 
     summary_writer = ExperimentCSVWriter(
         experiment_name="ctmc_boundary_mismatch_summary",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=summary_columns,
         metadata={
             "hypothesis": "H3",
@@ -442,11 +463,15 @@ def run_boundary_mismatch_demo(
 
     summary_rows: list[dict[str, object]] = []
 
-    for spec in systems:
+    for spec in iter_progress(
+        systems,
+        total=len(systems),
+        desc="boundary mismatch",
+    ):
         mu = np.asarray(spec.mu, dtype=np.float64)
         rho = spec.lam / spec.Lambda
         log.info(
-            "Boundary-mismatch demo: %s (N=%d, ρ=%.4f)",
+            "Boundary-mismatch demo: %s (N=%d, load=%.4f)",
             spec.system_id, spec.N, rho,
         )
 
@@ -528,7 +553,7 @@ def run_boundary_mismatch_demo(
 
     state_path = state_writer.finalize()
     summary_path = summary_writer.finalize()
-    report_path = summary_path.with_name("ctmc_boundary_mismatch_summary.md")
+    report_path = metadata_path(run_dir, "ctmc_boundary_mismatch_summary.md")
     lines = [
         "# CTMC Boundary Mismatch Summary",
         "",

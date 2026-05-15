@@ -52,10 +52,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_CONFIG_NAME = "final_experiment"
 DEFAULT_DT = 0.01
 DEFAULT_MAX_TIME = 800.0
@@ -430,9 +438,25 @@ def run_convergence_verification(
         Column("converged", bool, "Whether residual < tolerance"),
     ]
 
+    run_dir, _ = create_run_capsule(output_dir, "reflected_ode_convergence")
+    attach_run_log_handler(run_dir)
+    run_metrics_dir = metrics_dir(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "reflected_ode_convergence",
+            "output_dir": str(output_dir),
+            "dt": dt,
+            "max_time": max_time,
+            "n_random": n_random,
+            "seed": seed,
+            "system_ids": [spec.system_id for spec in systems],
+        },
+    )
+
     traj_writer = ExperimentCSVWriter(
         experiment_name="reflected_ode_trajectories",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=traj_columns,
         metadata={
             "hypothesis": "H1, H2",
@@ -461,7 +485,7 @@ def run_convergence_verification(
 
     summary_writer = ExperimentCSVWriter(
         experiment_name="reflected_ode_convergence_summary",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=summary_columns,
         metadata={
             "hypothesis": "H1, H2",
@@ -471,8 +495,12 @@ def run_convergence_verification(
 
     summary_rows: list[dict[str, object]] = []
 
-    for spec in systems:
-        log.info("Running convergence test: %s (N=%d, ρ=%.4f)", spec.system_id, spec.N, spec.rho)
+    for spec in iter_progress(
+        systems,
+        total=len(systems),
+        desc="ode convergence",
+    ):
+        log.info("Running convergence test: %s (N=%d, load=%.4f)", spec.system_id, spec.N, spec.rho)
         mu = np.asarray(spec.mu, dtype=np.float64)
 
         ics = generate_initial_conditions(spec.N, seed=seed, n_random=n_random)
@@ -558,7 +586,7 @@ def run_convergence_verification(
 
     traj_path = traj_writer.finalize()
     summary_path = summary_writer.finalize()
-    report_path = summary_path.with_name("reflected_ode_convergence_summary.md")
+    report_path = metadata_path(run_dir, "reflected_ode_convergence_summary.md")
     lines = [
         "# Reflected ODE Convergence Summary",
         "",

@@ -27,14 +27,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 log = logging.getLogger(__name__)
 
-DEFAULT_DATA_DIR = "outputs/data"
+DEFAULT_DATA_DIR = "outputs/final"
 DEFAULT_REPORT_DIR = "outputs/reports"
 
 
 def _find_latest_csv(data_dir: Path, prefix: str) -> Path | None:
     """Find the most recent CSV file matching a prefix."""
     candidates = sorted(
-        data_dir.glob(f"{prefix}_*.csv"),
+        data_dir.rglob(f"{prefix}_*.csv"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -248,8 +248,8 @@ def generate_statistical_summary(
     # â”€â”€ Data Inventory â”€â”€
     lines.append("## Data Inventory")
     lines.append("")
-    all_csvs = sorted(data_dir.glob("*.csv"))
-    all_metas = sorted(data_dir.glob("*.meta.json"))
+    all_csvs = sorted(data_dir.rglob("*.csv"))
+    all_metas = sorted(data_dir.rglob("*.meta.json"))
     lines.extend([
         f"- **CSV files**: {len(all_csvs)}",
         f"- **Metadata sidecars**: {len(all_metas)}",

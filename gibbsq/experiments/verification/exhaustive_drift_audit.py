@@ -52,10 +52,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_MAX_NORM = 30
 
 
@@ -333,9 +341,22 @@ def run_exhaustive_audit(
         Column("bound_holds", bool, "LV ≤ theorem_rhs"),
     ]
 
+    run_dir, _ = create_run_capsule(output_dir, "exhaustive_drift_audit")
+    attach_run_log_handler(run_dir)
+    run_metrics_dir = metrics_dir(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "exhaustive_drift_audit",
+            "output_dir": str(output_dir),
+            "max_norm": max_norm,
+            "system_ids": [sys.system_id for sys in systems],
+        },
+    )
+
     grid_writer = ExperimentCSVWriter(
         experiment_name="exhaustive_drift_grid",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=grid_columns,
         metadata={
             "hypothesis": "H4",
@@ -364,7 +385,7 @@ def run_exhaustive_audit(
 
     summary_writer = ExperimentCSVWriter(
         experiment_name="exhaustive_drift_summary",
-        output_dir=output_dir,
+        output_dir=run_metrics_dir,
         columns=summary_columns,
         metadata={
             "hypothesis": "H4",
@@ -374,7 +395,11 @@ def run_exhaustive_audit(
 
     summary_rows: list[dict[str, object]] = []
 
-    for sys in systems:
+    for sys in iter_progress(
+        systems,
+        total=len(systems),
+        desc="exhaustive drift",
+    ):
         mu = np.asarray(sys.mu, dtype=np.float64)
         constants = compute_theorem_constants(sys)
         epsilon = constants["epsilon"]
@@ -382,7 +407,7 @@ def run_exhaustive_audit(
 
         n_states = count_states(sys.N, max_norm)
         log.info(
-            "Auditing %s (N=%d, ρ=%.4f): %d states, ε=%.6e, R=%.6e",
+            "Auditing %s (N=%d, load=%.4f): %d states, epsilon=%.6e, R=%.6e",
             sys.system_id, sys.N, sys.lam / sys.Lambda, n_states, epsilon, R,
         )
 
@@ -445,7 +470,7 @@ def run_exhaustive_audit(
 
     grid_path = grid_writer.finalize()
     summary_path = summary_writer.finalize()
-    report_path = summary_path.with_name("exhaustive_drift_summary.md")
+    report_path = metadata_path(run_dir, "exhaustive_drift_summary.md")
     lines = [
         "# Exhaustive Drift Audit Summary",
         "",

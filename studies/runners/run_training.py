@@ -5,11 +5,6 @@ Run all z2 neural training experiments.
 This runner executes the training phase (Phase 2) of the N-GibbsQ
 neural learning pipeline. It runs Platinum BC Pretraining followed
 by REINFORCE SSA Training.
-
-Usage:
-    python -m studies.runners.run_training
-    python -m studies.runners.run_training --output-dir outputs/data
-    python -m studies.runners.run_training --dry-run
 """
 
 from __future__ import annotations
@@ -17,22 +12,21 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import subprocess
 import sys
 import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Sequence
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from studies.runners.common import PROJECT_ROOT, launch_module, resolve_runner_output_dir
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
 DEFAULT_REPORT_DIR = "outputs/reports"
 DEFAULT_CONFIG_NAME = "final_experiment"
 
@@ -62,46 +56,48 @@ class ExperimentResult:
         }
 
 
+def _experiment_type_for_module(module: str) -> str:
+    mapping = {
+        "gibbsq.experiments.training.pretrain_bc": "bc_train",
+        "gibbsq.experiments.training.train_reinforce": "reinforce_train",
+    }
+    return mapping[module]
+
+
 def _run_module(
     name: str,
     hypothesis: str,
     module: str,
     config_name: str,
-    output_dir: str,
+    output_dir: str | None,
 ) -> ExperimentResult:
     """Execute a single training module."""
     result = ExperimentResult(name=name, hypothesis=hypothesis, module=module)
     log.info("=" * 70)
     log.info("  EXPERIMENT: %s  (supports %s)", name, hypothesis)
     log.info("=" * 70)
-    
-    cmd = [
-        sys.executable,
-        "-m",
-        module,
-        "--config-name",
-        config_name,
-    ]
+
     t0 = time.perf_counter()
-    
-    out_dir_path = Path(output_dir) / "logs"
-    out_dir_path.mkdir(parents=True, exist_ok=True)
-    log_file = out_dir_path / f"{name.replace(' ', '_').lower()}.log"
-    
+    resolved_output_dir = resolve_runner_output_dir(config_name, output_dir)
+
     try:
-        with open(log_file, "w", encoding="utf-8") as f:
-            subprocess.run(cmd, cwd=PROJECT_ROOT, check=True, stdout=f, stderr=subprocess.STDOUT)
+        output_files = launch_module(
+            module=module,
+            config_name=config_name,
+            output_dir=resolved_output_dir,
+            hydra=True,
+            experiment_type=_experiment_type_for_module(module),
+        )
         result.elapsed_seconds = time.perf_counter() - t0
         result.status = "PASS"
-        result.output_files = [str(log_file)]
-        log.info("  ✓ %s completed in %.2fs (Log: %s)", name, result.elapsed_seconds, log_file.name)
+        result.output_files = [str(path) for path in output_files]
+        log.info("  OK %s completed in %.2fs", name, result.elapsed_seconds)
     except Exception as exc:
         result.elapsed_seconds = time.perf_counter() - t0
         result.status = "FAIL"
         result.error_message = str(exc)
-        result.output_files = [str(log_file)]
         result.traceback = traceback.format_exc()
-        log.error("  ✗ %s FAILED after %.2fs: %s (Log: %s)", name, result.elapsed_seconds, exc, log_file.name)
+        log.error("  FAIL %s after %.2fs: %s", name, result.elapsed_seconds, exc)
     return result
 
 
@@ -151,7 +147,7 @@ def _write_report(
     json_path.write_text(json.dumps(json_report, indent=2), encoding="utf-8")
 
     lines = [
-        f"# Training Pipeline Report — {timestamp}",
+        f"# Training Pipeline Report - {timestamp}",
         "",
         f"**Overall**: {overall}  |  "
         f"**Pass**: {n_pass}  |  **Fail**: {n_fail}  |  "
@@ -161,7 +157,7 @@ def _write_report(
         "|---|-----------|-----------|--------|--------|----------|-------------|",
     ]
     for idx, r in enumerate(results, start=1):
-        files_str = ", ".join(Path(f).name for f in r.output_files) or "—"
+        files_str = ", ".join(Path(f).name for f in r.output_files) or "-"
         lines.append(
             f"| {idx} | {r.name} | {r.hypothesis} | "
             f"`{r.module}` | {r.status} | {r.elapsed_seconds:.1f} | {files_str} |"
@@ -192,7 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Run z2 neural training experiments (Phase 2).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Output root for experiment capsules. Defaults to the selected config's output_dir.",
+    )
     parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR)
     parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME)
     parser.add_argument("--dry-run", action="store_true")
@@ -207,9 +207,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     experiments = build_training_experiments()
 
     if args.dry_run:
-        log.info("DRY RUN — %d experiments would be executed:", len(experiments))
+        log.info("DRY RUN - %d experiments would be executed:", len(experiments))
         for name, hyp, module in experiments:
-            log.info("  • %s (%s) -> %s", name, hyp, module)
+            log.info("  - %s (%s) -> %s", name, hyp, module)
         return 0
 
     log.info("Starting training pipeline: %d experiments", len(experiments))
@@ -219,7 +219,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name, hypothesis, module in experiments:
         result = _run_module(name, hypothesis, module, args.config_name, args.output_dir)
         results.append(result)
-        # If BC Pretraining fails, we probably shouldn't attempt REINFORCE.
         if result.status == "FAIL":
             log.error("Pipeline halted due to failure in %s", name)
             break

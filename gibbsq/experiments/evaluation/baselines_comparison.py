@@ -16,11 +16,11 @@ Tier 2/Tier 3 references before falling back to Tier 4 baselines.
 """
 
 import logging
+import json
 from pathlib import Path
 import numpy as np
 import jax
 from omegaconf import DictConfig
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.config import ExperimentConfig, load_experiment_config
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy, resolve_model_pointer
@@ -31,11 +31,8 @@ from studies.analysis.common.metrics import (
 from gibbsq.qroute.utils.logging import setup_wandb, get_run_config
 from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.progress import iter_progress
-from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
-from studies.analysis.common.visualization.theme import apply_theme, THEMES
-from gibbsq.qroute.utils.chart_exporter import save_chart
+from gibbsq.qroute.utils.run_artifacts import metadata_path, metrics_path
 import pandas as pd
-import matplotlib.pyplot as plt
 import sys
 import equinox as eqx
 from gibbsq.qroute.core.neural_policies import NeuralRouter
@@ -334,40 +331,12 @@ def run_corrected_comparison(
     else:
         raise RuntimeError("N-GibbsQ evaluation is required for policy comparison parity analysis.")
 
-    _generate_comparison_plot(results, run_dir)
+    metadata_path(run_dir, "corrected_policy_comparison_summary.json").write_text(
+        json.dumps(results, indent=2),
+        encoding="utf-8",
+    )
 
     return results
-
-
-def _generate_comparison_plot(results: dict, run_dir: Path):
-    """Generate comparison bar chart with chart-type-aware styling."""
-    from studies.analysis.common.visualization.plotting import plot_policy_dual_panel
-
-    sorted_results = sorted(results.items(), key=lambda x: (x[1]["tier"], x[1]["mean_q_total"]))
-
-    labels = [name for name, _ in sorted_results]
-    q_values = [r["mean_q_total"] for _, r in sorted_results]
-    q_errors = [r["se_q_total"] for _, r in sorted_results]
-    tiers = [r["tier"] for _, r in sorted_results]
-
-    plot_path = figure_path(run_dir, "corrected_policy_comparison")
-    fig = plot_policy_dual_panel(
-        labels=labels,
-        q_values=q_values,
-        q_errors=q_errors,
-        tiers=tiers,
-        save_path=plot_path,
-        theme="publication",
-        formats=["png", "pdf"],
-        context=ExperimentPlotContext(
-            experiment_id="policy",
-            chart_name="plot_tier_comparison_bars",
-        ),
-    )
-    import matplotlib.pyplot as plt
-    plt.close(fig)
-
-    log.info(f"Comparison plot saved to {plot_path}.png, {plot_path}.pdf")
 
 
 def _build_grid_eval_policy(model, service_rates: np.ndarray, rho: float):
@@ -450,31 +419,11 @@ def run_grid_generalization(
     df = pd.DataFrame(results)
     df.to_csv(metrics_path(run_dir, "platinum_grid_results.csv"), index=False)
 
-    _plot_platinum_grid(df, run_dir)
-    return results
-
-def _plot_platinum_grid(df: pd.DataFrame, output_dir: Path):
-    """Generate log-scale curves and performance index plots over rho."""
-    from studies.analysis.common.visualization.plotting import plot_platinum_grid
-
-    plot_path = figure_path(output_dir, "platinum_grid_analysis")
-    fig = plot_platinum_grid(
-        rho_values=df['rho'].values,
-        uniform_eq=df['Uniform_EQ'].values,
-        neural_eq=df['Neural_EQ'].values,
-        jsq_eq=df['JSQ_EQ'].values,
-        performance_index=df['Performance_Index'].values,
-        save_path=plot_path,
-        theme="publication",
-        formats=["png", "pdf"],
-        context=ExperimentPlotContext(
-            experiment_id="policy",
-            chart_name="plot_platinum_grid",
-        ),
+    metadata_path(run_dir, "platinum_grid_results.json").write_text(
+        df.to_json(orient="records", indent=2),
+        encoding="utf-8",
     )
-    import matplotlib.pyplot as plt
-    plt.close(fig)
-    log.info(f"Proposed grid analysis saved to {plot_path}.png, {plot_path}.pdf")
+    return results
 
 
 def main(raw_cfg: DictConfig):

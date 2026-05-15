@@ -127,7 +127,7 @@ theorem chapter.
 
 - [10_direct_ctmc_quadratic_proof_attempt.md](./10_direct_ctmc_quadratic_proof_attempt.md)
 - [11_audit_of_direct_ctmc_quadratic_proof.md](./11_audit_of_direct_ctmc_quadratic_proof.md)
-- [direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/experiments/verification/direct_ctmc_validation.py)
+- [direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/gibbsq/experiments/verification/direct_ctmc_validation.py)
 - [test_direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/tests/test_direct_ctmc_validation.py)
 - validation outputs under `outputs/direct_ctmc_validation`
 
@@ -154,10 +154,8 @@ Without that event, H4 stays conditional.
 
 **Current source files and artifacts.**
 
-- benchmark model in [03_model.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/03_model.tex)
-- benchmark comparisons in the existing policy outputs
 - quick rerun summary in
-  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260512_235410/metadata/direct_ctmc_validation_summary.md)
+  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260515_150449/metadata/direct_ctmc_validation_summary.md)
 
 **Assessment.**
 Meets Standard C for benchmark-level reporting.
@@ -172,12 +170,12 @@ Meets Standard C for benchmark-level reporting.
 
 **Current source files and artifacts.**
 
-- [smvr_probe_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/final/smvr_probe/final_20260512_210420/artifacts/smvr_probe_summary.md)
-- [probe_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/state_dependent_uas_probe/run_20260512_143154/artifacts/probe_summary.md)
+- historical exploratory-probe artifacts are not present in the current
+  checkout and should be regenerated or attached before H6 is cited
 
 **Assessment.**
-Meets Standard D.
-Keep out of the thesis core except as brief scope justification.
+Does not currently meet a citation-ready evidence standard in this checkout.
+Keep out of the thesis core unless the supporting artifacts are restored.
 
 ### H7. Differentiable-policy applicability
 
@@ -192,13 +190,14 @@ Keep out of the thesis core except as brief scope justification.
 
 **Current source files and artifacts.**
 
-- [03_model.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/03_model.tex)
-- [07_neural_policy.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/07_neural_policy.tex)
-- [08_experiments.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/08_experiments.tex)
+- the smooth softmax routing formula is present in the `z2` theorem notes
+- learning-study or manuscript artifacts are not present in this checkout and
+  should be restored or attached before H7 is cited as evidence-backed
 
 **Assessment.**
-Meets Standard C only as a supporting applicability study.
-It does **not** justify making the learned-policy layer the thesis centerpiece.
+Does not currently meet Standard C as an evidence-backed learning study in this
+checkout. It remains a plausible supporting applicability claim, not a thesis
+centerpiece.
 
 ---
 

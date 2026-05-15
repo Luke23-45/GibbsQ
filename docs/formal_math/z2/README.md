@@ -161,8 +161,8 @@ What the test covers:
 ### Benchmark audit
 
 Audit summary:
-- [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260512_235101/metadata/direct_ctmc_validation_summary.md)
-- [direct_ctmc_audit.jsonl](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260512_235101/metrics/direct_ctmc_audit.jsonl)
+- [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260515_150335/metadata/direct_ctmc_validation_summary.md)
+- [direct_ctmc_audit.jsonl](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260515_150335/metrics/direct_ctmc_audit.jsonl)
 
 Key audit outcomes:
 
@@ -178,15 +178,15 @@ themselves replace theorem-level sign-off.
 ### Quick empirical rerun
 
 Quick rerun summary:
-- [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260512_235410/metadata/direct_ctmc_validation_summary.md)
+- [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260515_150449/metadata/direct_ctmc_validation_summary.md)
 
 Key short-run comparison:
 
-- `UAS`: `11.489221`
-- `Reflected UAS (empirical default)`: `10.039646`
-- candidate `(0.5, 0.25, 0.25)`: `10.341040`
-- candidate `(0.5, 0.5, 0.25)`: `10.307986`
-- candidate `(0.7, 0.25, 0.25)`: `10.223725`
+- `UAS`: `11.099379`
+- `Reflected UAS (empirical default)`: `9.785714`
+- candidate `(0.5, 0.25, 0.25)`: `10.364907`
+- candidate `(0.5, 0.5, 0.25)`: `10.104037`
+- candidate `(0.7, 0.25, 0.25)`: `10.204969`
 
 This rerun supports the benchmark relevance of the default reflected point, but
 it is still an empirical benchmark fact rather than a theorem statement.

@@ -88,10 +88,8 @@ deterministic numerical attractor.
 **Current support in the repo.**
 
 - benchmark check in [02_boundary_equilibrium.md](./02_boundary_equilibrium.md)
-- deterministic artifact
-  [direction1_fluid.json](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direction12_probe/run_20260512_194636/artifacts/direction1_fluid.json)
-- summary
-  [direction12_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direction12_probe/run_20260512_194636/artifacts/direction12_summary.md)
+- deterministic verification artifact
+  [boundary_equilibrium_verification_20260515_091832.csv](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/data/boundary_equilibrium_verification_20260515_091832.csv)
 
 **Status.**
 This is a theorem-to-computation consistency claim and is safe for the thesis
@@ -144,11 +142,11 @@ Reflected-UAS point under the natural load condition \(\lambda < \Lambda\).
 - internal audit
   [11_audit_of_direct_ctmc_quadratic_proof.md](./11_audit_of_direct_ctmc_quadratic_proof.md)
 - validation code
-  [direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/experiments/verification/direct_ctmc_validation.py)
+  [direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/gibbsq/experiments/verification/direct_ctmc_validation.py)
 - test file
   [test_direct_ctmc_validation.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/tests/test_direct_ctmc_validation.py)
 - benchmark audit summary
-  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260512_235101/metadata/direct_ctmc_validation_summary.md)
+  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation/direct_ctmc_validation/final_20260515_150335/metadata/direct_ctmc_validation_summary.md)
 
 **Status.**
 This is the most important **conditional** hypothesis.
@@ -178,9 +176,8 @@ steady-state total queue length.
 
 **Current support in the repo.**
 
-- old benchmark data under `outputs/final/policy`
 - quick direct-CTMC rerun summary in
-  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260512_235410/metadata/direct_ctmc_validation_summary.md)
+  [direct_ctmc_validation_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direct_ctmc_validation_quick/direct_ctmc_validation/final_20260515_150449/metadata/direct_ctmc_validation_summary.md)
 
 **Status.**
 Safe as a validation hypothesis, but secondary to H1-H4.
@@ -200,14 +197,12 @@ a stronger thesis direction than Reflected UAS plus the `z2` theorem program.
 
 **Current support in the repo.**
 
-- SMVR summary
-  [smvr_probe_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/final/smvr_probe/final_20260512_210420/artifacts/smvr_probe_summary.md)
-- adaptive/state-dependent probe summary
-  [probe_summary.md](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/state_dependent_uas_probe/run_20260512_143154/artifacts/probe_summary.md)
+- historical exploratory-probe notes outside the current `z2` theorem package,
+  to be regenerated or attached before H6 is used as a cited thesis claim
 
 **Status.**
-This belongs in a short appendix or decision memo, not as a headline thesis
-claim.
+This belongs, at most, in a short appendix or decision memo after its supporting
+probe artifacts are regenerated or attached. It is not a headline thesis claim.
 
 ### H7. Differentiable-policy applicability hypothesis
 
@@ -227,16 +222,14 @@ dispatch rules are not.
 
 **Current support in the repo.**
 
-- policy definitions and differentiable structure in
-  [03_model.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/03_model.tex)
-- existing neural-policy study in
-  [07_neural_policy.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/07_neural_policy.tex)
-- supporting experimental material in
-  [08_experiments.tex](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/manuscripts/sections/08_experiments.tex)
+- the smooth softmax formula stated in this package
+- any neural-policy or manuscript support must be restored or attached before
+  H7 is cited as an evidence-backed thesis claim
 
 **Status.**
-This is safe only as a secondary or tertiary thesis claim.
-It must not be presented as the "main hero" of the thesis.
+This is safe only as a secondary or tertiary applicability claim, and only when
+the supporting learning-study artifacts are restored or attached. It must not
+be presented as the "main hero" of the thesis.
 
 ---
 

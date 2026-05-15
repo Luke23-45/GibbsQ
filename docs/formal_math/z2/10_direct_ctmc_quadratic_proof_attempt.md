@@ -306,7 +306,7 @@ This is the required Foster-Lyapunov inequality.
 
 ## 8. Conditional Theorem Statement
 
-**Theorem 3 (direct CTMC stability for Reflected UAS).**
+**Conditional Theorem 3 (direct CTMC stability for Reflected UAS).**
 Fix
 
 \[
@@ -320,7 +320,7 @@ Fix
 Then the Reflected-UAS queue-length CTMC is non-explosive, irreducible, and
 positive Harris recurrent.
 
-**Proof.**
+**Proof route.**
 Non-explosion and irreducibility were established in Section 1. The Lyapunov
 function \(V\) is norm-like, and Sections 3-7 proved
 
@@ -343,10 +343,12 @@ outside the finite set
 By the continuous-time Foster-Lyapunov criterion, the CTMC is positive Harris
 recurrent. `QED`
 
-Within the current package, this theorem statement should be read together with
-the promotion-sensitive status note in
+Within the current package, this conditional theorem statement should be read
+together with the promotion-sensitive status note in
 [03_theorem_status.md](./03_theorem_status.md) and the audit note in
 [11_audit_of_direct_ctmc_quadratic_proof.md](./11_audit_of_direct_ctmc_quadratic_proof.md).
+It should be promoted to final theorem language only when the package-level
+sign-off rule has been satisfied.
 
 ## 9. Why This Bypasses The Earlier Failures
 

@@ -31,7 +31,6 @@ from jaxtyping import PRNGKeyArray, Array, Float
 from jax.flatten_util import ravel_pytree
 from omegaconf import DictConfig
 
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.config import ExperimentConfig, NeuralConfig, load_experiment_config
 from gibbsq.qroute.core.neural_policies import NeuralRouter, ValueNetwork
 from gibbsq.qroute.core.pretraining import extract_bc_data_config
@@ -52,7 +51,7 @@ from gibbsq.qroute.utils.model_io import (
     validate_neural_model_shape,
 )
 from gibbsq.qroute.utils.progress import create_progress, iter_progress
-from gibbsq.qroute.utils.run_artifacts import artifacts_dir, figure_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import artifacts_dir, metrics_path
 
 log = logging.getLogger(__name__)
 
@@ -1099,10 +1098,6 @@ class ReinforceTrainer:
         execute_start: float | None = None,
     ):
         """Persist model weights and training history."""
-        import matplotlib.pyplot as plt
-        from studies.analysis.common.visualization.theme import apply_theme, THEMES
-        from gibbsq.qroute.utils.chart_exporter import save_chart
-
         artifacts = artifacts_dir(self.run_dir)
         policy_path = artifacts / "n_gibbsq_reinforce_weights.eqx"
         eqx.tree_serialise_leaves(policy_path, policy_net)
@@ -1110,7 +1105,6 @@ class ReinforceTrainer:
         value_path = artifacts / "value_network_weights.eqx"
         eqx.tree_serialise_leaves(value_path, value_net)
 
-        from studies.analysis.common.visualization.plotting import plot_training_dashboard
         import json
 
         metrics_file = metrics_path(self.run_dir, "reinforce_metrics.jsonl")
@@ -1201,29 +1195,20 @@ class ReinforceTrainer:
         log.info(f"JSQ Target: 100.0% | Random Floor: 0.0% (Performance Index Scale)")
         log.info("-------------------------------------------------------")
 
-        dashboard_metrics.update(
-            {
-                "final_eval_mean": float(final_mean),
-                "final_eval_std": float(final_std),
-                "final_eval_count": int(len(eval_indices)),
-                "train_epochs": int(self.cfg.train_epochs),
-                "run_label": "debug" if int(self.cfg.train_epochs) <= 5 else "training",
-            }
+        training_summary = {
+            "final_eval_mean": float(final_mean),
+            "final_eval_std": float(final_std),
+            "final_eval_count": int(len(eval_indices)),
+            "train_epochs": int(self.cfg.train_epochs),
+            "run_label": "debug" if int(self.cfg.train_epochs) <= 5 else "training",
+            "history_loss": [float(x) for x in history_loss],
+            "history_reward": [float(x) for x in history_reward],
+            "dashboard_metrics": dashboard_metrics,
+        }
+        metrics_path(self.run_dir, "reinforce_training_summary.json").write_text(
+            json.dumps(training_summary, indent=2),
+            encoding="utf-8",
         )
-        plot_path = figure_path(self.run_dir, "reinforce_training_curve")
-        fig = plot_training_dashboard(
-            metrics=dashboard_metrics,
-            jsq_baseline=100.0,  # JSQ = 100% on Performance Index scale
-            random_baseline=0.0,  # Random = 0% on Performance Index scale
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-            context=ExperimentPlotContext(
-                experiment_id="training",
-                chart_name="plot_training_dashboard",
-            ),
-        )
-        plt.close(fig)
 
         log.info(f"Training Complete! Final Loss: {history_loss[-1]:.4f}")
         log.info(f"Final Base-Regime Index Proxy: {history_reward[-1]:.2f}")

@@ -72,13 +72,17 @@ At the moment, the project supports the following clean statement:
 The deterministic reflected ODE built from the smooth reflected-UAS routing map
 is globally asymptotically stable.
 
-But the following stronger statement is still open:
+But the following stronger statement is not established by this
+classical-fluid-limit route:
 
-**Open stochastic statement.**
+**Separate stochastic statement.**
 The original Reflected-UAS CTMC is positive Harris recurrent for every
 \(\lambda<\Lambda\).
 
-The gap between those statements is not cosmetic. It is a genuine scaling issue.
+The gap between those statements is not cosmetic. It is a genuine scaling issue
+for this route. Later files `10` and `11` develop a separate direct
+Foster-Lyapunov route, whose status is controlled by the package-level
+promotion rules.
 
 ## 5. Plausible Ways To Close The Gap
 

@@ -47,7 +47,7 @@ from studies.runners.run_benchmarks import (
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = None
 DEFAULT_REPORT_DIR = "outputs/reports"
 
 
@@ -153,7 +153,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        help="Output root for experiment capsules. Defaults to the selected config's output_dir.",
+    )
     parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR)
     parser.add_argument("--config-name", default="final_experiment")
     parser.add_argument(

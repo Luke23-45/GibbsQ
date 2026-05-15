@@ -173,8 +173,8 @@ def generate_statistical_summary(
     # ── Data Inventory ──
     lines.append("## Data Inventory")
     lines.append("")
-    all_csvs = sorted(data_dir.glob("*.csv"))
-    all_metas = sorted(data_dir.glob("*.meta.json"))
+    all_csvs = sorted(data_dir.rglob("*.csv"))
+    all_metas = sorted(data_dir.rglob("*.meta.json"))
     lines.extend([
         f"- **CSV files**: {len(all_csvs)}",
         f"- **Metadata sidecars**: {len(all_metas)}",

@@ -56,7 +56,7 @@ def find_latest_csv(data_dir: Path, prefix: str) -> Optional[Path]:
         Path to the most recent matching CSV, or None if not found.
     """
     candidates = sorted(
-        data_dir.glob(f"{prefix}_*.csv"),
+        data_dir.rglob(f"{prefix}_*.csv"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -173,7 +173,7 @@ def write_file(path: Path, content: str) -> None:
 def resolve_data_root(
     analysis_dir: Optional[Path] = None,
 ) -> Path:
-    """Resolve the ``outputs/data/`` root directory.
+    """Resolve the experiment-data root directory.
 
     First attempts to load the path from ``configs/base.yaml`` via
     the config module.  Falls back to auto-detection by walking up
@@ -187,7 +187,7 @@ def resolve_data_root(
     Returns
     -------
     Path
-        Absolute path to ``outputs/data/``.
+        Absolute path to the experiment-data root.
 
     Raises
     ------
@@ -208,13 +208,17 @@ def resolve_data_root(
     if analysis_dir is None:
         analysis_dir = Path(__file__).resolve().parent.parent
 
-    # analysis/ → studies/ → GibbsQ/ → outputs/data/
-    data_root = analysis_dir.parent.parent / "outputs" / "data"
-    if data_root.exists():
-        return data_root
+    project_root = analysis_dir.parent.parent
+    for candidate in (
+        project_root / "outputs" / "final",
+        project_root / "outputs" / "data",
+    ):
+        if candidate.exists():
+            return candidate
 
     raise FileNotFoundError(
         f"Cannot locate data root. Searched:\n"
         f"  - Config-based resolution\n"
-        f"  - {data_root}\n"
+        f"  - {project_root / 'outputs' / 'final'}\n"
+        f"  - {project_root / 'outputs' / 'data'}\n"
     )

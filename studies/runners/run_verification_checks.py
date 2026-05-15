@@ -30,7 +30,7 @@ from studies.runners.run_verification import (
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_REPORT_DIR = "outputs/reports"
 DEFAULT_CONFIG_NAME = "final_experiment"
 

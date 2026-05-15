@@ -24,14 +24,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from studies.runners.common import (
+    DEFAULT_OUTPUT_DIR,
+    PROJECT_ROOT,
+    launch_module,
+    resolve_runner_output_dir,
+)
+
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
 DEFAULT_REPORT_DIR = "outputs/reports"
+DEFAULT_CONFIG_NAME = "final_experiment"
 
 
 @dataclass
@@ -97,13 +103,17 @@ def _run_experiment(
 # ──────────────────────────────────────────────────────────────────────
 
 def _make_independent_seed_rerun(output_dir: str, config_name: str) -> Callable[[], list[Path]]:
-    """Create a callable for the independent-seed benchmark rerun."""
+    """Create a launcher for the independent-seed benchmark rerun."""
+    resolved_output_dir = resolve_runner_output_dir(config_name, output_dir)
+
     def run() -> list[Path]:
-        from gibbsq.experiments.benchmark.independent_seed_rerun import (
-            run_benchmark_rerun,
+        return launch_module(
+            module="gibbsq.experiments.benchmark.independent_seed_rerun",
+            config_name=config_name,
+            output_dir=resolved_output_dir,
+            hydra=False,
+            experiment_type="independent_seed_rerun",
         )
-        policy_path, comp_path = run_benchmark_rerun(output_dir, config_name=config_name)
-        return [policy_path, comp_path]
     return run
 
 
@@ -200,7 +210,11 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Output root for experiment capsules. Defaults to the selected config's output_dir.",
+    )
     parser.add_argument("--report-dir", default=DEFAULT_REPORT_DIR)
     parser.add_argument("--config-name", default=DEFAULT_CONFIG_NAME)
     parser.add_argument("--dry-run", action="store_true")

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Engine parity verification for publication-critical closed-form baselines.
 
 This runner checks whether NumPy SSA and JAX SSA produce materially
@@ -8,7 +8,7 @@ under the exact scenario contracts used by the paper-facing experiments.
 Outputs:
     - JSON metrics summary
     - JSONL metrics rows
-    - parity figures for the configured scenarios
+    - markdown and JSON summaries for the configured scenarios
 
 What it does not claim:
     - any theorem proof or stability certification
@@ -25,8 +25,6 @@ from pathlib import Path
 from statistics import mean
 
 import hydra
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 from omegaconf import DictConfig
 from scipy import stats
@@ -45,10 +43,9 @@ from gibbsq.qroute.engines.jax_engine import compute_configured_max_events, poli
 from gibbsq.qroute.engines.numpy_engine import SimResult, run_replications
 from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
-from gibbsq.qroute.utils.run_artifacts import figure_path, metadata_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import metadata_path, metrics_path
 
 log = logging.getLogger(__name__)
-matplotlib.use("Agg")
 
 
 @dataclass(frozen=True)
@@ -479,67 +476,6 @@ def _write_report(run_dir: Path, summary: dict, rows: list[dict]) -> None:
     metadata_path(run_dir, "engine_parity_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _plot_scatter(run_dir: Path, rows: list[dict]) -> None:
-    if not rows:
-        return
-    x = np.array([row["numpy"]["mean_q_total"] for row in rows], dtype=np.float64)
-    y = np.array([row["jax"]["mean_q_total"] for row in rows], dtype=np.float64)
-    colors = ["#2e7d32" if row["passes_equivalence"] else "#c62828" for row in rows]
-
-    fig, ax = plt.subplots(figsize=(7, 6))
-    ax.scatter(x, y, c=colors, s=55, alpha=0.85)
-    lo = min(np.min(x), np.min(y))
-    hi = max(np.max(x), np.max(y))
-    ax.plot([lo, hi], [lo, hi], linestyle="--", color="black", linewidth=1.0)
-    ax.set_xlabel("NumPy mean E[Q_total]")
-    ax.set_ylabel("JAX mean E[Q_total]")
-    ax.set_title("Engine Parity: JAX vs NumPy")
-    ax.grid(alpha=0.25)
-    plot_base = figure_path(run_dir, "engine_parity_scatter")
-    fig.tight_layout()
-    fig.savefig(plot_base.with_suffix(".png"), dpi=200)
-    fig.savefig(plot_base.with_suffix(".pdf"))
-    plt.close(fig)
-
-
-def _plot_diffs(run_dir: Path, rows: list[dict]) -> None:
-    if not rows:
-        return
-    ordered = sorted(rows, key=lambda row: abs(row["relative_gap_pct"]), reverse=True)
-    labels = [row["scenario"] for row in ordered]
-    diffs = np.array([row["diff_mean_q_total"] for row in ordered], dtype=np.float64)
-    lows = np.array([row["diff_ci_low"] for row in ordered], dtype=np.float64)
-    highs = np.array([row["diff_ci_high"] for row in ordered], dtype=np.float64)
-    margins = np.array([row["equivalence_margin"] for row in ordered], dtype=np.float64)
-    y = np.arange(len(ordered))
-
-    fig, ax = plt.subplots(figsize=(10, max(4, 0.4 * len(ordered) + 1)))
-    ax.errorbar(
-        diffs,
-        y,
-        xerr=np.vstack((diffs - lows, highs - diffs)),
-        fmt="o",
-        color="#1565c0",
-        ecolor="#1565c0",
-        capsize=3,
-    )
-    for idx, margin in enumerate(margins):
-        ax.axvline(margin, color="#2e7d32", linestyle=":", linewidth=0.8)
-        ax.axvline(-margin, color="#2e7d32", linestyle=":", linewidth=0.8)
-    ax.axvline(0.0, color="black", linewidth=1.0)
-    ax.set_yticks(y)
-    ax.set_yticklabels(labels)
-    ax.invert_yaxis()
-    ax.set_xlabel("JAX - NumPy mean E[Q_total]")
-    ax.set_title("Engine Parity: Mean Difference with Equivalence CI")
-    ax.grid(alpha=0.25, axis="x")
-    plot_base = figure_path(run_dir, "engine_parity_diff_ci")
-    fig.tight_layout()
-    fig.savefig(plot_base.with_suffix(".png"), dpi=200)
-    fig.savefig(plot_base.with_suffix(".pdf"))
-    plt.close(fig)
-
-
 class EngineParityExperiment:
     def __init__(self, cfg: ExperimentConfig, raw_cfg: DictConfig, run_dir: Path, run_logger=None):
         self.cfg = cfg
@@ -560,9 +496,6 @@ class EngineParityExperiment:
 
         summary = _write_summary(self.run_dir, self.cfg, rows)
         _write_report(self.run_dir, summary, rows)
-        _plot_scatter(self.run_dir, rows)
-        _plot_diffs(self.run_dir, rows)
-
         log.info(
             "Engine parity complete: %d/%d passed equivalence.",
             summary["pass_count"],

@@ -5,6 +5,7 @@ Statistical comparison of N-GibbsQ vs Reflected UAS over multiple seeds.
 Both sides measured on the true Gillespie SSA (not DGA surrogate).
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -12,14 +13,12 @@ import equinox as eqx
 import hydra
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 from omegaconf import DictConfig
 from scipy import stats
 
 from studies.analysis.common.metrics import time_averaged_queue_lengths
-from studies.analysis.common.visualization.plot_profiles import ExperimentPlotContext
 from gibbsq.qroute.core.builders import build_policy_by_name
 from gibbsq.qroute.core.config import load_experiment_config
 from gibbsq.qroute.core.neural_policies import NeuralRouter
@@ -29,7 +28,7 @@ from gibbsq.qroute.utils.exporter import append_metrics_jsonl
 from gibbsq.qroute.utils.logging import get_run_config, setup_wandb
 from gibbsq.qroute.utils.model_io import build_neural_eval_policy, resolve_model_pointer
 from gibbsq.qroute.utils.progress import create_progress, iter_progress
-from gibbsq.qroute.utils.run_artifacts import figure_path, metrics_path
+from gibbsq.qroute.utils.run_artifacts import metadata_path, metrics_path
 
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -213,31 +212,25 @@ class StatsBenchmark:
         log.info(f"{int(self.cfg.verification.confidence_interval * 100)}% CI (Diff): [{ci_low:.4f}, {ci_high:.4f}]")
         log.info("=" * 60)
 
-        from studies.analysis.common.visualization.plotting import plot_raincloud
-
-        plot_path = figure_path(self.run_dir, "stats_boxplot")
-        fig = plot_raincloud(
-            group_a_data=baseline_data,
-            group_b_data=neural_data,
-            group_a_label=f"{PUBLICATION_BASELINE_LABEL} (Baseline)",
-            group_b_label="N-GibbsQ (Proposed)",
-            stats={
-                "p_value": float(p_val),
-                "cohen_d": float(cohen_d),
-                "improvement_pct": float(improvement),
-            },
-            save_path=plot_path,
-            theme="publication",
-            formats=["png", "pdf"],
-            context=ExperimentPlotContext(
-                experiment_id="stats",
-                chart_name="plot_raincloud",
-                semantic_overrides={
-                    "figure_title": f"{PUBLICATION_BASELINE_LABEL} vs N-GibbsQ: Distribution Comparison",
+        metadata_path(self.run_dir, "stats_summary.json").write_text(
+            json.dumps(
+                {
+                    "baseline_policy": PUBLICATION_BASELINE_POLICY_NAME,
+                    "baseline_label": PUBLICATION_BASELINE_LABEL,
+                    "baseline_mean": float(b_mean),
+                    "baseline_std": float(b_std),
+                    "neural_mean": float(n_mean),
+                    "neural_std": float(n_std),
+                    "p_value": float(p_val),
+                    "cohen_d": float(cohen_d),
+                    "ci_low": float(ci_low),
+                    "ci_high": float(ci_high),
+                    "improvement_pct": float(improvement),
                 },
+                indent=2,
             ),
+            encoding="utf-8",
         )
-        plt.close(fig)
 
         append_metrics_jsonl(
             {
@@ -270,14 +263,6 @@ class StatsBenchmark:
                     "stats/improvement_pct": improvement,
                 }
             )
-            try:
-                import wandb
-
-                self.run_logger.log(
-                    {"stats_boxplot": wandb.Image(str(figure_path(self.run_dir, "stats_boxplot").with_suffix(".png")))}
-                )
-            except Exception:
-                pass
 
 
 @hydra.main(version_base=None, config_path="../../../../configs", config_name="default")

@@ -15,7 +15,15 @@ from omegaconf import OmegaConf, DictConfig
 
 from gibbsq.qroute.core.config import ExperimentConfig
 from gibbsq.qroute.utils.device import setup_jax
-from gibbsq.qroute.utils.run_artifacts import artifacts_dir, config_path, figures_dir, logs_dir, metadata_dir, metrics_dir
+from gibbsq.qroute.utils.run_artifacts import (
+    artifacts_dir,
+    attach_run_log_handler,
+    config_path,
+    create_run_capsule,
+    figures_dir,
+    metadata_dir,
+    metrics_dir,
+)
 
 log = logging.getLogger(__name__)
 
@@ -56,28 +64,8 @@ def get_run_config(
     base_name = cfg.wandb.run_name or "run"
     run_id = f"{base_name}_{timestamp}"
     
-    run_dir = Path(cfg.output_dir) / experiment_type / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
-    
-    capsule_log_dir = logs_dir(run_dir)
-    capsule_log_dir.mkdir(parents=True, exist_ok=True)
-    figures_dir(run_dir).mkdir(parents=True, exist_ok=True)
-    metrics_dir(run_dir).mkdir(parents=True, exist_ok=True)
-    artifacts_dir(run_dir).mkdir(parents=True, exist_ok=True)
-    metadata_dir(run_dir).mkdir(parents=True, exist_ok=True)
-    
-    log_file = capsule_log_dir / "run.log"
-    _root = logging.getLogger()
-    _existing_log_files = {
-        h.baseFilename for h in _root.handlers
-        if isinstance(h, logging.FileHandler)
-    }
-    if str(log_file.resolve()) not in _existing_log_files:
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(logging.Formatter(
-            '[%(asctime)s][%(name)s][%(levelname)s] - %(message)s'
-        ))
-        _root.addHandler(file_handler)
+    run_dir, _ = create_run_capsule(cfg.output_dir, experiment_type, run_prefix=base_name)
+    attach_run_log_handler(run_dir)
     
     resolved_config_path = config_path(run_dir)
     if raw_cfg is not None:

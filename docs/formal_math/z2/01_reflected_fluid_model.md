@@ -159,9 +159,10 @@ strictly positive orthant. `QED`
 **Corollary 1.**
 Any fluid equilibrium must lie on a boundary face of \(\mathbb R_+^N\).
 
-This is exactly what the existing numerical diagnostic in
-[direction1_fluid.json](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/direction12_probe/run_20260512_194636/artifacts/direction1_fluid.json)
-shows: the first five coordinates are zero at the attracting state.
+This is exactly what the current boundary-equilibrium verification artifact in
+[boundary_equilibrium_verification_20260515_091832.csv](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/outputs/data/boundary_equilibrium_verification_20260515_091832.csv)
+shows for the benchmark system: the first five coordinates are zero at the
+attracting state.
 
 ## 6. Equilibrium Conditions With Reflection
 

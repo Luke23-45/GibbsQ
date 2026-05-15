@@ -51,10 +51,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from gibbsq.qroute.utils.csv_writer import Column, ExperimentCSVWriter  # noqa: E402
+from gibbsq.qroute.utils.run_artifacts import (  # noqa: E402
+    attach_run_log_handler,
+    create_run_capsule,
+    metadata_path,
+    metrics_dir,
+    write_run_config,
+)
+from gibbsq.qroute.utils.progress import iter_progress  # noqa: E402
 
 log = logging.getLogger(__name__)
 
-DEFAULT_OUTPUT_DIR = "outputs/data"
+DEFAULT_OUTPUT_DIR = "outputs/final"
 DEFAULT_CONFIG_NAME = "final_experiment"
 
 # ──────────────────────────────────────────────────────────────────────
@@ -495,9 +503,20 @@ def run_verification(
         Column("status", str, "PASS or FAIL"),
     ]
 
+    run_dir, _ = create_run_capsule(output_dir, "boundary_equilibrium_verification")
+    attach_run_log_handler(run_dir)
+    write_run_config(
+        run_dir,
+        {
+            "experiment_name": "boundary_equilibrium_verification",
+            "output_dir": str(output_dir),
+            "system_ids": [spec.system_id for spec in systems],
+        },
+    )
+
     writer = ExperimentCSVWriter(
         experiment_name="boundary_equilibrium_verification",
-        output_dir=output_dir,
+        output_dir=metrics_dir(run_dir),
         columns=columns,
         metadata={
             "hypothesis": "H2",
@@ -512,8 +531,12 @@ def run_verification(
 
     summary_rows: list[dict[str, object]] = []
 
-    for spec in systems:
-        log.info("Verifying system: %s (N=%d, ρ=%.4f)", spec.system_id, spec.N, spec.rho)
+    for spec in iter_progress(
+        systems,
+        total=len(systems),
+        desc="boundary equilibrium",
+    ):
+        log.info("Verifying system: %s (N=%d, load=%.4f)", spec.system_id, spec.N, spec.rho)
 
         # Step 1: Solve scalar equation
         K_star = solve_K_star(spec)
@@ -584,7 +607,7 @@ def run_verification(
         summary_rows.append(row)
 
     csv_path = writer.finalize()
-    summary_path = csv_path.with_name("boundary_equilibrium_verification_summary.md")
+    summary_path = metadata_path(run_dir, "boundary_equilibrium_verification_summary.md")
     summary_lines = [
         "# Boundary Equilibrium Verification Summary",
         "",
