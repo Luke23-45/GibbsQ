@@ -38,8 +38,9 @@ The rule is:
 
 - [run_all_z2.py](/C:/Users/Hellx/Documents/Programming/python/Project/iron/bc/GibbsQ/studies/runners/run_all_z2.py)
   Runs the main thesis pipeline end to end:
-  - verification first
-  - benchmarks second
+  - phase 1: fast verification slice
+  - phase 2: heavier stochastic verification slice
+  - phase 3: benchmark rerun
 
 ### Supporting neural runners
 
@@ -186,17 +187,34 @@ Purpose:
 - master runner for the active thesis experiment package
 
 Stages:
-1. verification
-2. benchmark
+1. phase 1: `Boundary Equilibrium Verification`
+2. phase 1: `Reflected-ODE Multi-Start Convergence`
+3. phase 1: `Theorem-Constant Parameter Sweep`
+4. phase 2: `CTMC Generator Boundary-Mismatch Demo`
+5. phase 2: `Direct CTMC Validation Capsule`
+6. phase 2: `Exhaustive Small-Grid Drift Audit`
+7. phase 2: `Consolidated CTMC Support Summary`
+8. phase 3: `Independent-Seed Benchmark Rerun`
 
 Options:
+- `--phase phase1`
+  Run only the fast verification slice, then stop
+- `--phase phase2`
+  Run only the heavier stochastic verification slice, then stop
+- `--phase phase3`
+  Run only the benchmark rerun, then stop
+- `--phase full`
+  Run phase1 -> phase2 -> phase3
 - `--skip-benchmarks`
-  Run only the verification stage
+  With `--phase full`, run phase1 -> phase2 and skip phase3
 
 Example:
 
 ```powershell
-python -m studies.runners.run_all_z2 --skip-benchmarks
+python -m studies.runners.run_all_z2 --phase phase1
+python -m studies.runners.run_all_z2 --phase phase2
+python -m studies.runners.run_all_z2 --phase phase3
+python -m studies.runners.run_all_z2 --phase full --skip-benchmarks
 ```
 
 ### `run_training.py`

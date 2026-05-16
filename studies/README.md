@@ -49,8 +49,13 @@ studies/
 ### Running Experiments
 
 ```bash
-# Run all verification + benchmark experiments
+# Run the full 3-phase thesis pipeline
 python -m studies.runners.run_all_z2
+
+# Or run one isolated phase only
+python -m studies.runners.run_all_z2 --phase phase1
+python -m studies.runners.run_all_z2 --phase phase2
+python -m studies.runners.run_all_z2 --phase phase3
 
 # Run verification experiments only (H1-H4)
 python -m studies.runners.run_verification
